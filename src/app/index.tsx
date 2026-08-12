@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function Index() {
-  const { isAuthenticated, isLoading } = useAuthStore();
+  const { isAuthenticated, isLoading, user } = useAuthStore();
   const theme = useTheme();
 
   if (isLoading) {

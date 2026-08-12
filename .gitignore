@@ -3,11 +3,17 @@
 # dependencies
 node_modules/
 
-# Expo
+# Expo & Tools
 .expo/
+.tamagui/
+.claude/
 dist/
 web-build/
 expo-env.d.ts
+
+# IDE / Editors
+.vscode/
+.idea/
 
 # Native
 .kotlin/
@@ -26,12 +32,14 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 
-# macOS
+# macOS / OS
 .DS_Store
+Thumbs.db
 *.pem
 
 # local env files
 .env*.local
+.env
 
 # typescript
 *.tsbuildinfo
@@ -41,3 +49,7 @@ example
 # generated native folders
 /ios
 /android
+
+# temp scripts
+replace.js
+

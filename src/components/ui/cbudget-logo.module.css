@@ -1,0 +1,144 @@
+/* Cbudget SVG Logo Keyframe Animations */
+
+/* Full Screen Splash Loader Overlay */
+.splashOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #0A2540;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 999999;
+  animation: bgFadeIn 0.4s ease-out forwards, splashExit 0.6s cubic-bezier(0.4, 0, 0.2, 1) 3.6s forwards;
+}
+
+@keyframes bgFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes splashExit {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  99% {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.04);
+    visibility: hidden;
+    pointer-events: none;
+    display: none;
+  }
+}
+
+/* Standalone Component Animations */
+.bar {
+  transform-origin: bottom center;
+}
+
+.animBarGrowth .bar1 {
+  animation: barGrow 1.2s ease-in-out infinite alternate;
+}
+
+.animBarGrowth .bar2 {
+  animation: barGrow 1.2s ease-in-out 0.2s infinite alternate;
+}
+
+.animBarGrowth .bar3 {
+  animation: barGrow 1.2s ease-in-out 0.4s infinite alternate;
+}
+
+@keyframes barGrow {
+  0% {
+    transform: scaleY(0.5);
+  }
+  100% {
+    transform: scaleY(1.15);
+  }
+}
+
+/* Step 2: Outer C Draws */
+.animStartup .outerC {
+  stroke-dasharray: 800;
+  stroke-dashoffset: 800;
+  animation: drawPath 1s cubic-bezier(0.4, 0, 0.2, 1) 0.4s forwards;
+}
+
+/* Step 3: Inner C Appears */
+.animStartup .innerC {
+  stroke-dasharray: 600;
+  stroke-dashoffset: 600;
+  animation: drawPath 0.8s cubic-bezier(0.4, 0, 0.2, 1) 1.1s forwards;
+}
+
+@keyframes drawPath {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Step 4: Bars Rise One by One */
+.animStartup .bar1 {
+  transform-origin: 135px 208px;
+  transform: scaleY(0);
+  animation: barRise 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 1.6s forwards;
+}
+
+.animStartup .bar2 {
+  transform-origin: 161px 208px;
+  transform: scaleY(0);
+  animation: barRise 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 1.8s forwards;
+}
+
+.animStartup .bar3 {
+  transform-origin: 187px 208px;
+  transform: scaleY(0);
+  animation: barRise 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 2.0s forwards;
+}
+
+@keyframes barRise {
+  to {
+    transform: scaleY(1);
+  }
+}
+
+/* Step 5: Dot Drops Into Place */
+.animStartup .dot {
+  opacity: 0;
+  transform: translateY(-30px);
+  animation: dotDrop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 2.3s forwards;
+}
+
+@keyframes dotDrop {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Step 6: "Cbudget" Fades Upward */
+.animStartup .logoText {
+  opacity: 0;
+  transform: translateY(20px);
+  animation: textFadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 2.6s forwards;
+}
+
+@keyframes textFadeUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+

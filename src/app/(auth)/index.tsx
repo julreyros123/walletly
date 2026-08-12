@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, SafeAreaView, Platform, Modal, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
-import { YStack, XStack, Text, Button, View } from 'tamagui';
+import { YStack, XStack, Text, Button, View, Theme } from 'tamagui';
 import { Link, Href, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import Animated, { FadeInDown, FadeIn, BounceIn } from 'react-native-reanimated';
@@ -35,105 +35,65 @@ export default function WelcomeScreen() {
   };
 
   return (
-    <YStack flex={1} backgroundColor={theme.background} minHeight={Platform.OS === 'web' ? '100vh' : '100%'}>
-      <BackgroundSystem />
+    <Theme name="dark">
+      <YStack flex={1} backgroundColor="#001a36" minHeight={Platform.OS === 'web' ? '100vh' : '100%'}>
       <SafeAreaView style={styles.safeArea}>
         <YStack flex={1} paddingHorizontal={Spacing[24]} paddingBottom={80}>
           
           {/* Main Content Area: Centered Vertically */}
           <YStack flex={1} justifyContent="center" alignItems="center">
             
-            {/* Logo Row with Sub-text */}
-            <Animated.View entering={BounceIn.delay(100).duration(800)}>
-              <YStack alignItems="center" justifyContent="center">
-                <XStack alignItems="center" justifyContent="center" gap={0}>
-                  <Image
-                    source={require('../../../assets/images/walletly-logo.png')}
-                    style={{ width: 100, height: 100, transform: [{ translateY: 5.5 }] }}
-                    contentFit="contain"
-                  />
-                  <Text
-                    color={theme.text}
-                    fontSize={54}
-                    fontWeight="900"
-                    letterSpacing={-2}
-                    marginLeft={-12}
-                  >
-                    budget
-                  </Text>
-                </XStack>
-
-                <Text
-                  color={theme.text}
-                  fontSize={12}
-                  fontWeight="900"
-                  letterSpacing={4}
-                  textTransform="uppercase"
-                  marginTop={-6}
-                  textAlign="center"
-                  style={{ transform: [{ translateX: 10 }] }} // Center-aligned under text portion
-                >
-                  BUDGET & INVESTMENT
-                </Text>
-              </YStack>
-            </Animated.View>
+            {/* Logo */}
+            <YStack alignItems="center" justifyContent="center">
+              <Image
+                source={require('../../../assets/images/walletly-logo.png')}
+                style={{ width: 140, height: 140, borderRadius: 32, overflow: 'hidden' }}
+                contentFit="contain"
+              />
+            </YStack>
             
           </YStack>
 
           {/* Bottom Actions */}
-          <Animated.View entering={FadeInDown.delay(700).duration(600).springify()} style={{ width: '100%' }}>
-            <YStack gap={Spacing[16]} width="100%">
-              <Link href={'/(auth)/register' as Href} asChild>
-                <FormButton variant="primary">
-                  Create Account
-                </FormButton>
-              </Link>
+          <YStack gap={Spacing[12]} width="100%">
+            <FormButton variant="primary" height={52} onPress={() => router.push('/(auth)/register' as Href)}>
+              Create Account
+            </FormButton>
 
-            <Link href={'/(auth)/login' as Href} asChild>
-              <FormButton variant="secondary">
-                Sign In
-              </FormButton>
-            </Link>
+            <FormButton variant="outline" height={52} onPress={() => router.push('/(auth)/login' as Href)}>
+              Sign In
+            </FormButton>
 
-            <Button
-              width="100%"
-              height={56}
-              backgroundColor={`${theme.primary}12` as any}
-              borderColor={`${theme.primary}4D` as any}
-              borderWidth={1.5}
-              borderRadius={16}
-              pressStyle={{ opacity: 0.8, scale: 0.98, backgroundColor: `${theme.primary}26` as any }}
-              disabled={guestLoading}
+            <FormButton
+              variant="ghost"
+              height={52}
+              loading={guestLoading}
+              leftIcon={{ ios: 'person.crop.circle', android: 'account_circle', web: 'account_circle' } as any}
               onPress={handleGuestLogin}
             >
-              <XStack gap={10} alignItems="center" justifyContent="center">
-                {guestLoading ? (
-                  <ActivityIndicator color={theme.primary as any} size="small" />
-                ) : (
-                  <>
-                    <SymbolView
-                      name={{ ios: 'person.crop.circle', android: 'account_circle', web: 'account_circle' } as any}
-                      size={20}
-                      tintColor={theme.primary as any}
-                    />
-                    <Text color={theme.primary as any} fontSize={16} fontWeight="700" letterSpacing={0.2}>
-                      Explore as Guest
-                    </Text>
-                  </>
-                )}
-              </XStack>
-            </Button>
+              Explore as Guest
+            </FormButton>
             
-            {/* FAQ Access Button */}
-            <XStack justifyContent="center" marginTop={8}>
-              <TouchableOpacity onPress={() => setFaqVisible(true)} activeOpacity={0.7} style={{ padding: 8 }}>
-                <Text color={theme.textSecondary} fontSize={13} fontWeight="600" letterSpacing={0.5}>
-                  Need Help? Read FAQ
-                </Text>
+            {/* Help & FAQ Access Link */}
+            <XStack justifyContent="center" marginTop={6}>
+              <TouchableOpacity
+                onPress={() => setFaqVisible(true)}
+                activeOpacity={0.7}
+                style={{ paddingVertical: 8, paddingHorizontal: 12 }}
+              >
+                <XStack alignItems="center" gap={6}>
+                  <SymbolView
+                    name={{ ios: 'questionmark.circle', android: 'help_outline', web: 'help_outline' } as any}
+                    size={15}
+                    tintColor="rgba(255, 255, 255, 0.75)"
+                  />
+                  <Text color="rgba(255, 255, 255, 0.85)" fontSize={13} fontWeight="500">
+                    Need help?
+                  </Text>
+                </XStack>
               </TouchableOpacity>
             </XStack>
-            </YStack>
-          </Animated.View>
+          </YStack>
 
         </YStack>
       </SafeAreaView>
@@ -225,23 +185,19 @@ export default function WelcomeScreen() {
             </ScrollView>
 
             {/* Bottom Close Button */}
-            <Button
+            <FormButton
+              variant="primary"
               height={50}
-              backgroundColor={theme.primary}
-              borderRadius={12}
-              color="#FFFFFF"
-              fontWeight="700"
-              fontSize={15}
-              pressStyle={{ opacity: 0.85 }}
               onPress={() => setFaqVisible(false)}
               marginTop={8}
             >
               Got It
-            </Button>
+            </FormButton>
           </YStack>
         </YStack>
       </Modal>
     </YStack>
+    </Theme>
   );
 }
 

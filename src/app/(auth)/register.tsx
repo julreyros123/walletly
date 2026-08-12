@@ -1,27 +1,53 @@
 import React, { useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { YStack, Text, XStack, Button } from 'tamagui';
+import { YStack, Text, XStack, View } from 'tamagui';
 import { Link, useRouter, Href } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import { registerSchema, RegisterFormData } from '@/validation/auth.schema';
 import { AuthLayout } from '@/components/ui/AuthLayout';
 import { FormInput } from '@/components/ui/FormInput';
 import { FormButton } from '@/components/ui/FormButton';
-import { FormCheckbox } from '@/components/ui/FormCheckbox';
 import { useTheme } from '@/hooks/use-theme';
-import { Alert, ActivityIndicator } from 'react-native';
-import { SymbolView } from 'expo-symbols';
-import { View } from 'tamagui';
+import { Alert, StyleSheet, Pressable } from 'react-native';
+import { GoogleIcon, FacebookIcon } from '@/components/ui/SocialIcons';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+
+function SocialIconButton({
+  icon,
+  onPress,
+}: {
+  icon: React.ReactNode;
+  onPress: () => void;
+}) {
+  const scale = useSharedValue(1);
+  const aStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Animated.View style={[aStyle, styles.socialBtn]}>
+      <Pressable
+        onPressIn={() => {
+          scale.value = withSpring(0.92, { damping: 15, stiffness: 300 });
+        }}
+        onPressOut={() => {
+          scale.value = withSpring(1, { damping: 15, stiffness: 300 });
+        }}
+        onPress={onPress}
+        style={styles.socialBtnInner}
+      >
+        {icon}
+      </Pressable>
+    </Animated.View>
+  );
+}
 
 export default function RegisterScreen() {
   const router = useRouter();
   const theme = useTheme();
   const login = useAuthStore((state) => state.login);
   const [loading, setLoading] = useState(false);
-  const [guestLoading, setGuestLoading] = useState(false);
-
-  const isAnyLoading = loading || guestLoading;
 
   const {
     control,
@@ -31,12 +57,8 @@ export default function RegisterScreen() {
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
-      firstName: '',
-      lastName: '',
       email: '',
       password: '',
-      confirmPassword: '',
-      acceptTerms: false,
     },
   });
 
@@ -50,7 +72,6 @@ export default function RegisterScreen() {
     if (/[0-9]/.test(pass)) score += 1;
     if (/[A-Z]/.test(pass)) score += 1;
     if (/[^A-Za-z0-9]/.test(pass)) score += 1;
-
     if (score <= 2) return { score, label: 'Weak', color: theme.error };
     if (score <= 4) return { score, label: 'Medium', color: theme.warning };
     return { score, label: 'Strong', color: theme.success };
@@ -61,17 +82,16 @@ export default function RegisterScreen() {
   const onSubmit = async (data: RegisterFormData) => {
     setLoading(true);
     try {
-      // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      // Successful mock registration and auto-login
+      // Extract name prefix from email dynamically
+      const derivedName = data.email.split('@')[0];
+      const capitalizedName = derivedName.charAt(0).toUpperCase() + derivedName.slice(1);
+      
       await login('mock-jwt-token-12345', {
         id: '1',
-        name: `${data.firstName} ${data.lastName}`,
+        name: capitalizedName,
         email: data.email,
       });
-
-      // Redirect to onboarding
       router.replace('/(onboarding)' as Href);
     } catch (err) {
       Alert.alert('Registration Failed', 'Please check your inputs and try again.');
@@ -80,75 +100,24 @@ export default function RegisterScreen() {
     }
   };
 
-  const handleGuestLogin = async () => {
-    setGuestLoading(true);
-    try {
-      await login('mock-guest-token-56789', {
-        id: 'guest',
-        name: 'Guest Explorer',
-        email: 'guest@cbudget.com',
-      });
-      router.replace('/(tabs)' as Href);
-    } catch (err) {
-      Alert.alert('Guest Mode Error', 'Unable to start guest session.');
-    } finally {
-      setGuestLoading(false);
-    }
-  };
-
   return (
     <AuthLayout
-      title="Create Account"
-      subtitle="Start building smarter financial habits today."
+      title="Create account"
+      subtitle="Start your financial journey"
       showBackButton
     >
-      <YStack gap={8}>
-        {/* Name Fields side-by-side */}
-        <XStack gap={12}>
-          <View flex={1}>
-            <Controller
-              control={control}
-              name="firstName"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <FormInput
-                  label="First Name"
-                  placeholder="John"
-                  onBlur={onBlur}
-                  onChangeText={onChange}
-                  value={value}
-                  error={errors.firstName?.message}
-                />
-              )}
-            />
-          </View>
-          <View flex={1}>
-            <Controller
-              control={control}
-              name="lastName"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <FormInput
-                  label="Last Name"
-                  placeholder="Doe"
-                  onBlur={onBlur}
-                  onChangeText={onChange}
-                  value={value}
-                  error={errors.lastName?.message}
-                />
-              )}
-            />
-          </View>
-        </XStack>
-
+      <YStack gap={16} width="100%">
+        {/* Email */}
         <Controller
           control={control}
           name="email"
           render={({ field: { onChange, onBlur, value } }) => (
             <FormInput
-              label="Email Address"
-              placeholder="name@example.com"
+              label="Email address"
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
+              placeholder="Enter your email"
               onBlur={onBlur}
               onChangeText={onChange}
               value={value}
@@ -157,51 +126,40 @@ export default function RegisterScreen() {
           )}
         />
 
+        {/* Password */}
         <Controller
           control={control}
           name="password"
           render={({ field: { onChange, onBlur, value } }) => (
-            <YStack gap={4}>
+            <YStack gap={6}>
               <FormInput
                 label="Password"
-                placeholder="••••••••"
                 secureTextEntry
                 autoCapitalize="none"
                 autoComplete="new-password"
+                placeholder="Enter your password"
                 onBlur={onBlur}
                 onChangeText={onChange}
                 value={value}
                 error={errors.password?.message}
               />
               {value.length > 0 && (
-                <YStack gap={4} paddingHorizontal={4} marginTop={-2} marginBottom={4}>
+                <YStack gap={4} paddingHorizontal={2} marginTop={2}>
                   <XStack justifyContent="space-between" alignItems="center">
-                    <Text fontSize={11} color={theme.textSecondary as any} fontWeight="600">
-                      Password Strength:
+                    <Text fontSize={11} color="rgba(255,255,255,0.45)" fontWeight="500">
+                      Password strength
                     </Text>
                     <Text fontSize={11} color={strength.color as any} fontWeight="700">
                       {strength.label}
                     </Text>
                   </XStack>
-                  <XStack gap={4} width="100%" height={4}>
-                    <View
-                      flex={1}
-                      height="100%"
-                      borderRadius={2}
-                      backgroundColor={(strength.score >= 1 ? strength.color : theme.border) as any}
-                    />
-                    <View
-                      flex={1}
-                      height="100%"
-                      borderRadius={2}
-                      backgroundColor={(strength.score >= 3 ? strength.color : theme.border) as any}
-                    />
-                    <View
-                      flex={1}
-                      height="100%"
-                      borderRadius={2}
-                      backgroundColor={(strength.score >= 5 ? strength.color : theme.border) as any}
-                    />
+                  <XStack gap={4} width="100%" height={3}>
+                    <View flex={1} height="100%" borderRadius={2}
+                      backgroundColor={(strength.score >= 1 ? strength.color : 'rgba(255,255,255,0.1)') as any} />
+                    <View flex={1} height="100%" borderRadius={2}
+                      backgroundColor={(strength.score >= 3 ? strength.color : 'rgba(255,255,255,0.1)') as any} />
+                    <View flex={1} height="100%" borderRadius={2}
+                      backgroundColor={(strength.score >= 5 ? strength.color : 'rgba(255,255,255,0.1)') as any} />
                   </XStack>
                 </YStack>
               )}
@@ -209,139 +167,50 @@ export default function RegisterScreen() {
           )}
         />
 
-        <Controller
-          control={control}
-          name="confirmPassword"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <FormInput
-              label="Confirm Password"
-              placeholder="••••••••"
-              secureTextEntry
-              autoCapitalize="none"
-              onBlur={onBlur}
-              onChangeText={onChange}
-              value={value}
-              error={errors.confirmPassword?.message}
-            />
-          )}
-        />
-
-        <Controller
-          control={control}
-          name="acceptTerms"
-          render={({ field: { onChange, value } }) => (
-            <FormCheckbox
-              checked={value}
-              onCheckedChange={onChange}
-              label={
-                <XStack flexWrap="wrap" alignItems="center" gap={3}>
-                  <Text color={theme.textSecondary} fontSize={13}>I agree to the </Text>
-                  <Text color={theme.primary as any} fontSize={13} fontWeight="600" pressStyle={{ opacity: 0.7 }} onPress={() => Alert.alert('Terms & Conditions', 'By using Cbudget, you agree that all funds, holdings, and budgets are 100% simulated and virtual. Cbudget does not handle real currency or trade real assets.')}>Terms & Conditions</Text>
-                  <Text color={theme.textSecondary} fontSize={13}> and </Text>
-                  <Text color={theme.primary as any} fontSize={13} fontWeight="600" pressStyle={{ opacity: 0.7 }} onPress={() => Alert.alert('Privacy Policy', 'We value your privacy. All your simulated budget logs, lessons, and portfolios are stored locally on your device via secure key-value encryption. We do not transmit your data to third parties.')}>Privacy Policy</Text>
-                </XStack>
-              }
-              error={errors.acceptTerms?.message}
-            />
-          )}
-        />
-
+        {/* Create Account CTA Button */}
         <FormButton
+          variant="primary"
+          height={50}
           loading={loading}
-          disabled={isAnyLoading}
+          disabled={loading}
+          glow
           onPress={handleSubmit(onSubmit)}
-          marginTop={8}
+          marginTop={4}
         >
-          Sign Up
+          Create Account
         </FormButton>
 
-        <Button
-          height={52}
-          backgroundColor={`${theme.primary}12` as any}
-          borderColor={`${theme.primary}4D` as any}
-          borderWidth={1.5}
-          borderRadius={16}
-          pressStyle={{ opacity: 0.8, scale: 0.98, backgroundColor: `${theme.primary}26` as any }}
-          disabled={isAnyLoading}
-          onPress={handleGuestLogin}
-        >
-          <XStack gap={8} alignItems="center" justifyContent="center">
-            {guestLoading ? (
-              <ActivityIndicator color={theme.primary as any} size="small" />
-            ) : (
-              <>
-                <SymbolView
-                  name={{ ios: 'person.crop.circle', android: 'account_circle', web: 'account_circle' } as any}
-                  size={18}
-                  tintColor={theme.primary as any}
-                />
-                <Text color={theme.primary as any} fontSize={14} fontWeight="700">
-                  Explore as Guest
-                </Text>
-              </>
-            )}
-          </XStack>
-        </Button>
-
         {/* Divider */}
-        <XStack alignItems="center" width="100%" marginVertical={4}>
-          <View flex={1} height={1} backgroundColor={theme.border} />
-          <Text color={theme.textSecondary} fontSize={11} fontWeight="600" textTransform="uppercase" letterSpacing={0.8} marginHorizontal={12}>
-            Or register with
+        <XStack alignItems="center" width="100%" marginVertical={6}>
+          <View flex={1} height={1} backgroundColor="rgba(255, 255, 255, 0.1)" />
+          <Text color="rgba(255, 255, 255, 0.45)" fontSize={12} fontWeight="600" marginHorizontal={12}>
+            or sign up with
           </Text>
-          <View flex={1} height={1} backgroundColor={theme.border} />
+          <View flex={1} height={1} backgroundColor="rgba(255, 255, 255, 0.1)" />
         </XStack>
 
-        {/* Social Logins */}
-        <XStack justifyContent="center" gap={12} width="100%">
-          {/* Apple */}
-          <Button
-            flex={1}
-            height={44}
-            backgroundColor={theme.backgroundElement}
-            borderRadius={12}
-            pressStyle={{ opacity: 0.7, scale: 0.98 }}
-            alignItems="center"
-            justifyContent="center"
-            borderWidth={0}
-            onPress={() => Alert.alert('Simulated Registration', 'Apple Sign Up completed.')}
-          >
-            <SymbolView
-              name={{ ios: 'apple.logo', android: 'apple', web: 'apple' } as any}
-              size={18}
-              tintColor={theme.text}
-            />
-          </Button>
-
-          {/* Google */}
-          <Button
-            flex={1}
-            height={44}
-            backgroundColor={theme.backgroundElement}
-            borderRadius={12}
-            pressStyle={{ opacity: 0.7, scale: 0.98 }}
-            alignItems="center"
-            justifyContent="center"
-            borderWidth={0}
-            onPress={() => Alert.alert('Simulated Registration', 'Google Sign Up completed.')}
-          >
-            <SymbolView
-              name={{ ios: 'g.circle.fill', android: 'google', web: 'google' } as any}
-              size={18}
-              tintColor={theme.text}
-            />
-          </Button>
+        {/* Logo-only side-by-side social buttons */}
+        <XStack justifyContent="center" gap={16} width="100%">
+          <SocialIconButton
+            icon={<GoogleIcon size={24} />}
+            onPress={() => Alert.alert('Google', 'Google Sign Up')}
+          />
+          <SocialIconButton
+            icon={<FacebookIcon size={24} />}
+            onPress={() => Alert.alert('Facebook', 'Facebook Sign Up')}
+          />
         </XStack>
 
-        <XStack justifyContent="center" gap={8} marginTop={4}>
-          <Text color={theme.textSecondary} fontSize={14}>
+        {/* Footer Link */}
+        <XStack justifyContent="center" gap={6} marginTop={10}>
+          <Text color="rgba(255, 255, 255, 0.55)" fontSize={14} fontWeight="400">
             Already have an account?
           </Text>
           <Link href={'/(auth)/login' as Href} asChild>
             <Text
               color={theme.primary as any}
               fontSize={14}
-              fontWeight="600"
+              fontWeight="700"
               pressStyle={{ opacity: 0.7 }}
             >
               Sign In
@@ -352,3 +221,20 @@ export default function RegisterScreen() {
     </AuthLayout>
   );
 }
+
+const styles = StyleSheet.create({
+  socialBtn: {
+    width: 60,
+    height: 50,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  socialBtnInner: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});

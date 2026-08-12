@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import * as SecureStore from 'expo-secure-store';
+import { storage } from '@/utils/storage';
 
 const AUTH_TOKEN_KEY = 'cbudget_auth_token';
 
@@ -33,36 +33,36 @@ export const useAuthStore = create<AuthState>((set) => ({
   isPremium: false,
 
   login: async (token: string, user: User) => {
-    await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
-    await SecureStore.setItemAsync('cbudget_user', JSON.stringify(user));
+    await storage.setItem(AUTH_TOKEN_KEY, token);
+    await storage.setItem('cbudget_user', JSON.stringify(user));
     
     // Retrieve stored premium status if it exists
-    const storedPremium = await SecureStore.getItemAsync('cbudget_is_premium');
+    const storedPremium = await storage.getItem('cbudget_is_premium');
     const isPremium = storedPremium === 'true';
     
     set({ token, user, isAuthenticated: true, isPremium });
   },
 
   logout: async () => {
-    await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
-    await SecureStore.deleteItemAsync('cbudget_user');
-    await SecureStore.deleteItemAsync('cbudget_is_premium');
+    await storage.deleteItem(AUTH_TOKEN_KEY);
+    await storage.deleteItem('cbudget_user');
+    await storage.deleteItem('cbudget_is_premium');
     set({ token: null, user: null, isAuthenticated: false, isPremium: false });
   },
 
   deleteAccount: async () => {
-    await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
-    await SecureStore.deleteItemAsync('cbudget_user');
-    await SecureStore.deleteItemAsync('cbudget_is_premium');
+    await storage.deleteItem(AUTH_TOKEN_KEY);
+    await storage.deleteItem('cbudget_user');
+    await storage.deleteItem('cbudget_is_premium');
     set({ token: null, user: null, isAuthenticated: false, isPremium: false });
   },
 
   hydrate: async () => {
     try {
-      const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+      const token = await storage.getItem(AUTH_TOKEN_KEY);
       if (token) {
-        const userStr = await SecureStore.getItemAsync('cbudget_user');
-        const storedPremium = await SecureStore.getItemAsync('cbudget_is_premium');
+        const userStr = await storage.getItem('cbudget_user');
+        const storedPremium = await storage.getItem('cbudget_is_premium');
         const isPremium = storedPremium === 'true';
         let user: User | null = null;
         if (userStr) {
@@ -93,7 +93,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   setPremium: async (premium: boolean) => {
-    await SecureStore.setItemAsync('cbudget_is_premium', premium ? 'true' : 'false');
+    await storage.setItem('cbudget_is_premium', premium ? 'true' : 'false');
     set({ isPremium: premium });
   },
 
@@ -108,7 +108,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         avatarEmoji: avatarEmoji !== undefined ? avatarEmoji : state.user.avatarEmoji,
       };
       
-      SecureStore.setItemAsync('cbudget_user', JSON.stringify(updatedUser));
+      storage.setItem('cbudget_user', JSON.stringify(updatedUser));
       return { user: updatedUser };
     });
   },

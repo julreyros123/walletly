@@ -99,8 +99,8 @@ export default function ForgotPasswordScreen() {
 
   return (
     <AuthLayout
-      title="Forgot Password"
-      subtitle="Enter your email to receive a reset link."
+      title="Reset your password"
+      subtitle="Enter your email address to receive a recovery link."
       showBackButton
       backgroundMode="tabs"
     >
@@ -119,14 +119,16 @@ export default function ForgotPasswordScreen() {
               onChangeText={onChange}
               value={value}
               error={errors.email?.message}
+              variant="auth"
             />
           )}
         />
 
         <FormButton
+          variant="primary"
+          height={52}
           loading={loading}
           onPress={handleSubmit(onSubmit)}
-          height={56} // Boosted to 56px
         >
           Send Reset Link
         </FormButton>
@@ -137,7 +139,7 @@ export default function ForgotPasswordScreen() {
           </Text>
           <Link href={'/(auth)/login' as Href} asChild>
             <Text
-              color={theme.primary}
+              color={theme.primary as any}
               fontSize={14}
               fontWeight="600"
               pressStyle={{ opacity: 0.7 }}

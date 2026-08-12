@@ -1,9 +1,8 @@
 import React, { forwardRef, useState } from 'react';
-import { TextInput, TextInputProps } from 'react-native';
-import { YStack, Label, Input, Text, XStack, Button, InputProps } from 'tamagui';
+import { TextInput, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { YStack, Text, XStack, InputProps } from 'tamagui';
 import { useTheme } from '@/hooks/use-theme';
 import { SymbolView } from 'expo-symbols';
-
 import type { SymbolViewProps } from 'expo-symbols';
 
 interface FormInputProps extends InputProps {
@@ -11,36 +10,62 @@ interface FormInputProps extends InputProps {
   error?: string;
   leftIcon?: SymbolViewProps['name'];
   rightIcon?: SymbolViewProps['name'];
+  variant?: 'default' | 'auth';
 }
 
 export const FormInput = forwardRef<TextInput, FormInputProps>(
-  ({ label, error, secureTextEntry, leftIcon, rightIcon, style, ...props }, ref) => {
+  (
+    {
+      label,
+      error,
+      secureTextEntry,
+      leftIcon,
+      rightIcon,
+      variant = 'auth',
+      style,
+      value,
+      onFocus,
+      onBlur,
+      onChangeText,
+      ...props
+    },
+    ref
+  ) => {
     const theme = useTheme();
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
     const [isFocused, setIsFocused] = useState(false);
 
+    const handleFocus = (e: any) => {
+      setIsFocused(true);
+      onFocus?.(e);
+    };
+
+    const handleBlur = (e: any) => {
+      setIsFocused(false);
+      onBlur?.(e);
+    };
+
     const isSecure = secureTextEntry && !isPasswordVisible;
 
     return (
-      <YStack width="100%" gap={2}>
+      <YStack width="100%" gap={6}>
+        {/* Label and Error Row */}
         {(label || error) && (
-          <XStack justifyContent="space-between" alignItems="center" marginBottom={0}>
+          <XStack justifyContent="space-between" alignItems="center" paddingHorizontal={2}>
             {label && (
-              <Label
+              <Text
                 color={theme.textSecondary}
-                fontSize={12}
-                fontWeight="500"
-                padding={0}
-                height="auto"
-                minHeight={0}
+                fontSize={13}
+                fontWeight="600"
+                letterSpacing={0.2}
               >
                 {label}
-              </Label>
+              </Text>
             )}
             {error && (
               <Text
-                color={theme.error}
-                fontSize={11}
+                color="#EF4444"
+                fontSize={12}
                 fontWeight="600"
               >
                 {error}
@@ -48,61 +73,58 @@ export const FormInput = forwardRef<TextInput, FormInputProps>(
             )}
           </XStack>
         )}
-        <XStack position="relative" alignItems="center" width="100%">
+
+        {/* Input Field Container */}
+        <XStack
+          alignItems="center"
+          width="100%"
+          style={[
+            styles.container,
+            {
+              borderColor: error ? '#EF4444' : isFocused ? theme.primary : theme.border,
+              borderWidth: isFocused || error ? 1.5 : 1,
+              backgroundColor: isFocused ? `${theme.backgroundElement}45` as any : theme.backgroundElement,
+            }
+          ]}
+        >
+          {/* Left Icon */}
           {leftIcon && (
-            <XStack position="absolute" left={10} zIndex={10} pointerEvents="none">
+            <View style={styles.leftIconWrapper}>
               <SymbolView
                 name={leftIcon}
-                size={16}
-                tintColor={error ? theme.error : isFocused ? theme.teal : theme.textSecondary}
+                size={18}
+                tintColor={error ? '#EF4444' : isFocused ? theme.primary : theme.textSecondary}
               />
-            </XStack>
+            </View>
           )}
 
-          <Input
-            ref={ref as any}
+          <TextInput
+            ref={ref}
+            value={value as string}
             secureTextEntry={isSecure}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
-            placeholderTextColor={`${theme.textSecondary}80` as any}
-            color={theme.text}
-            backgroundColor={theme.surface}
-            borderColor={error ? theme.error : isFocused ? theme.teal : theme.border}
-            borderWidth={1}
-            borderRadius={8}
-            height={42}
-            paddingLeft={leftIcon ? 34 : 12}
-            paddingRight={secureTextEntry || rightIcon ? 34 : 12}
-            flex={1}
-            fontSize={14}
-            focusStyle={{
-              borderColor: error ? theme.error : theme.teal,
-              borderWidth: 1.5,
-              backgroundColor: theme.surface,
-            }}
-            shadowColor="#0F172A"
-            shadowOffset={{ width: 0, height: 1 }}
-            shadowOpacity={isFocused ? 0.06 : 0.03}
-            shadowRadius={3}
-            elevation={1}
-            style={[{ outlineStyle: 'none' } as any, style]}
-            {...props}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            onChangeText={onChangeText}
+            placeholderTextColor={`${theme.textSecondary}75` as any}
+            style={[
+              styles.input,
+              {
+                paddingLeft: leftIcon ? 42 : 16,
+                paddingRight: secureTextEntry || rightIcon ? 46 : 16,
+                color: theme.text,
+                outlineStyle: 'none',
+              } as any,
+              style,
+            ]}
+            {...(props as any)}
           />
 
+          {/* Right Icon/Toggle */}
           {secureTextEntry ? (
-            <Button
-              position="absolute"
-              right={4}
-              zIndex={10}
-              chromeless
-              circular
-              width={34}
-              height={34}
-              padding={0}
-              alignItems="center"
-              justifyContent="center"
+            <TouchableOpacity
               onPress={() => setIsPasswordVisible(!isPasswordVisible)}
-              pressStyle={{ opacity: 0.7 }}
+              style={styles.rightIconWrapper}
+              activeOpacity={0.7}
             >
               <SymbolView
                 name={
@@ -110,18 +132,18 @@ export const FormInput = forwardRef<TextInput, FormInputProps>(
                     ? { ios: 'eye.slash', android: 'visibility_off', web: 'visibility_off' }
                     : { ios: 'eye', android: 'visibility', web: 'visibility' }
                 }
-                size={16}
+                size={18}
                 tintColor={theme.textSecondary}
               />
-            </Button>
+            </TouchableOpacity>
           ) : rightIcon ? (
-            <XStack position="absolute" right={10} zIndex={10} pointerEvents="none">
+            <View style={styles.rightIconWrapper} pointerEvents="none">
               <SymbolView
                 name={rightIcon}
-                size={16}
+                size={18}
                 tintColor={theme.textSecondary}
               />
-            </XStack>
+            </View>
           ) : null}
         </XStack>
       </YStack>
@@ -130,3 +152,33 @@ export const FormInput = forwardRef<TextInput, FormInputProps>(
 );
 
 FormInput.displayName = 'FormInput';
+
+const styles = StyleSheet.create({
+  container: {
+    height: 50,
+    borderRadius: 12,
+    position: 'relative',
+  },
+  input: {
+    flex: 1,
+    height: '100%',
+    fontSize: 15,
+    fontWeight: '400',
+  },
+  leftIconWrapper: {
+    position: 'absolute',
+    left: 14,
+    zIndex: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  rightIconWrapper: {
+    position: 'absolute',
+    right: 14,
+    zIndex: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100%',
+    width: 32,
+  },
+});

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ScrollView, StyleSheet, Alert, Modal, TouchableOpacity, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { YStack, XStack, Text, Button, Progress, View } from 'tamagui';
@@ -13,7 +13,8 @@ import { AppHeader } from '@/components/ui/AppHeader';
 import { Spacing } from '@/constants/theme';
 import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
 import { BackgroundSystem } from '@/components/ui/BackgroundSystem';
-import { PouchyBubble } from '@/components/ui/PouchyBubble';
+import { useAuthStore } from '@/store/authStore';
+import { useLocalSearchParams } from 'expo-router';
 
 // Map categories to Symbol Names
 const CATEGORY_ICONS: Record<string, SymbolViewProps['name']> = {
@@ -53,17 +54,31 @@ const SAVINGS_CATEGORY_ICONS: Record<string, SymbolViewProps['name']> = {
 export default function BudgetScreen() {
   const theme = useTheme() as any;
   const store = useGamificationStore();
+  const { user } = useAuthStore();
+  const isGuest = user?.id === 'guest';
+
+  const params = useLocalSearchParams<{ action?: string }>();
+
+  useEffect(() => {
+    if (params.action === 'log') {
+      setShowExpenseForm(true);
+    }
+  }, [params.action]);
 
   // Onboarding Wizard local states
   const [onboardingStep, setOnboardingStep] = useState(1);
   const [setupBudgetType, setSetupBudgetType] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
   const [setupAmount, setSetupAmount] = useState('');
   const [setupCategories, setSetupCategories] = useState<string[]>(['Food', 'Transportation', 'School']);
+  const [setupCategoryLimits, setSetupCategoryLimits] = useState<Record<string, string>>({});
+  const [setupBillsAmount, setSetupBillsAmount] = useState('');
+  const [setupDailyAmount, setSetupDailyAmount] = useState('');
+  const [selectedCategoryBreakdown, setSelectedCategoryBreakdown] = useState<string | null>(null);
   const [customCategoryName, setCustomCategoryName] = useState('');
   const [showCustomCatInput, setShowCustomCatInput] = useState(false);
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'budget' | 'savings'>('budget');
+  const [activeTab, setActiveTab] = useState<'budget' | 'savings' | 'history'>('budget');
 
   // Add Expense Form local states
   const [showExpenseForm, setShowExpenseForm] = useState(false);
@@ -94,6 +109,42 @@ export default function BudgetScreen() {
   const defaultCategories = ['Food', 'Transportation', 'School', 'Bills', 'Shopping', 'Entertainment', 'Savings', 'Emergency Fund'];
 
   // Handle Onboarding Completion
+  // Transition to Step 4 Limits Allocation
+  const handleGoToStep4 = () => {
+    if (setupCategories.length === 0) {
+      Alert.alert('Categories Required', 'Please select at least one category to track.');
+      return;
+    }
+    
+    const totalAmt = parseFloat(setupAmount) || 0;
+    const billsAmt = parseFloat(setupBillsAmount) || 0;
+    // Daily spending = total minus fixed commitments
+    const dailyAmt = Math.max(0, totalAmt - billsAmt);
+    
+    const otherCategories = setupCategories.filter(c => c !== 'Bills');
+    const equalShare = otherCategories.length > 0
+      ? Math.round(dailyAmt / otherCategories.length)
+      : 0;
+      
+    const initialLimits: Record<string, string> = {};
+    
+    if (setupCategories.includes('Bills') && billsAmt > 0) {
+      initialLimits['Bills'] = billsAmt.toString();
+    }
+    
+    otherCategories.forEach((cat, idx) => {
+      if (idx === otherCategories.length - 1) {
+        const sumOfPrev = equalShare * (otherCategories.length - 1);
+        initialLimits[cat] = Math.max(0, dailyAmt - sumOfPrev).toString();
+      } else {
+        initialLimits[cat] = equalShare.toString();
+      }
+    });
+    
+    setSetupCategoryLimits(initialLimits);
+    setOnboardingStep(4);
+  };
+
   const handleOnboardingComplete = () => {
     const amt = parseFloat(setupAmount);
     if (isNaN(amt) || amt <= 0) {
@@ -105,8 +156,13 @@ export default function BudgetScreen() {
       return;
     }
 
-    store.setupBudget(setupBudgetType, amt, setupCategories);
-    Alert.alert('Onboarding Complete!', `Your ${setupBudgetType} budget of ₱${amt.toLocaleString()} has been set up! (+30 XP)`);
+    const numericLimits: Record<string, number> = {};
+    setupCategories.forEach((cat) => {
+      numericLimits[cat] = parseFloat(setupCategoryLimits[cat]) || 0;
+    });
+
+    store.setupBudget(setupBudgetType, amt, setupCategories, numericLimits);
+    Alert.alert('Onboarding Complete!', `Your ${setupBudgetType} budget of ₱${amt.toLocaleString()} has been set up!${isGuest ? '' : ' (+30 XP)'}`);
   };
 
   // Add Custom Category in Onboarding
@@ -125,10 +181,6 @@ export default function BudgetScreen() {
   // Handle Log Simulated Expense
   const handleLogExpense = () => {
     const amt = parseFloat(expenseAmount);
-    if (!expenseName.trim()) {
-      Alert.alert('Missing Field', 'Please enter a name for the expense.');
-      return;
-    }
     if (!expenseCategory) {
       Alert.alert('Missing Field', 'Please select a category.');
       return;
@@ -138,8 +190,9 @@ export default function BudgetScreen() {
       return;
     }
 
+    const finalExpenseName = expenseName.trim() || `${expenseCategory} Purchase`;
     const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    store.addExpense(expenseName.trim(), expenseCategory, amt, todayStr, expenseNotes.trim());
+    store.addExpense(finalExpenseName, expenseCategory, amt, todayStr, expenseNotes.trim());
     
     // Quick Reset
     setExpenseName('');
@@ -152,13 +205,13 @@ export default function BudgetScreen() {
       .filter((e) => e.category === expenseCategory)
       .reduce((sum, e) => sum + e.amount, 0) + amt;
     
-    // Average limit per category (simple estimation)
-    const categoryLimit = store.totalBudget / (store.selectedCategories.length || 1);
+    // Custom limit per category if set, fallback to equal share
+    const categoryLimit = store.categoryLimits?.[expenseCategory] || (store.totalBudget / (store.selectedCategories.length || 1));
 
     if (catTotalSpent > categoryLimit) {
-      Alert.alert('Budget Alert!', `You've exceeded the average category allocation for ${expenseCategory}! Be mindful of overspending. (+10 XP)`);
+      Alert.alert('Budget Alert!', `You've exceeded your limit allocation for ${expenseCategory}! Be mindful of overspending.${isGuest ? '' : ' (+10 XP)'}`);
     } else {
-      Alert.alert('Expense Logged!', `Simulated purchase of ₱${amt.toLocaleString()} recorded. (+10 XP)`);
+      Alert.alert('Expense Logged!', `Simulated purchase of ₱${amt.toLocaleString()} recorded.${isGuest ? '' : ' (+10 XP)'}`);
     }
   };
 
@@ -182,7 +235,7 @@ export default function BudgetScreen() {
     setGoalTargetDate('120');
     setShowAddGoalModal(false);
 
-    Alert.alert('Savings Goal Set!', `Goal "${goalName.trim()}" created with target ₱${target.toLocaleString()}. (+15 XP)`);
+    Alert.alert('Savings Goal Set!', `Goal "${goalName.trim()}" created with target ₱${target.toLocaleString()}.${isGuest ? '' : ' (+15 XP)'}`);
   };
 
   // Handle Contribute Savings Goal
@@ -203,7 +256,7 @@ export default function BudgetScreen() {
     if (contributeGoalId) {
       const success = store.contributeToSavingsGoal(contributeGoalId, amt);
       if (success) {
-        Alert.alert('Contribution Logged!', `₱${amt.toLocaleString()} contributed to savings goal! (+15 XP)`);
+        Alert.alert('Contribution Logged!', `₱${amt.toLocaleString()} contributed to savings goal!${isGuest ? '' : ' (+15 XP)'}`);
         setContributeAmount('');
         setContributeGoalId(null);
       } else {
@@ -212,104 +265,31 @@ export default function BudgetScreen() {
     }
   };
 
-  // Onboarding text for Pouchy
-  const onboardingPouchyText = 
-    onboardingStep === 1
-      ? "Hey! Pouchy here. Let's decide if you want to track your budget daily, weekly, or monthly. Monthly is great for long-term planning!"
-      : onboardingStep === 2
-      ? `Let's set your ${setupBudgetType} limit! Make sure it's realistic so you still have leftover money to practice investing!`
-      : "Choose the categories you want to track. You can add custom categories too, like your favorite hobbies or school projects!";
-
-  // Calculate warning and expression for Pouchy on active budget view
-  let activePouchyExpression: 'smiling' | 'happy' | 'sad' | 'mad' = 'smiling';
-  let activePouchyText = '';
-  
-  // Check category limits
-  let overspentCategory = '';
-  let warningCategory = '';
-  const limitPerCat = store.totalBudget / (store.selectedCategories.length || 1);
-
-  store.selectedCategories.forEach((cat) => {
-    const spent = store.loggedExpenses
-      .filter((e) => e.category === cat)
-      .reduce((sum, e) => sum + e.amount, 0);
-    const ratio = spent / limitPerCat;
-    if (ratio >= 1.0) {
-      overspentCategory = cat;
-    } else if (ratio >= 0.9 && !warningCategory) {
-      warningCategory = cat;
-    }
-  });
-
-  if (overspentCategory) {
-    activePouchyExpression = 'mad';
-    activePouchyText = `Oh no! You have overspent in the ${overspentCategory} category! Try to cut back on other categories to keep your budget balanced.`;
-  } else if (warningCategory) {
-    activePouchyExpression = 'mad';
-    activePouchyText = `Watch out! Your spending in the ${warningCategory} category is close to the limit (over 90%). Let's keep it steady!`;
-  } else if (totalSpent > store.totalBudget) {
-    activePouchyExpression = 'mad';
-    activePouchyText = `Danger! Your total budget of ₱${store.totalBudget.toLocaleString()} has been exceeded! Try logging a refund or slowing down your spending.`;
-  } else if (totalSpent > store.totalBudget * 0.8) {
-    activePouchyExpression = 'smiling';
-    activePouchyText = `You've used over 80% of your total budget. Be careful with your next purchases!`;
-  } else if (totalSpent === 0) {
-    activePouchyExpression = 'smiling';
-    activePouchyText = `Ready to track your spending? Log a simulated purchase below to see how it affects your category limits!`;
-  } else {
-    activePouchyExpression = 'happy';
-    activePouchyText = `Awesome job! You are managing your budget very well. Keep it up and you will have plenty of cash left to invest!`;
-  }
-
-  // Savings tab Pouchy expression/text
-  let savingsPouchyExpression: 'smiling' | 'happy' | 'sad' | 'mad' = 'smiling';
-  let savingsPouchyText = '';
-  
-  if (store.savingsGoals.length === 0) {
-    savingsPouchyExpression = 'smiling';
-    savingsPouchyText = `Hi there! Setting up savings goals is a great way to save for important things. Let's create your first goal like "Emergency Fund"!`;
-  } else {
-    const allCompleted = store.savingsGoals.every(g => g.currentSavings >= g.targetAmount);
-    const anyCompleted = store.savingsGoals.some(g => g.currentSavings >= g.targetAmount);
-    if (allCompleted) {
-      savingsPouchyExpression = 'happy';
-      savingsPouchyText = `Amazing! All your savings goals are fully funded! You're ready to put your savings into simulator investments!`;
-    } else if (anyCompleted) {
-      savingsPouchyExpression = 'happy';
-      savingsPouchyText = `Great job! You have fully funded at least one goal. Keep contributing to the others to build discipline!`;
-    } else {
-      savingsPouchyExpression = 'smiling';
-      savingsPouchyText = `You're making progress on your goals! Remember, even small contributions add up over time. Keep saving!`;
-    }
-  }
 
   // Render First-Time Setup
   if (!store.isBudgetSetupComplete) {
     return (
       <YStack flex={1} backgroundColor={theme.background}>
-        <BackgroundSystem mode="tabs" />
+        <BackgroundSystem mode="tabs" height={380} />
         <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
           <ScrollView contentContainerStyle={styles.scrollContent}>
             
             <YStack gap={Spacing[16]} paddingVertical={Spacing[16]} alignItems="center">
-              <Text color={theme.primary} fontSize={14} fontWeight="700" letterSpacing={1} textTransform="uppercase">
+              <Text color={theme.primary as any} fontSize={14} fontWeight="700" letterSpacing={1} textTransform="uppercase">
                 Step {onboardingStep} of 3
               </Text>
-              <Text color={theme.text} fontSize={22} fontWeight="700" textAlign="center" letterSpacing={-0.5}>
+              <Text color="#FFFFFF" fontSize={22} fontWeight="700" textAlign="center" letterSpacing={-0.5}>
                 Let's Create Your First Budget
               </Text>
-              <Text color={theme.textSecondary} fontSize={14} textAlign="center" paddingHorizontal={10}>
+              <Text color="rgba(255,255,255,0.7)" fontSize={14} textAlign="center" paddingHorizontal={10}>
                 Cbudget helps you build healthy financial habits starting with structured budgeting rules.
               </Text>
             </YStack>
 
-            <Animated.View entering={FadeInDown.duration(400)}>
-              <PouchyBubble expression="smiling" text={onboardingPouchyText} />
-            </Animated.View>
 
             {/* STEP 1: Budget Type */}
             {onboardingStep === 1 && (
-              <Animated.View entering={FadeInDown.duration(400)}>
+              <View>
                 <CbudgetCard gap={20} marginTop={Spacing[16]}>
                   <Text color={theme.text} fontSize={16} fontWeight="700">
                     What type of budget are you creating?
@@ -350,65 +330,174 @@ export default function BudgetScreen() {
                     })}
                   </YStack>
 
-                  <FormButton variant="primary" height={48} onPress={() => setOnboardingStep(2)} marginTop={10}>
-                    Next Step
-                  </FormButton>
+                  <Button
+                    backgroundColor={theme.primary as any}
+                    borderRadius={6}
+                    borderWidth={0}
+                    height={46}
+                    pressStyle={{ opacity: 0.85 }}
+                    onPress={() => setOnboardingStep(2)}
+                    marginTop={10}
+                  >
+                    <Text color="#FFFFFF" fontSize={13} fontWeight="700">Next Step</Text>
+                  </Button>
                 </CbudgetCard>
-              </Animated.View>
+              </View>
             )}
 
-            {/* STEP 2: Budget Amount */}
+            {/* STEP 2: Budget Amount — Single total + optional fixed commitments */}
             {onboardingStep === 2 && (
-              <Animated.View entering={FadeInDown.duration(400)}>
-                <CbudgetCard gap={20} marginTop={Spacing[16]}>
-                  <Text color={theme.text} fontSize={16} fontWeight="700">
-                    How much is your {setupBudgetType} budget?
-                  </Text>
-                  
-                  <FormInput
-                    label="Limit (₱)"
-                    placeholder={
-                      setupBudgetType === 'daily'
-                        ? 'e.g. 200'
-                        : setupBudgetType === 'weekly'
-                        ? 'e.g. 2000'
-                        : 'e.g. 10000'
-                    }
-                    keyboardType="numeric"
-                    value={setupAmount}
-                    onChangeText={setSetupAmount}
-                    leftIcon={{ ios: 'banknote', android: 'payments', web: 'payments' } as any}
-                  />
+              <View>
+                <CbudgetCard gap={18} marginTop={Spacing[16]}>
+                  <YStack gap={4}>
+                    <Text color={theme.text} fontSize={16} fontWeight="700">
+                      How much is your {setupBudgetType} budget?
+                    </Text>
+                    <Text color={theme.textSecondary} fontSize={12}>
+                      Enter your total spending limit first, then optionally set aside a fixed portion for recurring commitments.
+                    </Text>
+                  </YStack>
 
-                  <XStack gap={10} marginTop={10}>
-                    <Button flex={1} backgroundColor={theme.backgroundElement} height={48} borderRadius={12} onPress={() => setOnboardingStep(1)}>
-                      <Text color={theme.text} fontWeight="600">Back</Text>
+                  <YStack gap={14}>
+                    {/* Total budget — primary input */}
+                    <FormInput
+                      label="Total Budget (₱)"
+                      placeholder="e.g. 10000"
+                      keyboardType="numeric"
+                      value={setupAmount}
+                      onChangeText={(val) => {
+                        let cleanVal = val.replace(/[^0-9]/g, '');
+                        if (cleanVal.length > 1 && cleanVal.startsWith('0')) cleanVal = cleanVal.replace(/^0+/, '');
+                        setSetupAmount(cleanVal);
+                      }}
+                      leftIcon={{ ios: 'banknote', android: 'payments', web: 'payments' } as any}
+                    />
+
+                    {/* Optional fixed commitments divider */}
+                    <YStack gap={6}>
+                      <XStack alignItems="center" gap={8}>
+                        <View height={1} flex={1} backgroundColor={theme.border} />
+                        <Text color={theme.textSecondary} fontSize={11} fontWeight="600">OPTIONAL</Text>
+                        <View height={1} flex={1} backgroundColor={theme.border} />
+                      </XStack>
+                      <Text color={theme.textSecondary} fontSize={12}>
+                        Do you have recurring fixed commitments? (e.g. tuition installment, load plan, transportation pass)
+                      </Text>
+                    </YStack>
+
+                    <FormInput
+                      label="Fixed Commitments (₱)"
+                      placeholder="e.g. 2000  —  leave blank if none"
+                      keyboardType="numeric"
+                      value={setupBillsAmount}
+                      onChangeText={(val) => {
+                        let cleanVal = val.replace(/[^0-9]/g, '');
+                        if (cleanVal.length > 1 && cleanVal.startsWith('0')) cleanVal = cleanVal.replace(/^0+/, '');
+                        setSetupBillsAmount(cleanVal);
+                      }}
+                      leftIcon={{ ios: 'doc.text.fill', android: 'receipt_long', web: 'receipt_long' } as any}
+                    />
+
+                    {/* Live breakdown banner — only shown if both have values */}
+                    {(() => {
+                      const total = parseFloat(setupAmount) || 0;
+                      const fixed = parseFloat(setupBillsAmount) || 0;
+                      const daily = Math.max(0, total - fixed);
+                      if (total <= 0) return null;
+                      return (
+                        <YStack gap={6} backgroundColor={`${theme.primary}08` as any} padding={12} borderRadius={8} borderWidth={1} borderColor={`${theme.primary}20` as any}>
+                          <XStack justifyContent="space-between">
+                            <Text color={theme.textSecondary} fontSize={12}>Total Budget</Text>
+                            <Text color={theme.text} fontSize={12} fontWeight="700">₱{total.toLocaleString()}</Text>
+                          </XStack>
+                          {fixed > 0 && (
+                            <XStack justifyContent="space-between">
+                              <XStack gap={4} alignItems="center">
+                                <View width={8} height={8} borderRadius={4} backgroundColor={CATEGORY_COLORS['Bills']} />
+                                <Text color={theme.textSecondary} fontSize={12}>Fixed Commitments</Text>
+                              </XStack>
+                              <Text color={CATEGORY_COLORS['Bills']} fontSize={12} fontWeight="700">₱{fixed.toLocaleString()}</Text>
+                            </XStack>
+                          )}
+                          <XStack justifyContent="space-between">
+                            <XStack gap={4} alignItems="center">
+                              <View width={8} height={8} borderRadius={4} backgroundColor={theme.success} />
+                              <Text color={theme.textSecondary} fontSize={12}>Daily Spending Left</Text>
+                            </XStack>
+                            <Text color={theme.success} fontSize={12} fontWeight="700">₱{daily.toLocaleString()}</Text>
+                          </XStack>
+                        </YStack>
+                      );
+                    })()}
+                  </YStack>
+
+                  <XStack gap={10} marginTop={6}>
+                    <Button
+                      flex={1}
+                      backgroundColor={theme.backgroundElement}
+                      borderRadius={6}
+                      borderColor={theme.border}
+                      borderWidth={1}
+                      height={46}
+                      pressStyle={{ opacity: 0.85 }}
+                      onPress={() => setOnboardingStep(1)}
+                    >
+                      <Text color={theme.text} fontSize={13} fontWeight="700">Back</Text>
                     </Button>
-                    <FormButton flex={1.8} variant="primary" height={48} onPress={() => setOnboardingStep(3)}>
-                      Next Step
-                    </FormButton>
+                    <Button
+                      flex={1.8}
+                      backgroundColor={theme.primary as any}
+                      borderRadius={6}
+                      borderWidth={0}
+                      height={46}
+                      pressStyle={{ opacity: 0.85 }}
+                      onPress={() => {
+                        const total = parseFloat(setupAmount) || 0;
+                        if (total <= 0) {
+                          Alert.alert('Invalid Amount', 'Please enter a valid total budget amount.');
+                          return;
+                        }
+                        const fixed = parseFloat(setupBillsAmount) || 0;
+                        if (fixed > total) {
+                          Alert.alert('Too High', 'Fixed commitments cannot exceed your total budget.');
+                          return;
+                        }
+                        // Auto-add Bills category only if fixed commitments > 0
+                        if (fixed > 0 && !setupCategories.includes('Bills')) {
+                          setSetupCategories(prev => [...prev, 'Bills']);
+                        }
+                        // If fixed is 0, remove Bills from pre-selection gracefully
+                        if (fixed === 0) {
+                          setSetupCategories(prev => prev.filter(c => c !== 'Bills'));
+                        }
+                        setOnboardingStep(3);
+                      }}
+                    >
+                      <Text color="#FFFFFF" fontSize={13} fontWeight="700">Next Step</Text>
+                    </Button>
                   </XStack>
                 </CbudgetCard>
-              </Animated.View>
+              </View>
             )}
 
             {/* STEP 3: Categories Select */}
             {onboardingStep === 3 && (
-              <Animated.View entering={FadeInDown.duration(400)}>
+              <View>
                 <CbudgetCard gap={16} marginTop={Spacing[16]}>
                   <Text color={theme.text} fontSize={16} fontWeight="700">
                     Which categories would you like to track?
                   </Text>
                   
-                  <XStack flexWrap="wrap" gap={8} marginVertical={8}>
+                  <XStack flexWrap="wrap" gap={8} marginVertical={8} justifyContent="space-between">
                     {defaultCategories.map((cat) => {
                       const isSelected = setupCategories.includes(cat);
+                      const catColor = CATEGORY_COLORS[cat] || CATEGORY_COLORS['Custom'];
+                      const catIcon = CATEGORY_ICONS[cat] || CATEGORY_ICONS['Custom'];
+                      
                       return (
-                        <Button
+                        <TouchableOpacity
                           key={cat}
-                          backgroundColor={isSelected ? theme.primary : theme.backgroundElement}
-                          borderRadius={100}
-                          height={36}
+                          activeOpacity={0.8}
                           onPress={() => {
                             if (isSelected) {
                               setSetupCategories(setupCategories.filter((c) => c !== cat));
@@ -416,33 +505,108 @@ export default function BudgetScreen() {
                               setSetupCategories([...setupCategories, cat]);
                             }
                           }}
-                          borderWidth={0}
-                          pressStyle={{ opacity: 0.85 }}
+                          style={{
+                            width: '48.5%',
+                            marginBottom: 4,
+                          }}
                         >
-                          <Text color={isSelected ? '#FFFFFF' : theme.text} fontSize={12} fontWeight="600">
-                            {cat}
-                          </Text>
-                        </Button>
+                          <XStack
+                            backgroundColor={(isSelected ? `${catColor}12` : theme.backgroundElement) as any}
+                            borderColor={(isSelected ? catColor : theme.border) as any}
+                            borderWidth={1.5}
+                            borderRadius={6}
+                            padding={10}
+                            alignItems="center"
+                            gap={10}
+                            height={48}
+                          >
+                            <View
+                              width={28}
+                              height={28}
+                              borderRadius={6}
+                              backgroundColor={(isSelected ? `${catColor}20` : `${theme.textSecondary}15`) as any}
+                              alignItems="center"
+                              justifyContent="center"
+                            >
+                              <SymbolView name={catIcon} size={13} tintColor={isSelected ? catColor : theme.textSecondary} />
+                            </View>
+                            <YStack flex={1} justifyContent="center">
+                              <Text color={theme.text} fontSize={12} fontWeight="700" numberOfLines={1}>
+                                {cat}
+                              </Text>
+                            </YStack>
+                            {isSelected && (
+                              <View
+                                width={16}
+                                height={16}
+                                borderRadius={8}
+                                backgroundColor={catColor as any}
+                                alignItems="center"
+                                justifyContent="center"
+                              >
+                                <SymbolView name={{ ios: 'checkmark', android: 'check', web: 'check' } as any} size={10} tintColor="#FFFFFF" />
+                              </View>
+                            )}
+                          </XStack>
+                        </TouchableOpacity>
                       );
                     })}
 
                     {/* Render custom categories user added */}
-                    {setupCategories.filter(c => !defaultCategories.includes(c)).map((cat) => (
-                      <Button
-                        key={cat}
-                        backgroundColor={theme.primary}
-                        borderRadius={100}
-                        height={36}
-                        onPress={() => {
-                          setSetupCategories(setupCategories.filter((c) => c !== cat));
-                        }}
-                        borderWidth={0}
-                      >
-                        <Text color="#FFFFFF" fontSize={12} fontWeight="600">
-                          {cat} ✕
-                        </Text>
-                      </Button>
-                    ))}
+                    {setupCategories.filter(c => !defaultCategories.includes(c)).map((cat) => {
+                      const catColor = CATEGORY_COLORS['Custom'];
+                      const catIcon = CATEGORY_ICONS['Custom'];
+                      return (
+                        <TouchableOpacity
+                          key={cat}
+                          activeOpacity={0.8}
+                          onPress={() => {
+                            setSetupCategories(setupCategories.filter((c) => c !== cat));
+                          }}
+                          style={{
+                            width: '48.5%',
+                            marginBottom: 4,
+                          }}
+                        >
+                          <XStack
+                            backgroundColor={`${catColor}12` as any}
+                            borderColor={catColor as any}
+                            borderWidth={1.5}
+                            borderRadius={6}
+                            padding={10}
+                            alignItems="center"
+                            gap={10}
+                            height={48}
+                          >
+                            <View
+                              width={28}
+                              height={28}
+                              borderRadius={6}
+                              backgroundColor={`${catColor}20` as any}
+                              alignItems="center"
+                              justifyContent="center"
+                            >
+                              <SymbolView name={catIcon} size={13} tintColor={catColor} />
+                            </View>
+                            <YStack flex={1} justifyContent="center">
+                              <Text color={theme.text} fontSize={12} fontWeight="700" numberOfLines={1}>
+                                {cat}
+                              </Text>
+                            </YStack>
+                            <View
+                              width={16}
+                              height={16}
+                              borderRadius={8}
+                              backgroundColor={theme.error}
+                              alignItems="center"
+                              justifyContent="center"
+                            >
+                              <Text color="#FFFFFF" fontSize={9} fontWeight="900">✕</Text>
+                            </View>
+                          </XStack>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </XStack>
 
                   {showCustomCatInput ? (
@@ -452,9 +616,15 @@ export default function BudgetScreen() {
                         placeholderTextColor={`${theme.text}45`}
                         value={customCategoryName}
                         onChangeText={setCustomCategoryName}
-                        style={[styles.customInput, { color: theme.text, borderColor: theme.border }]}
+                        style={[styles.customInput, { color: theme.text, borderColor: theme.border, borderRadius: 6 }]}
                       />
-                      <Button backgroundColor={theme.primary as any} height={38} borderRadius={8} onPress={handleAddCustomCategory}>
+                      <Button
+                        backgroundColor={theme.primary as any}
+                        height={38}
+                        borderRadius={6}
+                        borderWidth={0}
+                        onPress={handleAddCustomCategory}
+                      >
                         <Text color="#FFFFFF" fontSize={12} fontWeight="700">Add</Text>
                       </Button>
                     </XStack>
@@ -470,15 +640,202 @@ export default function BudgetScreen() {
                   )}
 
                   <XStack gap={10} marginTop={12}>
-                    <Button flex={1} backgroundColor={theme.backgroundElement} height={48} borderRadius={12} onPress={() => setOnboardingStep(2)}>
-                      <Text color={theme.text} fontWeight="600">Back</Text>
+                    <Button
+                      flex={1}
+                      backgroundColor={theme.backgroundElement}
+                      borderRadius={6}
+                      borderColor={theme.border}
+                      borderWidth={1}
+                      height={46}
+                      pressStyle={{ opacity: 0.85 }}
+                      onPress={() => setOnboardingStep(2)}
+                    >
+                      <Text color={theme.text} fontSize={13} fontWeight="700">Back</Text>
                     </Button>
-                    <FormButton flex={1.8} variant="primary" height={48} onPress={handleOnboardingComplete}>
-                      Create Budget
-                    </FormButton>
+                    <Button
+                      flex={1.8}
+                      backgroundColor={theme.primary as any}
+                      borderRadius={6}
+                      borderWidth={0}
+                      height={46}
+                      pressStyle={{ opacity: 0.85 }}
+                      onPress={handleGoToStep4}
+                    >
+                      <Text color="#FFFFFF" fontSize={13} fontWeight="700">Next Step</Text>
+                    </Button>
                   </XStack>
                 </CbudgetCard>
-              </Animated.View>
+              </View>
+            )}
+
+            {/* STEP 4: Category Limits Allocation */}
+            {onboardingStep === 4 && (
+              <View>
+                <CbudgetCard gap={16} marginTop={Spacing[16]}>
+                  <YStack gap={4}>
+                    <Text color={theme.text} fontSize={16} fontWeight="700">
+                      Set Spending Limits
+                    </Text>
+                    <Text color={theme.textSecondary} fontSize={12}>
+                      Divide your ₱{parseFloat(setupAmount).toLocaleString()} budget across your spending categories.
+                    </Text>
+                  </YStack>
+
+                  <YStack gap={0} marginVertical={4}>
+                    {setupCategories.map((cat, index) => {
+                      const catColor = CATEGORY_COLORS[cat] || CATEGORY_COLORS['Custom'];
+                      const catIcon = CATEGORY_ICONS[cat] || CATEGORY_ICONS['Custom'];
+                      const limitVal = setupCategoryLimits[cat] || '0';
+                      const isFixed = cat === 'Bills';
+                      const isLast = index === setupCategories.length - 1;
+
+                      return (
+                        <XStack
+                          key={cat}
+                          alignItems="center"
+                          paddingVertical={12}
+                          paddingHorizontal={4}
+                          borderBottomWidth={isLast ? 0 : 1}
+                          borderBottomColor={`${theme.border}60` as any}
+                        >
+                          {/* Icon */}
+                          <View
+                            width={34}
+                            height={34}
+                            borderRadius={8}
+                            backgroundColor={`${catColor}15` as any}
+                            alignItems="center"
+                            justifyContent="center"
+                            marginRight={10}
+                          >
+                            <SymbolView name={catIcon} size={15} tintColor={catColor} />
+                          </View>
+
+                          {/* Name + badge */}
+                          <YStack flex={1} gap={3}>
+                            <Text color={theme.text} fontSize={13} fontWeight="700" numberOfLines={1}>
+                              {cat}
+                            </Text>
+                            {isFixed && (
+                              <View
+                                alignSelf="flex-start"
+                                backgroundColor={`${CATEGORY_COLORS['Bills']}18` as any}
+                                paddingHorizontal={6}
+                                paddingVertical={2}
+                                borderRadius={4}
+                              >
+                                <Text color={CATEGORY_COLORS['Bills']} fontSize={9} fontWeight="800">
+                                  FIXED
+                                </Text>
+                              </View>
+                            )}
+                          </YStack>
+
+                          {/* Amount input — fixed right side */}
+                          <XStack alignItems="center" gap={4} marginLeft={8}>
+                            <Text color={theme.textSecondary} fontSize={14} fontWeight="500">₱</Text>
+                            <TextInput
+                              placeholder="0"
+                              placeholderTextColor={`${theme.text}40`}
+                              keyboardType="numeric"
+                              value={limitVal}
+                              onChangeText={(val) => {
+                                let cleanVal = val.replace(/[^0-9]/g, '');
+                                if (cleanVal.length > 1 && cleanVal.startsWith('0')) {
+                                  cleanVal = cleanVal.replace(/^0+/, '');
+                                }
+                                setSetupCategoryLimits(prev => ({
+                                  ...prev,
+                                  [cat]: cleanVal
+                                }));
+                              }}
+                              style={{
+                                width: 90,
+                                height: 38,
+                                borderRadius: 8,
+                                borderWidth: 1.5,
+                                borderColor: isFixed ? CATEGORY_COLORS['Bills'] : theme.border,
+                                paddingHorizontal: 10,
+                                fontSize: 14,
+                                fontWeight: '700',
+                                textAlign: 'right',
+                                color: theme.text,
+                                backgroundColor: isFixed ? `${CATEGORY_COLORS['Bills']}08` : 'transparent',
+                              }}
+                            />
+                          </XStack>
+                        </XStack>
+                      );
+                    })}
+                  </YStack>
+
+
+                  {/* Allocation Status message */}
+                  {(() => {
+                    const totalLimitSum = Object.values(setupCategoryLimits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
+                    const budgetAmt = parseFloat(setupAmount) || 0;
+                    const diff = budgetAmt - totalLimitSum;
+                    
+                    let statusText = '';
+                    let statusColor = theme.text;
+                    if (diff > 0) {
+                      statusText = `₱${diff.toLocaleString()} remaining to allocate`;
+                      statusColor = theme.warning;
+                    } else if (diff < 0) {
+                      statusText = `Overallocated by ₱${Math.abs(diff).toLocaleString()}! Please reduce limits.`;
+                      statusColor = theme.error;
+                    } else {
+                      statusText = 'Budget fully allocated!';
+                      statusColor = theme.success;
+                    }
+
+                    return (
+                      <XStack justifyContent="space-between" alignItems="center" backgroundColor={`${statusColor}10` as any} padding={10} borderRadius={6} borderLeftWidth={3} borderLeftColor={statusColor as any}>
+                        <Text color={statusColor} fontSize={12} fontWeight="700">
+                          {statusText}
+                        </Text>
+                        <Text color={theme.textSecondary} fontSize={11}>
+                          Total: ₱{totalLimitSum.toLocaleString()} / ₱{budgetAmt.toLocaleString()}
+                        </Text>
+                      </XStack>
+                    );
+                  })()}
+
+                  <XStack gap={10} marginTop={12}>
+                    <Button
+                      flex={1}
+                      backgroundColor={theme.backgroundElement}
+                      borderRadius={6}
+                      borderColor={theme.border}
+                      borderWidth={1}
+                      height={46}
+                      pressStyle={{ opacity: 0.85 }}
+                      onPress={() => setOnboardingStep(3)}
+                    >
+                      <Text color={theme.text} fontSize={13} fontWeight="700">Back</Text>
+                    </Button>
+                    {(() => {
+                      const totalLimitSum = Object.values(setupCategoryLimits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
+                      const budgetAmt = parseFloat(setupAmount) || 0;
+                      const isMatching = totalLimitSum === budgetAmt;
+                      return (
+                        <Button
+                          flex={1.8}
+                          backgroundColor={isMatching ? theme.primary as any : theme.backgroundElement}
+                          borderRadius={6}
+                          borderWidth={0}
+                          height={46}
+                          pressStyle={{ opacity: 0.85 }}
+                          disabled={!isMatching}
+                          onPress={handleOnboardingComplete}
+                        >
+                          <Text color={isMatching ? '#FFFFFF' : theme.textSecondary} fontSize={13} fontWeight="700">Create Budget</Text>
+                        </Button>
+                      );
+                    })()}
+                  </XStack>
+                </CbudgetCard>
+              </View>
             )}
 
           </ScrollView>
@@ -489,11 +846,11 @@ export default function BudgetScreen() {
 
   return (
     <YStack flex={1} backgroundColor={theme.background}>
-      <BackgroundSystem mode="tabs" />
+      <BackgroundSystem mode="tabs" height={380} />
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         
         {/* Custom Segmented Tab Controller */}
-        <XStack paddingHorizontal={20} marginVertical={Spacing[8]} gap={8}>
+        <XStack paddingHorizontal={12} marginVertical={Spacing[8]} gap={6}>
           <Button
             flex={1}
             height={40}
@@ -504,14 +861,14 @@ export default function BudgetScreen() {
             pressStyle={{ opacity: 0.85 }}
             onPress={() => setActiveTab('budget')}
           >
-            <XStack gap={6} alignItems="center">
+            <XStack gap={4} alignItems="center">
               <SymbolView
                 name={{ ios: 'chart.pie.fill', android: 'pie_chart', web: 'pie_chart' } as const}
-                size={14}
+                size={13}
                 tintColor={activeTab === 'budget' ? theme.primary : theme.textSecondary}
               />
-              <Text color={activeTab === 'budget' ? theme.text : theme.textSecondary} fontSize={13} fontWeight="700">
-                Budget Tracker
+              <Text color={activeTab === 'budget' ? theme.text : theme.textSecondary} fontSize={12} fontWeight="700">
+                Budget
               </Text>
             </XStack>
           </Button>
@@ -526,14 +883,36 @@ export default function BudgetScreen() {
             pressStyle={{ opacity: 0.85 }}
             onPress={() => setActiveTab('savings')}
           >
-            <XStack gap={6} alignItems="center">
+            <XStack gap={4} alignItems="center">
               <SymbolView
                 name={{ ios: 'heart.circle.fill', android: 'favorite', web: 'favorite' } as const}
-                size={14}
+                size={13}
                 tintColor={activeTab === 'savings' ? theme.primary : theme.textSecondary}
               />
-              <Text color={activeTab === 'savings' ? theme.text : theme.textSecondary} fontSize={13} fontWeight="700">
-                Savings Goals
+              <Text color={activeTab === 'savings' ? theme.text : theme.textSecondary} fontSize={12} fontWeight="700">
+                Savings
+              </Text>
+            </XStack>
+          </Button>
+
+          <Button
+            flex={1}
+            height={40}
+            borderRadius={10}
+            backgroundColor={activeTab === 'history' ? theme.surface : theme.backgroundElement}
+            borderWidth={activeTab === 'history' ? 1 : 0}
+            borderColor={theme.border}
+            pressStyle={{ opacity: 0.85 }}
+            onPress={() => setActiveTab('history')}
+          >
+            <XStack gap={4} alignItems="center">
+              <SymbolView
+                name={{ ios: 'clock.fill', android: 'history', web: 'history' } as const}
+                size={13}
+                tintColor={activeTab === 'history' ? theme.primary : theme.textSecondary}
+              />
+              <Text color={activeTab === 'history' ? theme.text : theme.textSecondary} fontSize={12} fontWeight="700">
+                History
               </Text>
             </XStack>
           </Button>
@@ -544,25 +923,26 @@ export default function BudgetScreen() {
           {/* ==================== BUDGET TAB VIEW ==================== */}
           {activeTab === 'budget' && (
             <YStack gap={Spacing.five}>
-              {/* Pouchy Bubble Status Indicator */}
-              <Animated.View entering={FadeInDown.duration(400)}>
-                <PouchyBubble
-                  expression={activePouchyExpression}
-                  text={activePouchyText}
-                />
-              </Animated.View>
 
               {/* Overall Analytics Card */}
-              <Animated.View entering={FadeInDown.duration(450)}>
-                <CbudgetCard borderLeftWidth={5} borderLeftColor={theme.primary} gap={14}>
+              <View>
+                <YStack 
+                  marginBottom={Spacing[8]}
+                  paddingHorizontal={8}
+                  paddingVertical={12}
+                  gap={16}
+                >
                   <YStack alignItems="center" gap={4}>
-                    <Text color={theme.textSecondary} fontSize={11} fontWeight="600" letterSpacing={0.8} textTransform="uppercase">
+                    <Text color="rgba(255,255,255,0.7)" fontSize={11} fontWeight="700" letterSpacing={1} textTransform="uppercase" marginBottom={4}>
                       {store.budgetType?.toUpperCase()} BUDGET REMAINING
                     </Text>
-                    <Text color={theme.text} fontSize={28} fontWeight="700" letterSpacing={-0.5}>
-                      ₱{budgetLeftover.toLocaleString()}
-                    </Text>
-                    <Text color={theme.textSecondary} fontSize={13} textAlign="center">
+                    <XStack alignItems="baseline" gap={4}>
+                      <Text color={theme.primary as any} fontSize={24} fontWeight="700">₱</Text>
+                      <Text color={theme.primary as any} fontSize={42} fontWeight="900" letterSpacing={-1}>
+                        {budgetLeftover.toLocaleString()}
+                      </Text>
+                    </XStack>
+                    <Text color="rgba(255,255,255,0.7)" fontSize={13} textAlign="center">
                       leftover of ₱{store.totalBudget.toLocaleString()} total budget limit
                     </Text>
                   </YStack>
@@ -570,7 +950,7 @@ export default function BudgetScreen() {
                   <Progress
                     value={(totalSpent / store.totalBudget) * 100}
                     height={8}
-                    backgroundColor={theme.backgroundElement}
+                    backgroundColor="rgba(255,255,255,0.05)"
                     borderRadius={4}
                   >
                     <Progress.Indicator 
@@ -580,42 +960,46 @@ export default function BudgetScreen() {
                   </Progress>
 
                   {/* Summary Breakdown Row */}
-                  <XStack justifyContent="space-between" width="100%" borderTopWidth={1} borderTopColor={theme.border} paddingTop={10}>
+                  <XStack justifyContent="space-between" width="100%" paddingTop={12}>
                     <YStack gap={2}>
-                      <Text color={theme.textSecondary} fontSize={11}>Spent</Text>
-                      <Text color={theme.text} fontSize={13} fontWeight="700">₱{totalSpent.toLocaleString()}</Text>
+                      <Text color="rgba(255,255,255,0.7)" fontSize={11}>Spent</Text>
+                      <Text color="#FFFFFF" fontSize={13} fontWeight="700">₱{totalSpent.toLocaleString()}</Text>
                     </YStack>
                     <YStack gap={2} alignItems="center">
-                      <Text color={theme.textSecondary} fontSize={11}>Sim Savings</Text>
+                      <Text color="rgba(255,255,255,0.7)" fontSize={11}>Sim Savings</Text>
                       <Text color={theme.primary as any} fontSize={13} fontWeight="700">₱{totalSavingsContribution.toLocaleString()}</Text>
                     </YStack>
                     <YStack gap={2} alignItems="flex-end">
-                      <Text color={theme.textSecondary} fontSize={11}>Simulation Cash</Text>
-                      <Text color={theme.primary} fontSize={13} fontWeight="700">₱{store.virtualBalance.toLocaleString()}</Text>
+                      <Text color="rgba(255,255,255,0.7)" fontSize={11}>Sim Cash</Text>
+                      <Text color={theme.primary as any} fontSize={13} fontWeight="700">₱{store.virtualBalance.toLocaleString()}</Text>
                     </YStack>
                   </XStack>
-                </CbudgetCard>
-              </Animated.View>
+                </YStack>
+              </View>
 
               {/* Action Button: Log simulated expense */}
               {!showExpenseForm && (
-                <Animated.View entering={FadeInDown.duration(400)}>
+                <View>
                   <XStack gap={10}>
-                    <FormButton
-                      flex={1.2}
-                      variant="primary"
-                      onPress={() => setShowExpenseForm(true)}
-                      leftIcon={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' } as any}
-                    >
-                      {'Log Expense (< 5s)'}
-                    </FormButton>
                     <Button
                       flex={1}
-                      height={48}
+                      height={46}
+                      backgroundColor={theme.primary as any}
+                      borderRadius={6}
+                      borderWidth={0}
+                      pressStyle={{ opacity: 0.85 }}
+                      onPress={() => setShowExpenseForm(true)}
+                    >
+                      <Text color="#FFFFFF" fontSize={13} fontWeight="700">Log Purchase</Text>
+                    </Button>
+                    <Button
+                      flex={1}
+                      height={46}
                       backgroundColor={theme.backgroundElement}
-                      borderRadius={12}
+                      borderRadius={6}
                       borderColor={theme.border}
                       borderWidth={1}
+                      pressStyle={{ opacity: 0.85 }}
                       onPress={() => {
                         Alert.alert(
                           'Reset Budget?',
@@ -630,23 +1014,16 @@ export default function BudgetScreen() {
                       <Text color={theme.error} fontSize={13} fontWeight="700">Reset Budget</Text>
                     </Button>
                   </XStack>
-                </Animated.View>
+                </View>
               )}
 
               {/* Rapid Expense Logger Modal/Card */}
               {showExpenseForm && (
-                <Animated.View entering={FadeInDown.duration(400)}>
+                <View>
                   <CbudgetCard borderColor={theme.primary} borderWidth={1.5} gap={14}>
                     <Text color={theme.text} fontSize={17} fontWeight="700">
-                      Rapid Expense Logger
+                      Log an Expense
                     </Text>
-
-                    <FormInput
-                      label="Expense Name"
-                      placeholder="e.g. Lunch, Bus Fare, Book"
-                      value={expenseName}
-                      onChangeText={setExpenseName}
-                    />
 
                     {/* Category quick selectors */}
                     <YStack gap={6}>
@@ -656,17 +1033,22 @@ export default function BudgetScreen() {
                       <XStack gap={6} flexWrap="wrap">
                         {store.selectedCategories.map((cat) => {
                           const isSelected = expenseCategory === cat;
+                          const catColor = CATEGORY_COLORS[cat] || CATEGORY_COLORS['Custom'];
                           return (
                             <Button
                               key={cat}
-                              backgroundColor={isSelected ? theme.primary : theme.backgroundElement}
+                              backgroundColor={(isSelected ? `${catColor}15` : theme.backgroundElement) as any}
+                              borderColor={(isSelected ? catColor : theme.border) as any}
+                              borderWidth={1.5}
                               borderRadius={8}
                               height={34}
                               paddingHorizontal={12}
-                              onPress={() => setExpenseCategory(cat)}
-                              borderWidth={0}
+                              onPress={() => {
+                                setExpenseCategory(cat);
+                                setExpenseName(''); // reset name when category changes
+                              }}
                             >
-                              <Text color={isSelected ? '#FFFFFF' : theme.text} fontSize={11} fontWeight="600">
+                              <Text color={isSelected ? catColor : theme.text} fontSize={11} fontWeight="600">
                                 {cat}
                               </Text>
                             </Button>
@@ -675,14 +1057,96 @@ export default function BudgetScreen() {
                       </XStack>
                     </YStack>
 
+                    {/* Quick Name Suggestions — shown when a category is selected */}
+                    {expenseCategory ? (() => {
+                      const suggestions: Record<string, string[]> = {
+                        Food: ['Lunch', 'Breakfast', 'Dinner', 'Snack', 'Merienda', 'Groceries', 'Coffee', 'Milk Tea'],
+                        Transportation: ['Jeepney', 'Bus Fare', 'Grab', 'Tricycle', 'Train', 'Toll Fee', 'Gas'],
+                        School: ['Photocopy', 'Supplies', 'Materials', 'Books', 'Printing', 'Project'],
+                        Bills: ['Electric Bill', 'Water Bill', 'Internet', 'Load', 'Rent', 'Subscription'],
+                        Shopping: ['Clothes', 'Online Order', 'Toiletries', 'Accessories', 'Shoes'],
+                        Entertainment: ['Movie', 'Streaming', 'Game', 'Concert', 'Sports'],
+                        Savings: ['Emergency Fund', 'Goal Deposit'],
+                        'Emergency Fund': ['Medical', 'Repair', 'Emergency'],
+                      };
+                      const chips = suggestions[expenseCategory] || [];
+                      if (chips.length === 0) return null;
+                      return (
+                        <YStack gap={6}>
+                          <Text color={theme.textSecondary} fontSize={11} fontWeight="600" textTransform="uppercase">
+                            Quick Name — what did you buy?
+                          </Text>
+                          <XStack gap={6} flexWrap="wrap">
+                            {chips.map((chip) => {
+                              const isActive = expenseName === chip;
+                              return (
+                                <TouchableOpacity
+                                  key={chip}
+                                  onPress={() => setExpenseName(isActive ? '' : chip)}
+                                  style={{
+                                    paddingHorizontal: 12,
+                                    paddingVertical: 7,
+                                    borderRadius: 20,
+                                    borderWidth: 1.5,
+                                    borderColor: isActive ? (CATEGORY_COLORS[expenseCategory] || theme.primary) : theme.border,
+                                    backgroundColor: isActive ? `${CATEGORY_COLORS[expenseCategory] || theme.primary}12` : 'transparent',
+                                    marginBottom: 4,
+                                  }}
+                                >
+                                  <Text style={{ color: isActive ? (CATEGORY_COLORS[expenseCategory] || theme.primary) : theme.textSecondary, fontSize: 12, fontWeight: isActive ? '700' : '500' }}>
+                                    {chip}
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </XStack>
+                        </YStack>
+                      );
+                    })() : null}
+
+                    {/* Expense Name text input — always visible for custom entry */}
                     <FormInput
-                      label="Amount (₱)"
-                      placeholder="e.g. 120"
-                      keyboardType="numeric"
-                      value={expenseAmount}
-                      onChangeText={setExpenseAmount}
-                      leftIcon={{ ios: 'banknote', android: 'payments', web: 'payments' } as any}
+                      label="Or Type a Name (Optional)"
+                      placeholder="e.g. Lunch, Bus Fare (or leave blank)"
+                      value={expenseName}
+                      onChangeText={setExpenseName}
                     />
+
+                    {/* Amount + quick presets */}
+                    <YStack gap={8}>
+                      <FormInput
+                        label="Amount (₱)"
+                        placeholder="e.g. 120"
+                        keyboardType="numeric"
+                        value={expenseAmount}
+                        onChangeText={setExpenseAmount}
+                        leftIcon={{ ios: 'banknote', android: 'payments', web: 'payments' } as any}
+                      />
+                      {/* Amount Quick Presets */}
+                      <XStack gap={6} flexWrap="wrap">
+                        {[20, 50, 100, 150, 200, 500, 1000].map((preset) => {
+                          const isActive = expenseAmount === preset.toString();
+                          return (
+                            <TouchableOpacity
+                              key={preset}
+                              onPress={() => setExpenseAmount(isActive ? '' : preset.toString())}
+                              style={{
+                                paddingHorizontal: 10,
+                                paddingVertical: 5,
+                                borderRadius: 6,
+                                borderWidth: 1.5,
+                                borderColor: isActive ? theme.primary : theme.border,
+                                backgroundColor: isActive ? `${theme.primary}12` : 'transparent',
+                              }}
+                            >
+                              <Text style={{ color: isActive ? theme.primary : theme.textSecondary, fontSize: 12, fontWeight: '600' }}>
+                                ₱{preset}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </XStack>
+                    </YStack>
 
                     <FormInput
                       label="Notes (Optional)"
@@ -700,62 +1164,129 @@ export default function BudgetScreen() {
                       </FormButton>
                     </XStack>
                   </CbudgetCard>
-                </Animated.View>
+                </View>
               )}
 
+
               {/* Category limits progress */}
-              <YStack gap={12}>
+              <YStack gap={16}>
                 <Text color={theme.text} fontSize={16} fontWeight="700" paddingHorizontal={4}>
                   Category Budget Breakdown
                 </Text>
 
-                {store.selectedCategories.map((cat, idx) => {
-                  const spentInCat = store.loggedExpenses
-                    .filter((e) => e.category === cat)
-                    .reduce((sum, e) => sum + e.amount, 0);
-                  
-                  // Average limit allocation
-                  const limitInCat = store.totalBudget / (store.selectedCategories.length || 1);
-                  const ratio = spentInCat / limitInCat;
-                  const isOver = spentInCat > limitInCat;
-                  const catColor = CATEGORY_COLORS[cat] || CATEGORY_COLORS['Custom'];
-                  const catIcon = CATEGORY_ICONS[cat] || CATEGORY_ICONS['Custom'];
+                <YStack gap={14}>
+                  {/* --- FIXED BILLS SECTION --- */}
+                  {store.selectedCategories.includes('Bills') && (
+                    <YStack gap={10}>
+                      <Text color={theme.primary as any} fontSize={12} fontWeight="800" paddingHorizontal={4} letterSpacing={0.5}>
+                        FIXED MONTHLY BILLS
+                      </Text>
+                      {store.selectedCategories.filter(c => c === 'Bills').map((cat) => {
+                        const spentInCat = store.loggedExpenses
+                          .filter((e) => e.category === cat)
+                          .reduce((sum, e) => sum + e.amount, 0);
+                        const limitInCat = store.categoryLimits?.[cat] || (store.totalBudget / (store.selectedCategories.length || 1));
+                        const ratio = spentInCat / limitInCat;
+                        const isOver = spentInCat > limitInCat;
+                        const catColor = CATEGORY_COLORS[cat] || CATEGORY_COLORS['Custom'];
+                        const catIcon = CATEGORY_ICONS[cat] || CATEGORY_ICONS['Custom'];
 
-                  return (
-                    <Animated.View key={cat} entering={FadeInDown.delay(100 * idx).duration(400)}>
-                      <CbudgetCard padding={14} gap={10} borderColor={isOver ? `${theme.error}30` as any : theme.border} borderWidth={1}>
-                        <XStack justifyContent="space-between" alignItems="center">
-                          <XStack gap={10} alignItems="center">
-                            <View width={36} height={36} borderRadius={8} backgroundColor={`${catColor}15` as any} alignItems="center" justifyContent="center">
-                              <SymbolView name={catIcon} size={15} tintColor={catColor} />
-                            </View>
-                            <YStack gap={2}>
-                              <Text color={theme.text} fontSize={14} fontWeight="700">{cat}</Text>
-                              <Text color={theme.textSecondary} fontSize={11}>
-                                Spent ₱{spentInCat.toLocaleString()} of ₱{limitInCat.toLocaleString()}
-                              </Text>
-                            </YStack>
-                          </XStack>
+                        return (
+                          <TouchableOpacity key={cat} activeOpacity={0.85} onPress={() => setSelectedCategoryBreakdown(cat)}>
+                            <CbudgetCard padding={14} gap={10} borderColor={isOver ? `${theme.error}30` as any : theme.border} borderWidth={1}>
+                              <XStack justifyContent="space-between" alignItems="center">
+                                <XStack gap={10} alignItems="center">
+                                  <View width={36} height={36} borderRadius={8} backgroundColor={`${catColor}15` as any} alignItems="center" justifyContent="center">
+                                    <SymbolView name={catIcon} size={15} tintColor={catColor} />
+                                  </View>
+                                  <YStack gap={2}>
+                                    <Text color={theme.text} fontSize={14} fontWeight="700">{cat}</Text>
+                                    <Text color={theme.textSecondary} fontSize={11}>
+                                      Spent ₱{spentInCat.toLocaleString()} of ₱{limitInCat.toLocaleString()}
+                                    </Text>
+                                  </YStack>
+                                </XStack>
 
-                          <XStack
-                            backgroundColor={(isOver ? `${theme.error}15` : `${theme.success}10`) as any}
-                            borderRadius={8}
-                            paddingHorizontal={8}
-                            paddingVertical={4}
-                          >
-                            <Text color={isOver ? theme.error : theme.success} fontSize={10} fontWeight="700">
-                              {isOver ? 'OVER BUDGET' : `${Math.round(ratio * 100)}%`}
-                            </Text>
-                          </XStack>
-                        </XStack>
+                                <XStack
+                                  backgroundColor={(isOver ? `${theme.error}15` : `${theme.success}10`) as any}
+                                  borderRadius={8}
+                                  paddingHorizontal={8}
+                                  paddingVertical={4}
+                                >
+                                  <Text color={isOver ? theme.error : theme.success} fontSize={10} fontWeight="700">
+                                    {isOver ? 'OVER BUDGET' : `${Math.round(ratio * 100)}%`}
+                                  </Text>
+                                </XStack>
+                              </XStack>
 
-                        <Progress value={Math.min(100, ratio * 100)} height={5} backgroundColor={theme.backgroundElement} borderRadius={3}>
-                          <Progress.Indicator backgroundColor={(isOver ? theme.error : catColor) as any} borderRadius={3} />
-                        </Progress>
+                              <Progress value={Math.min(100, ratio * 100)} height={5} backgroundColor={theme.backgroundElement} borderRadius={3}>
+                                <Progress.Indicator backgroundColor={(isOver ? theme.error : catColor) as any} borderRadius={3} />
+                              </Progress>
+                            </CbudgetCard>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </YStack>
+                  )}
+
+                  {/* --- DAILY/VARIABLE SPENDING SECTION --- */}
+                  <YStack gap={10}>
+                    <Text color={theme.primary as any} fontSize={12} fontWeight="800" paddingHorizontal={4} letterSpacing={0.5} marginTop={store.selectedCategories.includes('Bills') ? 4 : 0}>
+                      DAILY & VARIABLE SPENDING
+                    </Text>
+                    {store.selectedCategories.filter(c => c !== 'Bills').length === 0 ? (
+                      <CbudgetCard padding={14}>
+                        <Text color={theme.textSecondary} fontSize={12}>No variable spending categories selected.</Text>
                       </CbudgetCard>
-                    </Animated.View>
-                  );
-                })}
+                    ) : (
+                      store.selectedCategories.filter(c => c !== 'Bills').map((cat) => {
+                        const spentInCat = store.loggedExpenses
+                          .filter((e) => e.category === cat)
+                          .reduce((sum, e) => sum + e.amount, 0);
+                        const limitInCat = store.categoryLimits?.[cat] || (store.totalBudget / (store.selectedCategories.length || 1));
+                        const ratio = spentInCat / limitInCat;
+                        const isOver = spentInCat > limitInCat;
+                        const catColor = CATEGORY_COLORS[cat] || CATEGORY_COLORS['Custom'];
+                        const catIcon = CATEGORY_ICONS[cat] || CATEGORY_ICONS['Custom'];
+
+                        return (
+                          <TouchableOpacity key={cat} activeOpacity={0.85} onPress={() => setSelectedCategoryBreakdown(cat)}>
+                            <CbudgetCard padding={14} gap={10} borderColor={isOver ? `${theme.error}30` as any : theme.border} borderWidth={1}>
+                              <XStack justifyContent="space-between" alignItems="center">
+                                <XStack gap={10} alignItems="center">
+                                  <View width={36} height={36} borderRadius={8} backgroundColor={`${catColor}15` as any} alignItems="center" justifyContent="center">
+                                    <SymbolView name={catIcon} size={15} tintColor={catColor} />
+                                  </View>
+                                  <YStack gap={2}>
+                                    <Text color={theme.text} fontSize={14} fontWeight="700">{cat}</Text>
+                                    <Text color={theme.textSecondary} fontSize={11}>
+                                      Spent ₱{spentInCat.toLocaleString()} of ₱{limitInCat.toLocaleString()}
+                                    </Text>
+                                  </YStack>
+                                </XStack>
+
+                                <XStack
+                                  backgroundColor={(isOver ? `${theme.error}15` : `${theme.success}10`) as any}
+                                  borderRadius={8}
+                                  paddingHorizontal={8}
+                                  paddingVertical={4}
+                                >
+                                  <Text color={isOver ? theme.error : theme.success} fontSize={10} fontWeight="700">
+                                    {isOver ? 'OVER BUDGET' : `${Math.round(ratio * 100)}%`}
+                                  </Text>
+                                </XStack>
+                              </XStack>
+
+                              <Progress value={Math.min(100, ratio * 100)} height={5} backgroundColor={theme.backgroundElement} borderRadius={3}>
+                                <Progress.Indicator backgroundColor={(isOver ? theme.error : catColor) as any} borderRadius={3} />
+                              </Progress>
+                            </CbudgetCard>
+                          </TouchableOpacity>
+                        );
+                      })
+                    )}
+                  </YStack>
+                </YStack>
               </YStack>
             </YStack>
           )}
@@ -763,16 +1294,9 @@ export default function BudgetScreen() {
           {/* ==================== SAVINGS TAB VIEW ==================== */}
           {activeTab === 'savings' && (
             <YStack gap={Spacing.five}>
-              {/* Pouchy Bubble Status Indicator */}
-              <Animated.View entering={FadeInDown.duration(400)}>
-                <PouchyBubble
-                  expression={savingsPouchyExpression}
-                  text={savingsPouchyText}
-                />
-              </Animated.View>
 
               {/* Smart Savings Insights Hero */}
-              <Animated.View entering={FadeInDown.duration(400)}>
+              <View>
                 <CbudgetCard borderLeftWidth={5} borderLeftColor={theme.primary} gap={10} backgroundColor={`${theme.primary}08` as any}>
                   <XStack gap={6} alignItems="center">
                     <SymbolView
@@ -787,7 +1311,9 @@ export default function BudgetScreen() {
 
                   {store.savingsGoals.length === 0 ? (
                     <Text color={theme.textSecondary} fontSize={12} lineHeight={16}>
-                      Create a savings goal below. Cbudget will calculate educational projections and recommend spending optimizations to help you build habits fast!
+                      {isGuest
+                        ? 'Create a savings goal below. Cbudget will calculate educational projections to help you track your progress!'
+                        : 'Create a savings goal below. Cbudget will calculate educational projections and recommend spending optimizations to help you build habits fast!'}
                     </Text>
                   ) : (
                     <YStack gap={8}>
@@ -805,19 +1331,21 @@ export default function BudgetScreen() {
                             <Text color={theme.textSecondary} fontSize={12} lineHeight={16}>
                               • Save <Text fontWeight="700" color={theme.text}>₱{dailyRate}/day</Text> to reach your target in <Text fontWeight="700">{days} days</Text>.
                             </Text>
-                            <Text color={theme.textSecondary} fontSize={12} lineHeight={16}>
-                              • Pro-Tip: Reduce shopping expenses by <Text fontWeight="700" color={theme.warning}>₱300/week</Text> to complete this goal <Text fontWeight="700" color={theme.success}>1.5 months earlier</Text>!
-                            </Text>
+                            {!isGuest && (
+                              <Text color={theme.textSecondary} fontSize={12} lineHeight={16}>
+                                • Pro-Tip: Reduce shopping expenses by <Text fontWeight="700" color={theme.warning}>₱300/week</Text> to complete this goal <Text fontWeight="700" color={theme.success}>1.5 months earlier</Text>!
+                              </Text>
+                            )}
                           </YStack>
                         );
                       })}
                     </YStack>
                   )}
                 </CbudgetCard>
-              </Animated.View>
+              </View>
 
               {/* Create Savings Goal Button */}
-              <Animated.View entering={FadeInDown.duration(400)}>
+              <View>
                 <FormButton
                   variant="primary"
                   onPress={() => setShowAddGoalModal(true)}
@@ -825,7 +1353,7 @@ export default function BudgetScreen() {
                 >
                   Create Savings Goal
                 </FormButton>
-              </Animated.View>
+              </View>
 
               {/* Savings Goals List */}
               <YStack gap={12}>
@@ -851,7 +1379,7 @@ export default function BudgetScreen() {
                     const goalIcon = SAVINGS_CATEGORY_ICONS[g.category] || SAVINGS_CATEGORY_ICONS['Custom'];
 
                     return (
-                      <Animated.View key={g.id} entering={FadeInDown.delay(100 * idx).duration(450)}>
+                      <View key={g.id}>
                         <CbudgetCard gap={12}>
                           <XStack justifyContent="space-between" alignItems="center">
                             <XStack gap={10} alignItems="center">
@@ -906,7 +1434,106 @@ export default function BudgetScreen() {
                             </Button>
                           )}
                         </CbudgetCard>
-                      </Animated.View>
+                      </View>
+                    );
+                  })
+                )}
+              </YStack>
+            </YStack>
+          )}
+
+          {/* ==================== TRANSACTION HISTORY TAB VIEW ==================== */}
+          {activeTab === 'history' && (
+            <YStack gap={Spacing.five}>
+              {/* Summary Metrics Card */}
+              <View>
+                <CbudgetCard padding={16} gap={10}>
+                  <Text color={theme.text} fontSize={14} fontWeight="800">
+                    Transaction Summary
+                  </Text>
+                  <View height={1} backgroundColor={theme.border} marginTop={4} marginBottom={2} />
+                  <XStack justifyContent="space-between" paddingTop={4}>
+                    <YStack gap={2}>
+                      <Text color={theme.textSecondary} fontSize={10} fontWeight="600">Total Transactions</Text>
+                      <Text color={theme.text} fontSize={16} fontWeight="700">{store.loggedExpenses.length}</Text>
+                    </YStack>
+                    <YStack gap={2} alignItems="flex-end">
+                      <Text color={theme.textSecondary} fontSize={10} fontWeight="600">Total Simulated Spent</Text>
+                      <Text color={theme.primary as any} fontSize={16} fontWeight="700">
+                        ₱{store.loggedExpenses.reduce((sum, e) => sum + e.amount, 0).toLocaleString()}
+                      </Text>
+                    </YStack>
+                  </XStack>
+                </CbudgetCard>
+              </View>
+
+              {/* Transactions List */}
+              <YStack gap={10}>
+                <Text color={theme.text} fontSize={16} fontWeight="700" paddingHorizontal={4}>
+                  Logged Purchases
+                </Text>
+
+                {store.loggedExpenses.length === 0 ? (
+                  <CbudgetCard padding={24} alignItems="center" justifyContent="center" gap={10}>
+                    <SymbolView
+                      name={{ ios: 'doc.plaintext.fill', android: 'receipt', web: 'receipt' } as const}
+                      size={28}
+                      tintColor={theme.textSecondary}
+                    />
+                    <Text color={theme.textSecondary} fontSize={13} textAlign="center">
+                      No purchases logged. Set up your budget and record simulated purchases to track where your money goes.
+                    </Text>
+                  </CbudgetCard>
+                ) : (
+                  store.loggedExpenses.map((exp) => {
+                    const catColor = CATEGORY_COLORS[exp.category] || CATEGORY_COLORS['Custom'];
+                    const catIcon = CATEGORY_ICONS[exp.category] || CATEGORY_ICONS['Custom'];
+                    return (
+                      <View key={exp.id}>
+                        <CbudgetCard padding={14} gap={10}>
+                          <XStack justifyContent="space-between" alignItems="center">
+                            <XStack gap={10} alignItems="center" flex={1}>
+                              <View width={36} height={36} borderRadius={8} backgroundColor={`${catColor}15` as any} alignItems="center" justifyContent="center">
+                                <SymbolView name={catIcon} size={15} tintColor={catColor} />
+                              </View>
+                              <YStack gap={2} flex={1}>
+                                <Text color={theme.text} fontSize={14} fontWeight="700" numberOfLines={1}>{exp.name}</Text>
+                                <Text color={theme.textSecondary} fontSize={11}>
+                                  Category: {exp.category} • {exp.date}
+                                </Text>
+                                {exp.notes ? (
+                                  <Text color={`${theme.textSecondary}bb` as any} fontSize={10} fontStyle="italic" numberOfLines={1}>
+                                    Notes: {exp.notes}
+                                  </Text>
+                                ) : null}
+                              </YStack>
+                            </XStack>
+
+                            <XStack gap={10} alignItems="center">
+                              <Text color={theme.text} fontSize={14} fontWeight="800">
+                                ₱{exp.amount.toLocaleString()}
+                              </Text>
+                              <TouchableOpacity
+                                activeOpacity={0.7}
+                                onPress={() => {
+                                  Alert.alert(
+                                    'Delete Transaction?',
+                                    `Are you sure you want to delete "${exp.name}"? This will return the ₱${exp.amount.toLocaleString()} limit to your budget.`,
+                                    [
+                                      { text: 'Cancel', style: 'cancel' },
+                                      { text: 'Delete', style: 'destructive', onPress: () => store.deleteExpense(exp.id) }
+                                    ]
+                                  );
+                                }}
+                              >
+                                <View width={28} height={28} borderRadius={6} backgroundColor={`${theme.error}10` as any} alignItems="center" justifyContent="center">
+                                  <SymbolView name={{ ios: 'trash.fill', android: 'delete', web: 'delete' } as const} size={13} tintColor={theme.error} />
+                                </View>
+                              </TouchableOpacity>
+                            </XStack>
+                          </XStack>
+                        </CbudgetCard>
+                      </View>
                     );
                   })
                 )}
@@ -1047,6 +1674,138 @@ export default function BudgetScreen() {
         </View>
       </Modal>
 
+      {/* MODAL: Category Transactions Breakdown */}
+      <Modal
+        visible={!!selectedCategoryBreakdown}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedCategoryBreakdown(null)}
+      >
+        <View style={styles.modalOverlay}>
+          {(() => {
+            if (!selectedCategoryBreakdown) return null;
+            const cat = selectedCategoryBreakdown;
+            const catColor = CATEGORY_COLORS[cat] || CATEGORY_COLORS['Custom'];
+            const catIcon = CATEGORY_ICONS[cat] || CATEGORY_ICONS['Custom'];
+            const spentInCat = store.loggedExpenses
+              .filter((e) => e.category === cat)
+              .reduce((sum, e) => sum + e.amount, 0);
+            const limitInCat = store.categoryLimits?.[cat] || (store.totalBudget / (store.selectedCategories.length || 1));
+            const ratio = spentInCat / limitInCat;
+            const isOver = spentInCat > limitInCat;
+            const catExpenses = store.loggedExpenses.filter((e) => e.category === cat);
+
+            return (
+              <CbudgetCard style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+                {/* Header */}
+                <XStack justifyContent="space-between" alignItems="center" borderBottomWidth={1} borderBottomColor={theme.border} paddingBottom={10}>
+                  <XStack gap={8} alignItems="center">
+                    <View width={28} height={28} borderRadius={6} backgroundColor={`${catColor}15` as any} alignItems="center" justifyContent="center">
+                      <SymbolView name={catIcon} size={14} tintColor={catColor} />
+                    </View>
+                    <Text color={theme.text} fontSize={15} fontWeight="700">
+                      {cat} Breakdown
+                    </Text>
+                  </XStack>
+                  <TouchableOpacity onPress={() => setSelectedCategoryBreakdown(null)}>
+                    <SymbolView name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' } as const} size={20} tintColor={theme.textSecondary} />
+                  </TouchableOpacity>
+                </XStack>
+
+                {/* Mini analytics */}
+                <YStack gap={8} marginVertical={10}>
+                  <XStack justifyContent="space-between" alignItems="baseline">
+                    <Text color={theme.textSecondary} fontSize={12}>Total Limit Allocated</Text>
+                    <Text color={theme.text} fontSize={16} fontWeight="800">₱{limitInCat.toLocaleString()}</Text>
+                  </XStack>
+                  <XStack justifyContent="space-between" alignItems="baseline">
+                    <Text color={theme.textSecondary} fontSize={12}>Total Spent</Text>
+                    <Text color={isOver ? theme.error : theme.success} fontSize={16} fontWeight="800">₱{spentInCat.toLocaleString()}</Text>
+                  </XStack>
+                  
+                  {/* Progress bar */}
+                  <View height={6} backgroundColor={theme.backgroundElement} borderRadius={3} overflow="hidden" marginTop={4}>
+                    <View
+                      height="100%"
+                      width={`${Math.min(100, ratio * 100)}%`}
+                      backgroundColor={isOver ? theme.error : catColor}
+                      borderRadius={3}
+                    />
+                  </View>
+                </YStack>
+
+                {/* Transactions list */}
+                <Text color={theme.text} fontSize={13} fontWeight="700" marginTop={6} marginBottom={8}>
+                  Expense Logs
+                </Text>
+                
+                <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
+                  {catExpenses.length === 0 ? (
+                    <YStack padding={20} alignItems="center" justifyContent="center" gap={6}>
+                      <SymbolView name={{ ios: 'doc.plaintext.fill', android: 'receipt', web: 'receipt' } as const} size={20} tintColor={theme.textSecondary} />
+                      <Text color={theme.textSecondary} fontSize={11} textAlign="center">
+                        No purchases logged under {cat} yet.
+                      </Text>
+                    </YStack>
+                  ) : (
+                    <YStack gap={8}>
+                      {catExpenses.map((exp) => (
+                        <XStack key={exp.id} justifyContent="space-between" alignItems="center" padding={10} backgroundColor={theme.backgroundElement} borderRadius={6} borderWidth={1} borderColor={theme.border}>
+                          <YStack gap={2} flex={1}>
+                            <Text color={theme.text} fontSize={12} fontWeight="700" numberOfLines={1}>{exp.name}</Text>
+                            <Text color={theme.textSecondary} fontSize={10}>{exp.date}</Text>
+                            {exp.notes ? (
+                              <Text color={`${theme.textSecondary}bb` as any} fontSize={9} fontStyle="italic" numberOfLines={1}>
+                                {exp.notes}
+                              </Text>
+                            ) : null}
+                          </YStack>
+                          <XStack gap={8} alignItems="center">
+                            <Text color={theme.text} fontSize={12} fontWeight="800">₱{exp.amount.toLocaleString()}</Text>
+                            <TouchableOpacity
+                              onPress={() => {
+                                Alert.alert(
+                                  'Delete Transaction?',
+                                  `Are you sure you want to delete "${exp.name}"?`,
+                                  [
+                                    { text: 'Cancel', style: 'cancel' },
+                                    {
+                                      text: 'Delete',
+                                      style: 'destructive',
+                                      onPress: () => {
+                                        store.deleteExpense(exp.id);
+                                      }
+                                    }
+                                  ]
+                                );
+                              }}
+                            >
+                              <SymbolView name={{ ios: 'trash.fill', android: 'delete', web: 'delete' } as const} size={12} tintColor={theme.error} />
+                            </TouchableOpacity>
+                          </XStack>
+                        </XStack>
+                      ))}
+                    </YStack>
+                  )}
+                </ScrollView>
+
+                <Button
+                  marginTop={14}
+                  height={38}
+                  backgroundColor={theme.backgroundElement}
+                  borderRadius={6}
+                  borderWidth={1}
+                  borderColor={theme.border}
+                  onPress={() => setSelectedCategoryBreakdown(null)}
+                >
+                  <Text color={theme.text} fontSize={12} fontWeight="700">Close</Text>
+                </Button>
+              </CbudgetCard>
+            );
+          })()}
+        </View>
+      </Modal>
+
     </YStack>
   );
 }
@@ -1056,7 +1815,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 6,
     paddingTop: 20,
     paddingBottom: 32,
   },

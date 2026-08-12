@@ -1,12 +1,56 @@
+import React, { useState, useEffect } from 'react';
 import { Image } from 'expo-image';
 import { StyleSheet, View } from 'react-native';
 import Animated, { Keyframe, Easing } from 'react-native-reanimated';
 
 import classes from './animated-icon.module.css';
+import stylesModule from './ui/cbudget-logo.module.css';
+import { CbudgetLogoSVG } from '@/components/ui/CbudgetLogoSVG';
+
 const DURATION = 300;
 
 export function AnimatedSplashOverlay() {
-  return null;
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    // Unmount splash screen overlay after 3.9s
+    const timer = setTimeout(() => {
+      setVisible(false);
+    }, 3900);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!visible) return null;
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+        backgroundColor: '#0A2540',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 999999,
+        animation: 'cbudgeBgFade 0.4s ease-out forwards, cbudgeSplashExit 0.6s cubic-bezier(0.4, 0, 0.2, 1) 3.3s forwards',
+      }}
+    >
+      <CbudgetLogoSVG
+        size={250}
+        showText={true}
+        animationMode="startup"
+        primaryColor="#2ECC71"
+        secondaryColor="#FFFFFF"
+        textColor="#FFFFFF"
+      />
+    </div>
+  );
 }
 
 const keyframe = new Keyframe({
@@ -61,13 +105,13 @@ export function AnimatedIcon() {
         <Image style={styles.glow} source={require('@/assets/images/logo-glow.png')} />
       </Animated.View>
 
-      <Animated.View style={styles.background} entering={keyframe.duration(DURATION)}>
-        <div className={classes.expoLogoBackground} />
-      </Animated.View>
-
-      <Animated.View style={styles.imageContainer} entering={logoKeyframe.duration(DURATION)}>
-        <Image style={styles.image} source={require('@/assets/images/expo-logo.png')} />
-      </Animated.View>
+      <CbudgetLogoSVG
+        size={140}
+        showText={false}
+        animationMode="none"
+        primaryColor="#2ECC71"
+        secondaryColor="#FFFFFF"
+      />
     </View>
   );
 }

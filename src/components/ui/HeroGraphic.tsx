@@ -1,8 +1,7 @@
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { Animated, StyleSheet, View, Platform } from 'react-native';
 import { YStack, Text } from 'tamagui';
-import { useTheme } from '@/hooks/use-theme';
-import { Spacing } from '@/constants/theme';
+import { Image } from 'expo-image';
 
 interface HeroGraphicProps {
   title?: string;
@@ -10,86 +9,87 @@ interface HeroGraphicProps {
 }
 
 export function HeroGraphic({ title, subtitle }: HeroGraphicProps) {
-  const theme = useTheme();
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const logoScale = useRef(new Animated.Value(0.88)).current;
+  const titleOpacity = useRef(new Animated.Value(0)).current;
+  const titleTranslate = useRef(new Animated.Value(10)).current;
+  const subtitleOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.parallel([
+        Animated.spring(logoScale, {
+          toValue: 1,
+          damping: 18,
+          stiffness: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(logoOpacity, {
+          toValue: 1,
+          duration: 280,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.parallel([
+        Animated.timing(titleOpacity, {
+          toValue: 1,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+        Animated.spring(titleTranslate, {
+          toValue: 0,
+          damping: 20,
+          stiffness: 200,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.timing(subtitleOpacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   return (
     <View style={styles.container}>
-      {/* Premium Graphic Card Container */}
-      <View style={[styles.graphicContainer, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}>
-        
-        {/* Deep Blue Polygon */}
-        <View style={[styles.polygon, { 
-          backgroundColor: theme.primary, 
-          width: 260, 
-          height: 260, 
-          top: -120, 
-          left: -60, 
-          transform: [{ rotate: '35deg' }, { skewX: '20deg' }],
-          opacity: 0.12,
-          zIndex: -1
-        }]} />
-        
-        {/* Secondary Angular Shape */}
-        <View style={[styles.polygon, { 
-          backgroundColor: theme.primary, 
-          width: 220, 
-          height: 220, 
-          top: -30, 
-          right: -80, 
-          transform: [{ rotate: '-15deg' }, { skewY: '-25deg' }],
-          opacity: 0.1,
-          zIndex: -1
-        }]} />
-        
-        {/* Accent Sharp Shape */}
-        <View style={[styles.polygon, { 
-          backgroundColor: theme.primary, 
-          width: 120, 
-          height: 300, 
-          bottom: -120, 
-          left: '20%', 
-          transform: [{ rotate: '45deg' }],
-          opacity: 0.08,
-          zIndex: -1
-        }]} />
+      {/* App Logo */}
+      <Animated.View
+        style={[
+          styles.logoWrap,
+          { opacity: logoOpacity, transform: [{ scale: logoScale }] },
+        ]}
+      >
+        <Image
+          source={require('@/assets/images/walletly-logo.png')}
+          style={styles.logo}
+          contentFit="contain"
+        />
+      </Animated.View>
 
-        {/* Crisp overlay lines to reinforce "geometric" structure */}
-        <View style={[styles.line, { borderColor: theme.primary, top: '20%', left: '-10%', transform: [{ rotate: '35deg' }], zIndex: -1 }]} />
-        <View style={[styles.line, { borderColor: theme.primary, top: '65%', right: '-20%', transform: [{ rotate: '-15deg' }], zIndex: -1 }]} />
-
-        {/* Text Content Overlay */}
-        {(title || subtitle) && (
-          <YStack
-            justifyContent="center"
-            alignItems="flex-start"
-            zIndex={10}
-            gap={8}
-          >
-            {title && (
-              <Text
-                color={theme.text}
-                fontSize={22}
-                fontWeight="800"
-                letterSpacing={-0.5}
-                lineHeight={28}
-              >
-                {title}
-              </Text>
-            )}
-            {subtitle && (
-              <Text
-                color={theme.textSecondary}
-                fontSize={13}
-                fontWeight="500"
-                lineHeight={18}
-              >
-                {subtitle}
-              </Text>
-            )}
-          </YStack>
-        )}
-
-      </View>
+      {/* Title & Subtitle */}
+      {(title || subtitle) && (
+        <YStack alignItems="center" gap={6} marginTop={16}>
+          {title && (
+            <Animated.Text
+              style={[
+                styles.title,
+                {
+                  opacity: titleOpacity,
+                  transform: [{ translateY: titleTranslate }],
+                },
+              ]}
+            >
+              {title}
+            </Animated.Text>
+          )}
+          {subtitle && (
+            <Animated.Text style={[styles.subtitle, { opacity: subtitleOpacity }]}>
+              {subtitle}
+            </Animated.Text>
+          )}
+        </YStack>
+      )}
     </View>
   );
 }
@@ -97,27 +97,37 @@ export function HeroGraphic({ title, subtitle }: HeroGraphicProps) {
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    marginBottom: 12,
-    overflow: 'hidden',
+    alignItems: 'center',
+    marginBottom: 24,
+    paddingTop: 8,
+  },
+  logoWrap: {
+    shadowColor: '#0052FF',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  logo: {
+    width: 72,
+    height: 72,
     borderRadius: 20,
   },
-  graphicContainer: {
-    width: '100%',
-    position: 'relative',
-    overflow: 'hidden',
-    borderRadius: 20,
-    paddingVertical: 18,
-    paddingHorizontal: 20,
+  title: {
+    color: '#FFFFFF',
+    fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: -0.6,
+    lineHeight: 34,
+    textAlign: 'center',
+    fontFamily: Platform.OS === 'ios' ? 'Inter-Bold' : undefined,
   },
-  polygon: {
-    position: 'absolute',
-    borderRadius: 32,
+  subtitle: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 14,
+    fontWeight: '400',
+    lineHeight: 20,
+    textAlign: 'center',
+    fontFamily: Platform.OS === 'ios' ? 'Inter-Regular' : undefined,
   },
-  line: {
-    position: 'absolute',
-    width: '150%',
-    height: 1,
-    borderWidth: 1,
-    opacity: 0.08,
-  }
 });

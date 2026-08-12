@@ -12,8 +12,6 @@ import { Spacing } from '@/constants/theme';
 import Animated, { FadeInDown, FadeIn, ZoomIn } from 'react-native-reanimated';
 import { useGamificationStore, ALL_ACHIEVEMENTS } from '@/store/gamificationStore';
 import { BackgroundSystem } from '@/components/ui/BackgroundSystem';
-import { PouchyHelper } from '@/components/ui/PouchyHelper';
-
 const getMasteryAvatarDetails = (title: string) => {
   switch (title) {
     case 'Smart Saver':
@@ -163,7 +161,7 @@ export default function ProfileScreen() {
   const handleCancelSubscription = () => {
     Alert.alert(
       'Cancel Premium Plan',
-      'Are you sure you want to downgrade your account? You will lose access to options simulator, advanced AI advisor, and academy certificates at the end of the billing period.',
+      'Are you sure you want to downgrade your account? You will lose access to options simulator, unlocked Investment Lab, and academy certificates at the end of the billing period.',
       [
         { text: 'Keep Premium', style: 'cancel' },
         {
@@ -258,7 +256,7 @@ export default function ProfileScreen() {
     setCardNumber('');
     setCardExpiry('');
     setCardCvv('');
-    Alert.alert('Premium Active!', 'Welcome to Cbudget Premium. Enjoy your unlimited sandbox and AI financial tools!');
+    Alert.alert('Premium Active!', 'Welcome to Cbudget Premium. Enjoy your unlimited sandbox and unlocked Investment Lab tools!');
   };
 
   const avatarDetails = getMasteryAvatarDetails(customAvatar);
@@ -276,20 +274,17 @@ export default function ProfileScreen() {
 
   return (
     <YStack flex={1} backgroundColor={theme.background}>
-      <BackgroundSystem mode="tabs" />
+      <BackgroundSystem mode="tabs" height={380} />
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           
           {/* User Profile Card */}
-          <Animated.View entering={FadeInDown.delay(100).duration(500)}>
-            <CbudgetCard
+          <View>
+            <YStack
               marginBottom={Spacing[16]}
               alignItems="center"
               gap={Spacing[16]}
-              borderLeftWidth={5}
-              borderLeftColor={(isPremium ? '#F59E0B' : theme.primary) as any}
-              borderColor={isPremium ? 'rgba(245, 158, 11, 0.3)' : theme.border}
-              borderWidth={isPremium ? 1.5 : 1}
+              paddingVertical={12}
             >
               <YStack alignItems="center" gap={12}>
                 
@@ -301,12 +296,12 @@ export default function ProfileScreen() {
                     borderRadius: 45,
                     backgroundColor: user?.avatarColor || avatarDetails.bg,
                     borderWidth: 3,
-                    borderColor: isPremium ? '#F59E0B' : (user?.avatarColor || avatarDetails.borderColor),
-                    borderStyle: isPremium ? 'solid' : avatarDetails.borderStyle,
+                    borderColor: user?.avatarColor || avatarDetails.borderColor,
+                    borderStyle: avatarDetails.borderStyle,
                     alignItems: 'center',
                     justifyContent: 'center',
                     marginBottom: 4,
-                    shadowColor: isPremium ? '#F59E0B' : '#000',
+                    shadowColor: '#000',
                     shadowOffset: { width: 0, height: 4 },
                     shadowOpacity: 0.15,
                     shadowRadius: 8,
@@ -324,18 +319,11 @@ export default function ProfileScreen() {
 
                 <YStack alignItems="center" gap={4}>
                   <XStack alignItems="center" gap={6}>
-                    <Text color={theme.text} fontSize={20} fontWeight="700">
+                    <Text color="#FFFFFF" fontSize={22} fontWeight="700">
                       {user?.name || 'User'}
                     </Text>
-                    {isPremium && (
-                      <SymbolView
-                        name={{ ios: 'crown.fill', android: 'star', web: 'star' } as any}
-                        size={16}
-                        tintColor="#F59E0B"
-                      />
-                    )}
                   </XStack>
-                  <Text color={theme.textSecondary} fontSize={13}>
+                  <Text color="rgba(255,255,255,0.7)" fontSize={13}>
                     {user?.email || 'user@example.com'}
                   </Text>
                   
@@ -359,8 +347,8 @@ export default function ProfileScreen() {
 
                   {/* Mastery Rank Badge */}
                   <XStack
-                    backgroundColor={isPremium ? 'rgba(245, 158, 11, 0.12)' : `${avatarDetails.color}15` as any}
-                    borderColor={isPremium ? 'rgba(245, 158, 11, 0.3)' : `${avatarDetails.color}30` as any}
+                    backgroundColor={`${avatarDetails.color}15` as any}
+                    borderColor={`${avatarDetails.color}30` as any}
                     borderWidth={1}
                     borderRadius={100}
                     paddingHorizontal={12}
@@ -372,10 +360,10 @@ export default function ProfileScreen() {
                     <SymbolView
                       name={{ ios: 'crown.fill', android: 'emoji_events', web: 'emoji_events' } as any}
                       size={11}
-                      tintColor={isPremium ? '#F59E0B' : avatarDetails.color as any}
+                      tintColor={avatarDetails.color as any}
                     />
-                    <Text color={isPremium ? '#F59E0B' : avatarDetails.color as any} fontSize={10} fontWeight="600" letterSpacing={0.5}>
-                      {isPremium ? 'PREMIUM MEMBER' : customAvatar.toUpperCase()}
+                    <Text color={avatarDetails.color as any} fontSize={10} fontWeight="600" letterSpacing={0.5}>
+                      {customAvatar.toUpperCase()}
                     </Text>
                   </XStack>
                 </YStack>
@@ -385,16 +373,14 @@ export default function ProfileScreen() {
               <XStack
                 width="100%"
                 justifyContent="space-between"
-                borderTopWidth={1}
-                borderTopColor={theme.border}
                 paddingTop={16}
                 gap={12}
               >
                 <YStack flex={1} alignItems="center" gap={2}>
-                  <Text color={theme.textSecondary} fontSize={11} fontWeight="500" letterSpacing={0.5} textTransform="uppercase">
+                  <Text color="rgba(255,255,255,0.7)" fontSize={11} fontWeight="500" letterSpacing={0.5} textTransform="uppercase">
                     Academy Score
                   </Text>
-                  <Text color={theme.text} fontSize={16} fontWeight="700">
+                  <Text color="#FFFFFF" fontSize={16} fontWeight="700">
                     {getFinancialHealthScore()} / 100
                   </Text>
                 </YStack>
@@ -404,19 +390,19 @@ export default function ProfileScreen() {
                   alignItems="center"
                   borderLeftWidth={1}
                   borderRightWidth={1}
-                  borderColor={theme.border}
+                  borderColor="rgba(255,255,255,0.15)"
                   gap={2}
                 >
-                  <Text color={theme.textSecondary} fontSize={11} fontWeight="500" letterSpacing={0.5} textTransform="uppercase">
+                  <Text color="rgba(255,255,255,0.7)" fontSize={11} fontWeight="500" letterSpacing={0.5} textTransform="uppercase">
                     Badges
                   </Text>
-                  <Text color={theme.text} fontSize={16} fontWeight="700">
+                  <Text color="#FFFFFF" fontSize={16} fontWeight="700">
                     {unlockedAchievements.length} / {ALL_ACHIEVEMENTS.length}
                   </Text>
                 </YStack>
 
                 <YStack flex={1} alignItems="center" gap={2}>
-                  <Text color={theme.textSecondary} fontSize={11} fontWeight="500" letterSpacing={0.5} textTransform="uppercase">
+                  <Text color="rgba(255,255,255,0.7)" fontSize={11} fontWeight="500" letterSpacing={0.5} textTransform="uppercase">
                     Streak
                   </Text>
                   <Text color={theme.warning} fontSize={16} fontWeight="700">
@@ -424,133 +410,13 @@ export default function ProfileScreen() {
                   </Text>
                 </YStack>
               </XStack>
-            </CbudgetCard>
-          </Animated.View>
+            </YStack>
+          </View>
 
-          {/* Cbudget Premium Section */}
-          <Animated.View entering={FadeInDown.delay(150).duration(500)}>
-            {!isPremium ? (
-              <CbudgetCard
-                marginBottom={Spacing[16]}
-                padding={0}
-                style={{ overflow: 'hidden' }}
-                borderColor="rgba(245, 158, 11, 0.4)"
-                borderWidth={1.5}
-              >
-                {/* Luxury Indigo/Violet Gradient Background */}
-                <View
-                  style={{
-                    padding: 20,
-                    gap: 14,
-                    background: 'linear-gradient(135deg, #1E1B4B 0%, #311042 100%)',
-                    backgroundColor: '#1E1B4B', // Fallback
-                  } as any}
-                >
-                  <XStack justifyContent="space-between" alignItems="center">
-                    <YStack gap={2}>
-                      <XStack gap={4} alignItems="center">
-                        <SymbolView
-                          name={{ ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' } as any}
-                          size={12}
-                          tintColor="#F59E0B"
-                        />
-                        <Text color="#F59E0B" fontSize={11} fontWeight="900" letterSpacing={1.5}>
-                          UNLEASH FINANCIAL MASTERY
-                        </Text>
-                      </XStack>
-                      <Text color="#FFFFFF" fontSize={22} fontWeight="900" letterSpacing={-0.5} marginTop={2}>
-                        Cbudget Premium
-                      </Text>
-                    </YStack>
-                    <SymbolView
-                      name={{ ios: 'crown.fill', android: 'star', web: 'star' } as any}
-                      size={32}
-                      tintColor="#F59E0B"
-                    />
-                  </XStack>
-                  
-                  <Text color="rgba(248, 250, 252, 0.75)" fontSize={13} lineHeight={19}>
-                    Join 10,000+ members accelerating their financial independence. Get options simulator modules, margin trading lab, custom AI-driven budget leaks advisor, and certified pathways.
-                  </Text>
-                  
-                  <Button
-                    height={46}
-                    backgroundColor="#F59E0B"
-                    borderRadius={12}
-                    pressStyle={{ opacity: 0.9, scale: 0.98 }}
-                    onPress={() => {
-                      setCheckoutStep(1);
-                      setCheckoutVisible(true);
-                    }}
-                    borderWidth={0}
-                    marginTop={4}
-                  >
-                    <XStack gap={6} alignItems="center">
-                      <Text color="#FFFFFF" fontWeight="800" fontSize={14} letterSpacing={0.2}>
-                        Upgrade to Premium
-                      </Text>
-                      <SymbolView
-                        name={{ ios: 'crown.fill', android: 'star', web: 'star' } as any}
-                        size={14}
-                        tintColor="#FFFFFF"
-                      />
-                    </XStack>
-                  </Button>
-                </View>
-              </CbudgetCard>
-            ) : (
-              <CbudgetCard
-                marginBottom={Spacing[16]}
-                padding={16}
-                gap={12}
-                backgroundColor={`${theme.primary}0D` as any}
-                borderColor={`${theme.primary}40` as any}
-                borderWidth={1.5}
-              >
-                <XStack justifyContent="space-between" alignItems="center">
-                  <YStack gap={2}>
-                    <XStack gap={6} alignItems="center">
-                      <SymbolView
-                        name={{ ios: 'checkmark.seal.fill', android: 'check_circle', web: 'check_circle' } as any}
-                        size={16}
-                        tintColor={theme.primary as any}
-                      />
-                      <Text color={theme.primary as any} fontSize={11} fontWeight="800" letterSpacing={1}>
-                        SUBSCRIBED
-                      </Text>
-                    </XStack>
-                    <Text color={theme.text} fontSize={17} fontWeight="800">
-                      Cbudget Premium Active
-                    </Text>
-                  </YStack>
-                  <SymbolView
-                    name={{ ios: 'crown.fill', android: 'star', web: 'star' } as any}
-                    size={24}
-                    tintColor="#F59E0B"
-                  />
-                </XStack>
-                <Text color={theme.textSecondary} fontSize={13}>
-                  Your premium subscription renews automatically. Next payment date: July 13, 2026.
-                </Text>
-                <Button
-                  height={40}
-                  backgroundColor="transparent"
-                  borderColor={theme.border}
-                  borderWidth={1}
-                  borderRadius={10}
-                  pressStyle={{ opacity: 0.8 }}
-                  onPress={handleCancelSubscription}
-                >
-                  <Text color={theme.textSecondary} fontWeight="600" fontSize={13}>
-                    Cancel Subscription
-                  </Text>
-                </Button>
-              </CbudgetCard>
-            )}
-          </Animated.View>
+
 
           {/* App Customization Panel */}
-          <Animated.View entering={FadeInDown.delay(200).duration(500)}>
+          <View>
             <YStack gap={10} marginBottom={Spacing[24]}>
               <Text color={theme.text} fontSize={16} fontWeight="900" paddingHorizontal={2}>
                 App Customization
@@ -606,6 +472,7 @@ export default function ProfileScreen() {
                   <Text color={theme.text} fontSize={13} fontWeight="700">Primary Color Theme</Text>
                   <XStack gap={12} alignItems="center" paddingVertical={4}>
                     {[
+                      { name: 'green', hex: '#3EB47D' },
                       { name: 'sky', hex: '#0EA5E9' },
                       { name: 'teal', hex: '#14B8A6' },
                       { name: 'purple', hex: '#8B5CF6' },
@@ -644,7 +511,7 @@ export default function ProfileScreen() {
                 </YStack>
               </CbudgetCard>
             </YStack>
-          </Animated.View>
+          </View>
 
           {/* Achievement Showcase */}
           <YStack gap={12} marginBottom={Spacing[24]}>
@@ -661,7 +528,7 @@ export default function ProfileScreen() {
                 const textColor = ach.unlocked ? theme.text : theme.textSecondary;
 
                 return (
-                  <Animated.View key={ach.id} entering={FadeInDown.delay(100 * index).duration(500)} style={{ width: '48.5%' }}>
+                  <View key={ach.id} style={{ width: '48.5%' }}>
                     <Button
                       padding={0}
                       height="auto"
@@ -725,14 +592,14 @@ export default function ProfileScreen() {
                         </YStack>
                       </CbudgetCard>
                     </Button>
-                  </Animated.View>
+                  </View>
                 );
               })}
             </XStack>
           </YStack>
 
           {/* Settings / Actions List */}
-          <Animated.View entering={FadeInDown.delay(300).duration(500)}>
+          <View>
             <YStack gap={Spacing[16]} marginBottom={Spacing[24]}>
               <CbudgetCard padding={0} overflow="hidden">
                 {/* Help & Support */}
@@ -792,10 +659,10 @@ export default function ProfileScreen() {
                 </Button>
               </CbudgetCard>
             </YStack>
-          </Animated.View>
+          </View>
 
           {/* Simulated Account Settings */}
-          <Animated.View entering={FadeInDown.delay(350).duration(500)}>
+          <View>
             <CbudgetCard marginBottom={Spacing[24]} gap={12} padding={16}>
               <Text color={theme.text} fontSize={15} fontWeight="700" paddingHorizontal={4} marginBottom={4}>
                 Simulated Sandbox Account
@@ -868,7 +735,7 @@ export default function ProfileScreen() {
                 </Button>
               </YStack>
             </CbudgetCard>
-          </Animated.View>
+          </View>
 
         </ScrollView>
       </SafeAreaView>
@@ -1120,7 +987,7 @@ export default function ProfileScreen() {
                     {[
                       { name: 'Virtual Cash & Stock Trades', free: true, pro: true },
                       { name: 'Options, Cryptos, & Margin Trading', free: false, pro: true },
-                      { name: 'Personalized AI Coach Budgets', free: false, pro: true },
+                      { name: 'Unlocked Investment Lab', free: false, pro: true },
                       { name: 'Unlimited Savings & Custom Goals', free: false, pro: true },
                       { name: 'Certified Milestones & Pathways', free: false, pro: true },
                     ].map((feature, i) => (
@@ -1609,15 +1476,28 @@ export default function ProfileScreen() {
             shadowRadius={24}
             alignItems="center"
           >
-            {/* Pouchy Sad Mascot Helper */}
-            <PouchyHelper expression="sad" size={80} />
+            {/* Warning Icon Helper */}
+            <YStack
+              width={64}
+              height={64}
+              borderRadius={32}
+              backgroundColor={`${theme.warning}15` as any}
+              alignItems="center"
+              justifyContent="center"
+            >
+              <SymbolView
+                name={{ ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning' } as const}
+                size={32}
+                tintColor={theme.warning}
+              />
+            </YStack>
 
             <YStack gap={6} alignItems="center">
               <Text fontSize={18} fontWeight="800" color={theme.text} textAlign="center">
-                Pouchy is Sad!
+                Sign Out?
               </Text>
               <Text fontSize={13} color={theme.textSecondary} textAlign="center" lineHeight={18}>
-                Pouchy will miss you! Are you sure you want to sign out and end your sandbox learning session?
+                Are you sure you want to sign out and end your sandbox learning session?
               </Text>
             </YStack>
 
@@ -1665,7 +1545,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 6,
     paddingTop: 16,
     paddingBottom: 32,
   },

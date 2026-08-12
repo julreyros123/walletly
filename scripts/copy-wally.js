@@ -1,1 +1,0 @@
-require('./copy-pouchy.js');

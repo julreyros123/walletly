@@ -89,7 +89,8 @@ export function AppHeader() {
             color={theme.text}
             fontSize={24}
             fontWeight="800"
-            letterSpacing={-0.8}
+            fontFamily="Inter_800ExtraBold"
+            letterSpacing={-1}
             marginLeft={-2}
           >
             budget
@@ -198,20 +199,47 @@ export function AppHeader() {
               </YStack>
 
               {/* Quick Stats Summary */}
-              <YStack gap={8} backgroundColor={theme.backgroundElement} padding={12} borderRadius={8}>
-                <XStack justifyContent="space-between" alignItems="center">
-                  <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Financial Health</Text>
-                  <Text color={theme.text} fontSize={13} fontWeight="700">{getFinancialHealthScore()}/100</Text>
-                </XStack>
-                <XStack justifyContent="space-between" alignItems="center">
-                  <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Streak</Text>
-                  <Text color={theme.warning} fontSize={13} fontWeight="700">🔥 {streakDays} days</Text>
-                </XStack>
-                <XStack justifyContent="space-between" alignItems="center">
-                  <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Academy Level</Text>
-                  <Text color={theme.primary} fontSize={13} fontWeight="700">Lvl {level} ({xp} XP)</Text>
-                </XStack>
-              </YStack>
+              {user?.id === 'guest' ? (
+                <YStack gap={10} backgroundColor={`${theme.primary}10` as any} padding={14} borderRadius={12} borderWidth={1} borderColor={`${theme.primary}20` as any}>
+                  <Text color={theme.text} fontSize={13} fontWeight="700">
+                    Guest Session
+                  </Text>
+                  <Text color={theme.textSecondary} fontSize={11} lineHeight={16}>
+                    Create an account to save your budgets, earn XP, track streaks, and unlock simulator games!
+                  </Text>
+                  <Button
+                    backgroundColor={theme.primary}
+                    pressStyle={{ opacity: 0.8 }}
+                    borderWidth={0}
+                    borderRadius={8}
+                    height={32}
+                    onPress={async () => {
+                      setShowDrawer(false);
+                      await logout();
+                      router.replace('/(auth)/register' as Href);
+                    }}
+                  >
+                    <Text color="#FFFFFF" fontSize={12} fontWeight="700">
+                      Create Account
+                    </Text>
+                  </Button>
+                </YStack>
+              ) : (
+                <YStack gap={8} backgroundColor={theme.backgroundElement} padding={12} borderRadius={8}>
+                  <XStack justifyContent="space-between" alignItems="center">
+                    <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Financial Health</Text>
+                    <Text color={theme.text} fontSize={13} fontWeight="700">{getFinancialHealthScore()}/100</Text>
+                  </XStack>
+                  <XStack justifyContent="space-between" alignItems="center">
+                    <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Streak</Text>
+                    <Text color={theme.warning} fontSize={13} fontWeight="700">🔥 {streakDays} days</Text>
+                  </XStack>
+                  <XStack justifyContent="space-between" alignItems="center">
+                    <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Academy Level</Text>
+                    <Text color={theme.primary} fontSize={13} fontWeight="700">Lvl {level} ({xp} XP)</Text>
+                  </XStack>
+                </YStack>
+              )}
 
               {/* Actions List */}
               <YStack gap={10} marginTop={8}>
@@ -253,7 +281,7 @@ export function AppHeader() {
                       tintColor={theme.error}
                     />
                     <Text color={theme.error} fontSize={13} fontWeight="600">
-                      Sign Out
+                      {user?.id === 'guest' ? 'Exit Guest Mode' : 'Sign Out'}
                     </Text>
                   </XStack>
                 </Button>

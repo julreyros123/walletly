@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable } from 'react-native';
-import { XStack, Label, Text, View } from 'tamagui';
+import { YStack, XStack, Label, Text, View } from 'tamagui';
 import { useTheme } from '@/hooks/use-theme';
 import { SymbolView } from 'expo-symbols';
 
@@ -20,7 +20,7 @@ export function FormCheckbox({
   const theme = useTheme();
 
   return (
-    <View space="$1">
+    <YStack gap={4}>
       <Pressable onPress={() => onCheckedChange(!checked)}>
         <XStack gap={12} alignItems="flex-start" paddingVertical={6}>
           <View
@@ -65,6 +65,6 @@ export function FormCheckbox({
           {error}
         </Text>
       )}
-    </View>
+    </YStack>
   );
 }

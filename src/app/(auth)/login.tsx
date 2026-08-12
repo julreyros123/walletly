@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { YStack, Text, XStack, Button } from 'tamagui';
+import { YStack, Text, XStack, View } from 'tamagui';
 import { Link, useRouter, Href } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import { loginSchema, LoginFormData } from '@/validation/auth.schema';
@@ -9,18 +9,45 @@ import { AuthLayout } from '@/components/ui/AuthLayout';
 import { FormInput } from '@/components/ui/FormInput';
 import { FormButton } from '@/components/ui/FormButton';
 import { useTheme } from '@/hooks/use-theme';
-import { Alert, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { SymbolView } from 'expo-symbols';
-import { View } from 'tamagui';
+import { Alert, StyleSheet, Pressable } from 'react-native';
+import { GoogleIcon, FacebookIcon } from '@/components/ui/SocialIcons';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+
+function SocialIconButton({
+  icon,
+  onPress,
+}: {
+  icon: React.ReactNode;
+  onPress: () => void;
+}) {
+  const scale = useSharedValue(1);
+  const aStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Animated.View style={[aStyle, styles.socialBtn]}>
+      <Pressable
+        onPressIn={() => {
+          scale.value = withSpring(0.92, { damping: 15, stiffness: 300 });
+        }}
+        onPressOut={() => {
+          scale.value = withSpring(1, { damping: 15, stiffness: 300 });
+        }}
+        onPress={onPress}
+        style={styles.socialBtnInner}
+      >
+        {icon}
+      </Pressable>
+    </Animated.View>
+  );
+}
 
 export default function LoginScreen() {
   const router = useRouter();
   const theme = useTheme();
   const login = useAuthStore((state) => state.login);
   const [loading, setLoading] = useState(false);
-  const [guestLoading, setGuestLoading] = useState(false);
-
-  const isAnyLoading = loading || guestLoading;
 
   const {
     control,
@@ -37,17 +64,12 @@ export default function LoginScreen() {
   const onSubmit = async (data: LoginFormData) => {
     setLoading(true);
     try {
-      // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 1200));
-
-      // Successful mock login
       await login('mock-jwt-token-12345', {
         id: '1',
         name: 'Demo User',
         email: data.email,
       });
-
-      // Redirect user to the tabs (Dashboard)
       router.replace('/(tabs)' as Href);
     } catch (err) {
       Alert.alert('Login Failed', 'Please check your credentials and try again.');
@@ -56,39 +78,24 @@ export default function LoginScreen() {
     }
   };
 
-  const handleGuestLogin = async () => {
-    setGuestLoading(true);
-    try {
-      await login('mock-guest-token-56789', {
-        id: 'guest',
-        name: 'Guest Explorer',
-        email: 'guest@cbudget.com',
-      });
-      router.replace('/(tabs)' as Href);
-    } catch (err) {
-      Alert.alert('Guest Mode Error', 'Unable to start guest session.');
-    } finally {
-      setGuestLoading(false);
-    }
-  };
-
   return (
     <AuthLayout
-      title="Welcome Back"
-      subtitle="Continue building smarter financial habits."
+      title="Welcome back"
+      subtitle="Sign in to continue"
       showBackButton
     >
-      <YStack gap={8}>
+      <YStack gap={16} width="100%">
+        {/* Email */}
         <Controller
           control={control}
           name="email"
           render={({ field: { onChange, onBlur, value } }) => (
             <FormInput
               label="Email Address"
-              placeholder="name@example.com"
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
+              placeholder="Enter your email"
               onBlur={onBlur}
               onChangeText={onChange}
               value={value}
@@ -97,17 +104,18 @@ export default function LoginScreen() {
           )}
         />
 
-        <YStack gap={4}>
+        {/* Password */}
+        <YStack gap={6}>
           <Controller
             control={control}
             name="password"
             render={({ field: { onChange, onBlur, value } }) => (
               <FormInput
                 label="Password"
-                placeholder="••••••••"
                 secureTextEntry
                 autoCapitalize="none"
                 autoComplete="password"
+                placeholder="Enter your password"
                 onBlur={onBlur}
                 onChangeText={onChange}
                 value={value}
@@ -115,119 +123,67 @@ export default function LoginScreen() {
               />
             )}
           />
-
-          <XStack justifyContent="flex-end">
+          <XStack justifyContent="flex-end" marginTop={4}>
             <Link href={'/(auth)/forgot-password' as Href} asChild>
               <Text
-                color={theme.primary}
+                color={theme.primary as any}
                 fontSize={13}
-                fontWeight="500"
+                fontWeight="600"
                 pressStyle={{ opacity: 0.7 }}
               >
-                Forgot Password?
+                Forgot password?
               </Text>
             </Link>
           </XStack>
         </YStack>
 
+        {/* Sign In CTA */}
         <FormButton
+          variant="primary"
+          height={50}
           loading={loading}
-          disabled={isAnyLoading}
+          disabled={loading}
+          glow
           onPress={handleSubmit(onSubmit)}
+          marginTop={4}
         >
           Sign In
         </FormButton>
 
-        <Button
-          height={52}
-          backgroundColor={`${theme.primary}12` as any}
-          borderColor={`${theme.primary}4D` as any}
-          borderWidth={1.5}
-          borderRadius={16}
-          pressStyle={{ opacity: 0.8, scale: 0.98, backgroundColor: `${theme.primary}26` as any }}
-          disabled={isAnyLoading}
-          onPress={handleGuestLogin}
-        >
-          <XStack gap={8} alignItems="center" justifyContent="center">
-            {guestLoading ? (
-              <ActivityIndicator color={theme.primary as any} size="small" />
-            ) : (
-              <>
-                <SymbolView
-                  name={{ ios: 'person.crop.circle', android: 'account_circle', web: 'account_circle' } as any}
-                  size={18}
-                  tintColor={theme.primary as any}
-                />
-                <Text color={theme.primary as any} fontSize={14} fontWeight="700">
-                  Explore as Guest
-                </Text>
-              </>
-            )}
-          </XStack>
-        </Button>
-
         {/* Divider */}
-        <XStack alignItems="center" width="100%" marginVertical={4}>
-          <View flex={1} height={1} backgroundColor={theme.border} />
-          <Text color={theme.textSecondary} fontSize={11} fontWeight="600" textTransform="uppercase" letterSpacing={0.8} marginHorizontal={12}>
-            Or continue with
+        <XStack alignItems="center" width="100%" marginVertical={6}>
+          <View flex={1} height={1} backgroundColor="rgba(255, 255, 255, 0.1)" />
+          <Text color="rgba(255, 255, 255, 0.45)" fontSize={12} fontWeight="600" marginHorizontal={12}>
+            or continue with
           </Text>
-          <View flex={1} height={1} backgroundColor={theme.border} />
+          <View flex={1} height={1} backgroundColor="rgba(255, 255, 255, 0.1)" />
         </XStack>
 
-        {/* Social Logins */}
-        <XStack justifyContent="center" gap={12} width="100%">
-          {/* Apple Login */}
-          <Button
-            flex={1}
-            height={44}
-            backgroundColor={theme.backgroundElement}
-            borderRadius={12}
-            pressStyle={{ opacity: 0.7, scale: 0.98 }}
-            alignItems="center"
-            justifyContent="center"
-            borderWidth={0}
-            onPress={() => Alert.alert('Simulated Login', 'Apple Sign In completed.')}
-          >
-            <SymbolView
-              name={{ ios: 'apple.logo', android: 'apple', web: 'apple' } as any}
-              size={18}
-              tintColor={theme.text}
-            />
-          </Button>
-
-          {/* Google Login */}
-          <Button
-            flex={1}
-            height={44}
-            backgroundColor={theme.backgroundElement}
-            borderRadius={12}
-            pressStyle={{ opacity: 0.7, scale: 0.98 }}
-            alignItems="center"
-            justifyContent="center"
-            borderWidth={0}
-            onPress={() => Alert.alert('Simulated Login', 'Google Sign In completed.')}
-          >
-            <SymbolView
-              name={{ ios: 'g.circle.fill', android: 'google', web: 'google' } as any}
-              size={18}
-              tintColor={theme.text}
-            />
-          </Button>
+        {/* Logo-only side-by-side social buttons */}
+        <XStack justifyContent="center" gap={16} width="100%">
+          <SocialIconButton
+            icon={<GoogleIcon size={24} />}
+            onPress={() => Alert.alert('Google', 'Google Sign In')}
+          />
+          <SocialIconButton
+            icon={<FacebookIcon size={24} />}
+            onPress={() => Alert.alert('Facebook', 'Facebook Sign In')}
+          />
         </XStack>
 
-        <XStack justifyContent="center" gap={8} marginTop={4}>
-          <Text color={theme.textSecondary} fontSize={14}>
+        {/* Footer link */}
+        <XStack justifyContent="center" gap={6} marginTop={10}>
+          <Text color="rgba(255, 255, 255, 0.55)" fontSize={14} fontWeight="400">
             Don't have an account?
           </Text>
           <Link href={'/(auth)/register' as Href} asChild>
             <Text
-              color={theme.primary}
+              color={theme.primary as any}
               fontSize={14}
-              fontWeight="600"
+              fontWeight="700"
               pressStyle={{ opacity: 0.7 }}
             >
-              Create Account
+              Sign Up
             </Text>
           </Link>
         </XStack>
@@ -235,3 +191,20 @@ export default function LoginScreen() {
     </AuthLayout>
   );
 }
+
+const styles = StyleSheet.create({
+  socialBtn: {
+    width: 60,
+    height: 50,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  socialBtnInner: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});

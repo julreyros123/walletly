@@ -1,27 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, View, Alert, Modal, TextInput, TouchableOpacity, Image as RNImage } from 'react-native';
+import { ScrollView, StyleSheet, Alert, Modal, TouchableOpacity, Image as RNImage } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { YStack, XStack, Text, Button, Progress } from 'tamagui';
+import { YStack, XStack, Button, Progress, View, Text as TamaguiText } from 'tamagui';
+
+const Text = (props: any) => <TamaguiText {...props} />;
 import { useAuthStore } from '@/store/authStore';
 import { useGamificationStore } from '@/store/gamificationStore';
 import { useTheme } from '@/hooks/use-theme';
 import { SymbolView } from 'expo-symbols';
 import { useRouter, Href } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import { CbudgetCard } from '@/components/ui/CbudgetCard';
-import { FormButton } from '@/components/ui/FormButton';
-import { AppHeader } from '@/components/ui/AppHeader';
 import { Spacing } from '@/constants/theme';
-
+import { DailyRewardModal } from '@/components/ui/DailyRewardModal';
 import { BackgroundSystem } from '@/components/ui/BackgroundSystem';
-import { PouchyHelper } from '@/components/ui/PouchyHelper';
+import { CbudgetCard } from '@/components/ui/CbudgetCard';
 
 export const getMasteryAvatarDetails = (title: string) => {
   switch (title) {
     case 'Smart Saver':
       return {
         initials: 'SS',
-        color: '#10B981', // emerald
+        color: '#10B981', // Emerald green
         borderColor: '#10B981',
         borderStyle: 'dashed' as const,
         bg: 'rgba(16, 185, 129, 0.1)',
@@ -29,7 +27,7 @@ export const getMasteryAvatarDetails = (title: string) => {
     case 'Investment Explorer':
       return {
         initials: 'IE',
-        color: '#3B82F6', // royal blue
+        color: '#3B82F6', // Royal blue
         borderColor: '#3B82F6',
         borderStyle: 'solid' as const,
         bg: 'rgba(59, 130, 246, 0.1)',
@@ -37,7 +35,7 @@ export const getMasteryAvatarDetails = (title: string) => {
     case 'Financial Strategist':
       return {
         initials: 'FS',
-        color: '#F59E0B', // amber
+        color: '#F59E0B', // Amber
         borderColor: '#F59E0B',
         borderStyle: 'solid' as const,
         bg: 'rgba(245, 158, 11, 0.1)',
@@ -46,7 +44,7 @@ export const getMasteryAvatarDetails = (title: string) => {
     default:
       return {
         initials: 'BB',
-        color: '#64748B', // slate
+        color: '#64748B', // Slate
         borderColor: '#64748B',
         borderStyle: 'solid' as const,
         bg: 'rgba(100, 116, 139, 0.1)',
@@ -105,36 +103,132 @@ const SpriteIcon = ({ name, size = 44 }: { name: 'achievements' | 'learning' | '
   );
 };
 
+const getCategoryIconDetails = (category: string) => {
+  switch (category.toLowerCase()) {
+    case 'food':
+    case 'dining':
+      return {
+        icon: { ios: 'fork.knife', android: 'restaurant', web: 'restaurant' } as const,
+        color: '#F97316', // orange
+        bg: 'rgba(249, 115, 22, 0.1)',
+      };
+    case 'transport':
+    case 'travel':
+      return {
+        icon: { ios: 'car.fill', android: 'directions_car', web: 'directions_car' } as const,
+        color: '#0EA5E9', // sky blue
+        bg: 'rgba(14, 165, 233, 0.1)',
+      };
+    case 'utilities':
+    case 'bills':
+      return {
+        icon: { ios: 'bolt.fill', android: 'bolt', web: 'bolt' } as const,
+        color: '#10B981', // emerald green
+        bg: 'rgba(16, 185, 129, 0.1)',
+      };
+    case 'entertainment':
+    case 'leisure':
+      return {
+        icon: { ios: 'gamecontroller.fill', android: 'sports_esports', web: 'sports_esports' } as const,
+        color: '#8B5CF6', // purple
+        bg: 'rgba(139, 92, 246, 0.1)',
+      };
+    case 'shopping':
+      return {
+        icon: { ios: 'bag.fill', android: 'local_mall', web: 'local_mall' } as const,
+        color: '#EC4899', // pink
+        bg: 'rgba(236, 72, 153, 0.1)',
+      };
+    case 'education':
+    case 'school':
+      return {
+        icon: { ios: 'book.fill', android: 'school', web: 'school' } as const,
+        color: '#3B82F6', // royal blue
+        bg: 'rgba(59, 130, 246, 0.1)',
+      };
+    default:
+      return {
+        icon: { ios: 'tag.fill', android: 'label', web: 'label' } as const,
+        color: '#64748B', // slate
+        bg: 'rgba(100, 116, 139, 0.1)',
+      };
+  }
+};
+
 export default function DashboardScreen() {
   const router = useRouter();
   const theme = useTheme() as any;
-  const { user, isPremium } = useAuthStore();
-  
+  const { user, isPremium, logout } = useAuthStore();
+  const isGuest = user?.id === 'guest';
   const store = useGamificationStore();
 
-  const [showAIChat, setShowAIChat] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
-  const [chatInput, setChatInput] = useState('');
-  const [chatMessages, setChatMessages] = useState<Array<{ id: string; text: string; sender: 'user' | 'ai'; suggestion?: string }>>([
-    { id: '1', text: "Hey! I'm Pouchy, your AI Financial Coach. Ask me how to budget, grow savings goals, or practice investing Cbudget in our sandbox!", sender: 'ai' },
-  ]);
+  const [showDailyReward, setShowDailyReward] = useState(false);
+  const [registerModalVisible, setRegisterModalVisible] = useState(false);
+
+  const handleRestrictedAction = (action: () => void) => {
+    if (isGuest) {
+      setRegisterModalVisible(true);
+    } else {
+      action();
+    }
+  };
 
   useEffect(() => {
+    if (isGuest) return;
     store.checkAndUpdateStreak();
-  }, []);
+    
+    // Check if daily reward should pop up
+    const today = new Date().toISOString().split('T')[0];
+    if (store.lastClaimedRewardDate !== today) {
+      setTimeout(() => setShowDailyReward(true), 500);
+    }
+  }, [isGuest]);
 
-  // Derived calculations
+  // Derived Calculations
   const totalSpent = store.loggedExpenses.reduce((sum, e) => sum + e.amount, 0);
-  const totalSavingsContribution = store.savingsGoals.reduce((sum, g) => sum + g.currentSavings, 0);
-  const budgetRemaining = store.totalBudget - totalSpent;
-  const budgetLeftover = Math.max(0, budgetRemaining - totalSavingsContribution - store.virtualBalance);
+  
+  const completedCount = Math.min(9, Math.floor(store.learningScore / 11));
+  const currentLevelNum = Math.min(9, completedCount + 1);
+  const isAllCompleted = store.learningScore >= 99;
 
-  // Asset price reference for holdings - synced with GInvest-equivalent simulation tickers
+  const levelTitles: Record<number, string> = {
+    1: 'Budgeting Basics',
+    2: 'Expense Tracking',
+    3: 'Saving Strategies',
+    4: 'Emergency Funds',
+    5: 'Financial Planning',
+    6: 'Investment Fundamentals',
+    7: 'Risk Management',
+    8: 'Diversification',
+    9: 'Long-Term Wealth',
+  };
+
+  const levelDescriptions: Record<number, string> = {
+    1: 'Master cash-flow principles and zero-based budgeting.',
+    2: 'Learn to track daily expenses and spot leaks.',
+    3: 'Discover the pay-yourself-first method.',
+    4: 'Build a solid safety buffer for life emergencies.',
+    5: 'Set S.M.A.R.T savings targets with timelines.',
+    6: 'Unlock compound interest and growth concepts.',
+    7: 'Understand risk tolerance and tradeoffs.',
+    8: 'Spread risks across multiple asset classes.',
+    9: 'Develop patience and long-term compounding.',
+  };
+
+  const currentLevelTitle = levelTitles[currentLevelNum] || 'Budgeting Basics';
+  const currentLevelDesc = levelDescriptions[currentLevelNum] || 'Complete learning pathway modules.';
+
+  const totalSavingsContribution = store.savingsGoals.reduce((sum, g) => sum + g.currentSavings, 0);
+  const budgetRemaining = Math.max(0, store.totalBudget - totalSpent);
+
+  // Asset price reference for holdings - synced with Invest Arena simulation tickers
   const assetPrices: Record<string, number> = {
-    'MONEY.SIM': 105.15,
-    'BOND.SIM': 185.30,
-    'PSEi.SIM': 345.50,
-    'TECH.SIM': 512.80,
+    'NOVA': 512.80,
+    'VOLT': 345.50,
+    'BREW': 125.30,
+    'APEX': 185.20,
+    'SOLR': 95.60,
   };
   const holdingsValue = Object.keys(store.portfolioAllocations).reduce(
     (sum, ticker) => sum + (store.portfolioAllocations[ticker] || 0) * (assetPrices[ticker] || 0),
@@ -142,592 +236,751 @@ export default function DashboardScreen() {
   );
   const totalSimValue = holdingsValue + store.virtualBalance;
 
-  const handleStartCoachChat = () => {
-    setShowAIChat(true);
-  };
+  // Gamification Level and XP progress variables
+  const LEVEL_THRESHOLDS = [0, 100, 250, 500, 1000, 2000, 3500, 5000];
+  const currentLevel = Math.max(1, Math.min(8, store.level));
+  const currentLevelThreshold = LEVEL_THRESHOLDS[currentLevel - 1] || 0;
+  const nextLevelThreshold = LEVEL_THRESHOLDS[currentLevel] || 10000;
+  const xpInCurrentLevel = Math.max(0, store.xp - currentLevelThreshold);
+  const xpNeededForNextLevel = Math.max(1, nextLevelThreshold - currentLevelThreshold);
+  const xpProgressRatio = Math.max(0, Math.min(1, xpInCurrentLevel / xpNeededForNextLevel));
+
+  const avatarDetails = getMasteryAvatarDetails(store.customAvatar);
 
   return (
-    <YStack flex={1} backgroundColor={theme.background} position="relative">
-      <BackgroundSystem mode="tabs" />
+    <YStack flex={1} backgroundColor="#0B132B" position="relative">
+      
       <SafeAreaView style={[styles.safeArea, { zIndex: 1 }]} edges={['top', 'left', 'right']}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} style={{ backgroundColor: 'transparent' }}>
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent} 
+          showsVerticalScrollIndicator={false}
+          style={{ backgroundColor: 'transparent', flex: 1 }}
+        >
           
-          {/* Greeting & Streak Header */}
-          <Animated.View entering={FadeInDown.delay(100).duration(450)}>
-            <XStack justifyContent="space-between" alignItems="center" marginBottom={Spacing[16]}>
-              <YStack gap={2}>
+          {/* ==================== GREETING & PROFILE HEADER ==================== */}
+          <XStack justifyContent="space-between" alignItems="center" marginBottom={12}>
+            <XStack gap={12} alignItems="center" flex={1}>
+              {/* Mastery Profile Avatar */}
+              <TouchableOpacity
+                onPress={() => setShowAvatarPicker(true)}
+                activeOpacity={0.85}
+                style={{
+                  width: 50,
+                  height: 50,
+                  borderRadius: 25,
+                  backgroundColor: avatarDetails.bg,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 2,
+                  borderColor: avatarDetails.borderColor,
+                  borderStyle: avatarDetails.borderStyle,
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <SpriteIcon name="avatar" size={38} />
+              </TouchableOpacity>
+
+              {/* Greeting, Title, and XP Bar */}
+              <YStack gap={2} flex={1}>
                 <XStack alignItems="center" gap={6}>
-                  <Text color={theme.textSecondary} fontSize={11} fontWeight="700" textTransform="uppercase" letterSpacing={0.5}>
-                    {store.customAvatar.toUpperCase()}
+                  <Text color="#FFFFFF" fontSize={18} fontFamily="Inter_700Bold" letterSpacing={-0.4}>
+                    Hey {user?.name ? user.name.split(' ')[0] : 'Explorer'} 👋
                   </Text>
-                  {isPremium && (
-                    <XStack
-                      backgroundColor="rgba(245, 158, 11, 0.12)"
-                      borderColor="rgba(245, 158, 11, 0.35)"
-                      borderWidth={1}
-                      borderRadius={100}
-                      paddingHorizontal={8}
-                      paddingVertical={1.5}
-                      alignItems="center"
-                      gap={3}
-                    >
-                      <SymbolView
-                        name={{ ios: 'crown.fill', android: 'star', web: 'star' } as any}
-                        size={9}
-                        tintColor="#F59E0B"
-                      />
-                      <Text color="#F59E0B" fontSize={8} fontWeight="800" letterSpacing={0.5}>
-                        PREMIUM
-                      </Text>
-                    </XStack>
-                  )}
                 </XStack>
-                <Text color={theme.text} fontSize={20} fontWeight="700" letterSpacing={-0.5}>
-                  Hey {user?.name ? user.name.split(' ')[0] : 'Explorer'} 👋
+
+                {/* Gamified XP Progress */}
+                <XStack alignItems="center" gap={6} marginTop={2}>
+                  <View backgroundColor="rgba(255, 255, 255, 0.18)" borderRadius={4} paddingHorizontal={5} paddingVertical={1.5}>
+                    <Text color="#FFFFFF" fontSize={8} fontFamily="Inter_800ExtraBold" letterSpacing={0.2}>
+                      LVL {store.level}
+                    </Text>
+                  </View>
+                  <YStack gap={1}>
+                    <View height={5} backgroundColor="rgba(255, 255, 255, 0.08)" borderRadius={4} overflow="hidden" width={110} marginTop={3} borderWidth={0.5} borderColor="rgba(255,255,255,0.1)">
+                      <View width={`${xpProgressRatio * 100}%`} height="100%" backgroundColor="#3EB47D" borderRadius={4} />
+                    </View>
+                    <Text color="rgba(255, 255, 255, 0.5)" fontSize={8} fontFamily="Inter_600SemiBold">
+                      {store.xp} / {nextLevelThreshold} XP
+                    </Text>
+                  </YStack>
+                </XStack>
+              </YStack>
+            </XStack>
+
+            {/* Streak Tracker Badge */}
+            <TouchableOpacity
+              onPress={() => handleRestrictedAction(() => setShowDailyReward(true))}
+              activeOpacity={0.8}
+              style={{
+                backgroundColor: '#FF7A00',
+                borderRadius: 100,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <SymbolView
+                name={{ ios: 'flame.fill', android: 'local_fire_department', web: 'local_fire_department' } as const}
+                size={14}
+                tintColor="#0B132B"
+              />
+              <Text color="#0B132B" fontSize={11} fontFamily="Inter_700Bold">
+                {store.streakDays}d Streak
+              </Text>
+            </TouchableOpacity>
+          </XStack>
+
+          {/* Mastery Avatar Title Pill */}
+          <TouchableOpacity
+            onPress={() => setShowAvatarPicker(true)}
+            activeOpacity={0.8}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              borderColor: 'rgba(255, 255, 255, 0.15)',
+              borderWidth: 1,
+              borderRadius: 100,
+              paddingHorizontal: 14,
+              paddingVertical: 8,
+              gap: 6,
+              alignSelf: 'flex-start',
+              marginBottom: 20,
+              minHeight: 38,
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <View width={8} height={8} borderRadius={4} backgroundColor={avatarDetails.color} />
+            <Text color="#FFFFFF" fontSize={11} fontFamily="Inter_600SemiBold" letterSpacing={0.5}>
+              {store.customAvatar}
+            </Text>
+            <SymbolView
+              name={{ ios: 'chevron.down', android: 'keyboard_arrow_down', web: 'keyboard_arrow_down' } as const}
+              size={10}
+              tintColor="rgba(255, 255, 255, 0.6)"
+            />
+          </TouchableOpacity>
+
+          {/* ==================== 1. PREMIUM BALANCE/BUDGET CARD ==================== */}
+          <CbudgetCard 
+            marginBottom={20} 
+            padding={0}
+            borderRadius={16}
+            borderWidth={1}
+            borderColor="rgba(255, 255, 255, 0.08)"
+            backgroundColor="#1C2541"
+            elevation={0}
+            style={{
+              overflow: 'hidden',
+            } as any}
+          >
+            <YStack padding={20} gap={14}>
+              <YStack gap={4}>
+                <Text color="#8D99AE" fontSize={11} fontFamily="Inter_600SemiBold" letterSpacing={0.5}>
+                  REMAINING BALANCE
                 </Text>
+                <XStack alignItems="baseline" gap={4} marginTop={2}>
+                  <Text color="#3EB47D" fontSize={20} fontFamily="Inter_700Bold">₱</Text>
+                  <Text color="#FFFFFF" fontSize={28} fontFamily="Inter_700Bold" letterSpacing={-0.5} lineHeight={34}>
+                    {budgetRemaining.toLocaleString()}
+                  </Text>
+                </XStack>
               </YStack>
 
-              <XStack alignItems="center" gap={4}>
-                <SymbolView
-                  name={{ ios: 'flame.fill', android: 'local_fire_department', web: 'local_fire_department' } as const}
-                  size={16}
-                  tintColor={theme.warning}
-                />
-                <Text color={theme.text} fontSize={14} fontWeight="600">
-                  {store.streakDays}-day streak
-                </Text>
-              </XStack>
-            </XStack>
-          </Animated.View>
-
-          {/* ==================== 1. BUDGET REMAINING CARD ==================== */}
-          <Animated.View entering={FadeInDown.delay(150).duration(500)}>
-            <CbudgetCard
-              marginBottom={Spacing[16]}
-              borderLeftWidth={5}
-              borderLeftColor={theme.primary}
-              padding={20}
-              gap={12}
-            >
-              <XStack justifyContent="space-between" alignItems="center">
-                <YStack gap={2}>
-                  <Text color={theme.textSecondary} fontSize={10} fontWeight="700" letterSpacing={0.8} textTransform="uppercase">
-                    BUDGET REMAINING
+              {/* Spend Progress Tracker */}
+              <YStack gap={6} marginTop={4}>
+                <XStack justifyContent="space-between" alignItems="center">
+                  <Text color="#8D99AE" fontSize={11} fontFamily="Inter_500Medium">
+                    Spent: ₱ {totalSpent.toLocaleString()}
                   </Text>
-                  <Text color={theme.text} fontSize={32} fontWeight="bold">
-                    ₱{budgetLeftover.toLocaleString()}
-                  </Text>
-                </YStack>
-                <Button
-                  size="$3"
-                  backgroundColor={theme.primary}
-                  borderRadius={10}
-                  pressStyle={{ opacity: 0.85 }}
-                  onPress={() => router.push('/(tabs)/budget' as Href)}
+                  <XStack gap={6} alignItems="center">
+                    {totalSpent > store.totalBudget && (
+                      <View backgroundColor="rgba(239, 68, 68, 0.2)" paddingHorizontal={6} paddingVertical={2} borderRadius={4}>
+                        <Text color="#EF4444" fontSize={9} fontFamily="Inter_700Bold">OVER BUDGET</Text>
+                      </View>
+                    )}
+                    <Text color="#FFFFFF" fontSize={11} fontFamily="Inter_700Bold">
+                      Limit: ₱ {store.totalBudget.toLocaleString()}
+                    </Text>
+                  </XStack>
+                </XStack>
+                
+                {/* Custom Stable Progress Bar (no sluggish layout animations) */}
+                <View 
+                  height={8} 
+                  backgroundColor="rgba(255,255,255,0.06)"
+                  borderRadius={4}
+                  overflow="hidden"
+                  width="100%"
                 >
-                  <Text color="#FFFFFF" fontWeight="700" fontSize={12}>Manage</Text>
-                </Button>
-              </XStack>
-
-              {store.isBudgetSetupComplete && (
-                <Progress value={(totalSpent / store.totalBudget) * 100} height={6} backgroundColor={theme.backgroundElement}>
-                  <Progress.Indicator backgroundColor={totalSpent > store.totalBudget ? theme.error : theme.success} />
-                </Progress>
-              )}
-            </CbudgetCard>
-          </Animated.View>
-
-          {/* Shortcut Quick actions Grid */}
-          <Animated.View entering={FadeInDown.delay(180).duration(500)}>
-            <YStack gap={10} marginBottom={Spacing[16]}>
-              <Text color={theme.text} fontSize={15} fontWeight="700" paddingHorizontal={4}>
-                Quick Actions
-              </Text>
-
-              <XStack justifyContent="space-between" gap={8}>
-                {/* Achievements Shortcut */}
-                <YStack alignItems="center" flex={1} gap={6}>
-                  <Button
-                    width={50}
-                    height={50}
-                    borderRadius={10}
-                    backgroundColor={theme.surface}
-                    borderColor={theme.border}
-                    borderWidth={1}
-                    alignItems="center"
-                    justifyContent="center"
-                    padding={0}
-                    pressStyle={{ scale: 0.95, backgroundColor: theme.backgroundElement }}
-                    onPress={() => router.push('/(tabs)/profile' as Href)}
-                  >
-                    <SymbolView
-                      name={{ ios: 'trophy.fill', android: 'emoji_events', web: 'emoji_events' } as any}
-                      size={22}
-                      tintColor={theme.primary}
-                    />
-                  </Button>
-                  <Text color={theme.text} fontSize={10} fontWeight="700" textAlign="center">
-                    Achievements
-                  </Text>
-                </YStack>
-
-                {/* AI Coach Assistant */}
-                <YStack alignItems="center" flex={1} gap={6}>
-                  <Button
-                    width={50}
-                    height={50}
-                    borderRadius={10}
-                    backgroundColor={theme.surface}
-                    borderColor={theme.border}
-                    borderWidth={1}
-                    alignItems="center"
-                    justifyContent="center"
-                    padding={0}
-                    pressStyle={{ scale: 0.95, backgroundColor: theme.backgroundElement }}
-                    onPress={handleStartCoachChat}
-                  >
-                    <PouchyHelper expression="smiling" size={38} />
-                  </Button>
-                  <Text color={theme.text} fontSize={10} fontWeight="700" textAlign="center">
-                    Pouchy Coach
-                  </Text>
-                </YStack>
-
-                {/* Mastery Avatar Customization */}
-                <YStack alignItems="center" flex={1} gap={6}>
-                  <Button
-                    width={50}
-                    height={50}
-                    borderRadius={10}
-                    backgroundColor={theme.surface}
-                    borderColor={theme.border}
-                    borderWidth={1}
-                    alignItems="center"
-                    justifyContent="center"
-                    padding={0}
-                    pressStyle={{ scale: 0.95, backgroundColor: theme.backgroundElement }}
-                    onPress={() => setShowAvatarPicker(true)}
-                  >
-                    <SymbolView
-                      name={{ ios: 'person.crop.circle.fill', android: 'account_circle', web: 'account_circle' } as any}
-                      size={24}
-                      tintColor={theme.primary}
-                    />
-                  </Button>
-                  <Text color={theme.text} fontSize={10} fontWeight="700" textAlign="center">
-                    Avatar Style
-                  </Text>
-                </YStack>
-
-                {/* Investment Lab */}
-                <YStack alignItems="center" flex={1} gap={6}>
-                  <Button
-                    width={50}
-                    height={50}
-                    borderRadius={10}
-                    backgroundColor={theme.surface}
-                    borderColor={theme.border}
-                    borderWidth={1}
-                    alignItems="center"
-                    justifyContent="center"
-                    padding={0}
-                    pressStyle={{ scale: 0.95, backgroundColor: theme.backgroundElement }}
-                    onPress={() => router.push('/(tabs)/invest' as Href)}
-                  >
-                    <SymbolView
-                      name={{ ios: 'chart.line.uptrend.xyaxis', android: 'trending_up', web: 'trending_up' } as any}
-                      size={22}
-                      tintColor={theme.primary}
-                    />
-                  </Button>
-                  <Text color={theme.text} fontSize={10} fontWeight="700" textAlign="center">
-                    Invest Lab
-                  </Text>
-                </YStack>
-
-              </XStack>
+                  <View 
+                    width={`${Math.min(100, store.totalBudget > 0 ? (totalSpent / store.totalBudget) * 100 : 0)}%`}
+                    height="100%"
+                    backgroundColor={totalSpent > store.totalBudget ? '#EF4444' : '#3EB47D'}
+                    borderRadius={4}
+                  />
+                </View>
+              </YStack>
             </YStack>
-          </Animated.View>
 
+            {/* Bottom Ledger Metrics */}
+            <View height={1} backgroundColor="rgba(255, 255, 255, 0.06)" />
+            <XStack justifyContent="space-between" alignItems="center" paddingHorizontal={20} paddingVertical={14} backgroundColor="rgba(0, 0, 0, 0.15)">
+              <YStack gap={2}>
+                <Text color="#8D99AE" fontSize={9} fontFamily="Inter_600SemiBold" letterSpacing={0.5}>SANDBOX CASH</Text>
+                <Text color="#FFFFFF" fontSize={13} fontFamily="Inter_700Bold">₱ {store.virtualBalance.toLocaleString()}</Text>
+              </YStack>
+              <View width={1} height={20} backgroundColor="rgba(255, 255, 255, 0.08)" />
+              <YStack gap={2} alignItems="center">
+                <Text color="#8D99AE" fontSize={9} fontFamily="Inter_600SemiBold" letterSpacing={0.5}>PORTFOLIO VALUE</Text>
+                <Text color="#FFFFFF" fontSize={13} fontFamily="Inter_700Bold">₱ {holdingsValue.toLocaleString()}</Text>
+              </YStack>
+              <View width={1} height={20} backgroundColor="rgba(255, 255, 255, 0.08)" />
+              <YStack gap={2} alignItems="flex-end">
+                <Text color="#8D99AE" fontSize={9} fontFamily="Inter_600SemiBold" letterSpacing={0.5}>TOTAL SAVINGS</Text>
+                <Text color="#3EB47D" fontSize={13} fontFamily="Inter_700Bold">₱ {totalSavingsContribution.toLocaleString()}</Text>
+              </YStack>
+            </XStack>
+          </CbudgetCard>
 
-          {/* ==================== 2. FINANCIAL HEALTH HERO CARD ==================== */}
-          <Animated.View entering={FadeInDown.delay(200).duration(500)}>
-            <CbudgetCard
-              marginBottom={Spacing[16]}
-              borderLeftWidth={5}
-              borderLeftColor={theme.primary}
-              padding={16}
-              gap={12}
+          {/* Acorns-Inspired Spare Change Round-Ups Card */}
+          {store.spareChangeAccumulated > 0 && (
+            <CbudgetCard 
+              padding={16} 
+              gap={12} 
+              marginBottom={16}
+              backgroundColor="#1C2541"
+              borderColor="rgba(62, 180, 125, 0.2)"
+              borderWidth={1.5}
+              borderRadius={16}
             >
               <XStack justifyContent="space-between" alignItems="center">
                 <YStack gap={2} flex={1}>
-                  <Text color={theme.textSecondary} fontSize={11} fontWeight="700" letterSpacing={0.8} textTransform="uppercase">
-                    Cbudget Scorecard
-                  </Text>
-                  <Text color={theme.text} fontSize={18} fontWeight="700">
-                    Financial Health Score
+                  <XStack gap={6} alignItems="center">
+                    <SymbolView
+                      name={{ ios: 'coins.pile.fill', android: 'savings', web: 'savings' } as any}
+                      size={16}
+                      tintColor="#3EB47D"
+                    />
+                    <Text color="#3EB47D" fontSize={11} fontFamily="Inter_700Bold" letterSpacing={0.5}>
+                      ACORNS SPARE CHANGE
+                    </Text>
+                  </XStack>
+                  <Text color="#FFFFFF" fontSize={13} fontFamily="Inter_600SemiBold" marginTop={4}>
+                    You saved <Text color="#3EB47D" fontFamily="Inter_700Bold">₱{store.spareChangeAccumulated}</Text> in round-ups from logged expenses!
                   </Text>
                 </YStack>
-                <YStack
-                  width={50}
-                  height={50}
-                  borderRadius={25}
-                  backgroundColor={`${theme.primary}12` as any}
-                  alignItems="center"
-                  justifyContent="center"
-                  borderWidth={2.5}
-                  borderColor={theme.primary}
+                
+                <TouchableOpacity
+                  onPress={() => {
+                    const amount = store.spareChangeAccumulated;
+                    store.sweepSpareChange();
+                    Alert.alert(
+                      '💰 Spare Change Swept!',
+                      `₱${amount} spare change has been transferred to your Investment Lab Sandbox Cash! (+10 XP)`
+                    );
+                  }}
+                  activeOpacity={0.8}
+                  style={{
+                    backgroundColor: '#059669',
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
                 >
-                  <Text color={theme.primary} fontSize={16} fontWeight="700">
-                    {store.getFinancialHealthScore()}
-                  </Text>
-                </YStack>
-              </XStack>
-
-              <XStack flexWrap="wrap" gap={8} marginTop={4}>
-                {[
-                  { label: 'Budget Discipline', val: store.budgetingScore, color: theme.success },
-                  { label: 'Savings Progress', val: store.savingScore, color: theme.primary },
-                  { label: 'Learning Progress', val: store.learningScore, color: theme.primary },
-                  { label: 'Investment Knowledge', val: store.investingScore, color: theme.warning },
-                ].map((item) => (
-                  <View
-                    key={item.label}
-                    style={{
-                      flex: 1,
-                      minWidth: 120,
-                      backgroundColor: theme.backgroundElement,
-                      borderRadius: 10,
-                      padding: 10,
-                      gap: 4,
-                    }}
-                  >
-                    <Text color={theme.textSecondary} fontSize={10} fontWeight="600">{item.label}</Text>
-                    <XStack alignItems="center" justifyContent="space-between">
-                      <Text color={theme.text} fontSize={14} fontWeight="700">{item.val}%</Text>
-                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: item.color }} />
-                    </XStack>
-                  </View>
-                ))}
-              </XStack>
-            </CbudgetCard>
-          </Animated.View>
-
-          {/* ==================== 3. SAVINGS GOAL PROGRESS ==================== */}
-          <Animated.View entering={FadeInDown.delay(250).duration(500)}>
-            <CbudgetCard marginBottom={Spacing[16]} padding={16} gap={10}>
-              <XStack justifyContent="space-between" alignItems="center">
-                <Text color={theme.text} fontSize={15} fontWeight="700">
-                  Savings Goals
-                </Text>
-                <TouchableOpacity onPress={() => router.push('/(tabs)/budget' as Href)}>
-                  <Text color={theme.primary as any} fontSize={12} fontWeight="700">View Goals</Text>
+                  <SymbolView
+                    name={{ ios: 'arrow.right.circle.fill', android: 'arrow_forward', web: 'arrow_forward' } as any}
+                    size={14}
+                    tintColor="#FFFFFF"
+                  />
+                  <Text color="#FFFFFF" fontSize={11} fontFamily="Inter_700Bold">SWEEP</Text>
                 </TouchableOpacity>
               </XStack>
-
-              {store.savingsGoals.length === 0 ? (
-                <Text color={theme.textSecondary} fontSize={12} fontStyle="italic">
-                  No active savings goals. Set up an emergency fund to shield your money!
-                </Text>
-              ) : (
-                <YStack gap={8}>
-                  {store.savingsGoals.slice(0, 2).map((goal) => {
-                    const ratio = goal.currentSavings / goal.targetAmount;
-                    return (
-                      <YStack key={goal.id} gap={4}>
-                        <XStack justifyContent="space-between">
-                          <Text color={theme.text} fontSize={13} fontWeight="600">{goal.name}</Text>
-                          <Text color={theme.primary as any} fontSize={12} fontWeight="700">₱{goal.currentSavings.toLocaleString()} / ₱{goal.targetAmount.toLocaleString()}</Text>
-                        </XStack>
-                        <Progress value={Math.min(100, ratio * 100)} height={5} backgroundColor={theme.backgroundElement}>
-                          <Progress.Indicator backgroundColor={theme.primary} />
-                        </Progress>
-                      </YStack>
-                    );
-                  })}
-                </YStack>
-              )}
             </CbudgetCard>
-          </Animated.View>
+          )}
 
-          {/* ==================== 4. INVESTMENT SIMULATION SUMMARY ==================== */}
-          <Animated.View entering={FadeInDown.delay(300).duration(500)}>
-            <CbudgetCard marginBottom={Spacing[16]} padding={16} gap={10}>
-              <XStack justifyContent="space-between" alignItems="center">
-                <YStack gap={2}>
-                  <Text color={theme.textSecondary} fontSize={10} fontWeight="700" letterSpacing={0.8} textTransform="uppercase">
-                    VIRTUAL PORTFOLIO VALUE
-                  </Text>
-                  <Text color={theme.text} fontSize={22} fontWeight="700">
-                    ₱{totalSimValue.toLocaleString()}
-                  </Text>
-                </YStack>
-                <Button
-                  size="$3"
-                  backgroundColor={theme.primary as any}
-                  borderRadius={10}
-                  pressStyle={{ opacity: 0.85 }}
-                  onPress={() => router.push('/(tabs)/invest' as Href)}
-                >
-                  <Text color="#FFFFFF" fontWeight="700" fontSize={12}>Arena</Text>
-                </Button>
-              </XStack>
-
-              <XStack justifyContent="space-between" backgroundColor={theme.backgroundElement} padding={10} borderRadius={10}>
-                <YStack gap={2}>
-                  <Text color={theme.textSecondary} fontSize={10} fontWeight="600">Sim Cash</Text>
-                  <Text color={theme.text} fontSize={13} fontWeight="700">₱{store.virtualBalance.toLocaleString()}</Text>
-                </YStack>
-                <YStack gap={2} alignItems="flex-end">
-                  <Text color={theme.textSecondary} fontSize={10} fontWeight="600">Holdings</Text>
-                  <Text color={theme.text} fontSize={13} fontWeight="700">₱{holdingsValue.toLocaleString()}</Text>
-                </YStack>
-              </XStack>
-            </CbudgetCard>
-          </Animated.View>
-
-          {/* ==================== 5. LEARNING PROGRESS ==================== */}
-          <Animated.View entering={FadeInDown.delay(350).duration(500)}>
-            <CbudgetCard
-              marginBottom={Spacing[16]}
-              borderLeftWidth={5}
-              borderLeftColor={theme.primary}
-              padding={16}
-              gap={12}
-              backgroundColor={`${theme.primary}05` as any}
+          {/* ==================== 2. QUICK ACTIONS ROW ==================== */}
+          <XStack justifyContent="space-between" gap={8} marginBottom={20}>
+            {/* Action 1: Log Expense */}
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/budget' as Href)}
+              activeOpacity={0.7}
+              style={styles.quickActionBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
             >
-              <XStack justifyContent="space-between" alignItems="center">
-                <YStack gap={2}>
-                  <Text color={theme.primary} fontSize={10} fontWeight="700" letterSpacing={0.8} textTransform="uppercase">
-                    ACADEMY PATHWAY
-                  </Text>
-                  <Text color={theme.text} fontSize={15} fontWeight="700">
-                    Complete Academic Roadmap
-                  </Text>
-                </YStack>
-                <Button
-                  size="$3"
-                  backgroundColor={theme.surface}
-                  borderColor={theme.border}
-                  borderWidth={1}
-                  borderRadius={8}
-                  onPress={() => router.push('/(tabs)/learn' as Href)}
-                >
-                  <Text color={theme.primary} fontWeight="700" fontSize={12}>Learn</Text>
-                </Button>
-              </XStack>
+              <View style={styles.quickActionCircle}>
+                <SymbolView
+                  name={{ ios: 'plus', android: 'add', web: 'add' } as any}
+                  size={24}
+                  tintColor="#FFFFFF"
+                />
+              </View>
+              <Text color={theme.text} fontSize={11} fontFamily="Inter_600SemiBold" textAlign="center">
+                Log Expense
+              </Text>
+            </TouchableOpacity>
 
-              <XStack gap={10} alignItems="center">
-                <Progress value={store.learningScore} height={5} flex={1} backgroundColor={theme.backgroundElement}>
-                  <Progress.Indicator backgroundColor={theme.primary} />
-                </Progress>
-                <Text color={theme.text} fontSize={12} fontWeight="700">{store.learningScore}% Done</Text>
-              </XStack>
-            </CbudgetCard>
-          </Animated.View>
+            {/* Action 2: Add Savings */}
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/budget' as Href)}
+              activeOpacity={0.7}
+              style={styles.quickActionBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            >
+              <View style={styles.quickActionCircle}>
+                <SymbolView
+                  name={{ ios: 'banknote.fill', android: 'savings', web: 'savings' } as any}
+                  size={22}
+                  tintColor="#FFFFFF"
+                />
+              </View>
+              <Text color={theme.text} fontSize={11} fontFamily="Inter_600SemiBold" textAlign="center">
+                Add Savings
+              </Text>
+            </TouchableOpacity>
 
-          {/* ==================== 6. RECENT TRANSACTIONS ==================== */}
-          <Animated.View entering={FadeInDown.delay(400).duration(500)}>
-            <CbudgetCard marginBottom={Spacing[24]} padding={16} gap={10}>
-              <Text color={theme.text} fontSize={15} fontWeight="700">
+            {/* Action 3: Next Lesson */}
+            <TouchableOpacity
+              onPress={() => handleRestrictedAction(() => router.push('/(tabs)/learn' as Href))}
+              activeOpacity={0.7}
+              style={styles.quickActionBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            >
+              <View style={styles.quickActionCircle}>
+                <SymbolView
+                  name={{ ios: 'book.fill', android: 'menu_book', web: 'menu_book' } as any}
+                  size={20}
+                  tintColor="#FFFFFF"
+                />
+              </View>
+              <Text color={theme.text} fontSize={11} fontFamily="Inter_600SemiBold" textAlign="center">
+                Next Lesson
+              </Text>
+            </TouchableOpacity>
+
+            {/* Action 4: Claim Daily */}
+            <TouchableOpacity
+              onPress={() => handleRestrictedAction(() => setShowDailyReward(true))}
+              activeOpacity={0.7}
+              style={styles.quickActionBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            >
+              <View style={styles.quickActionCircle}>
+                <SymbolView
+                  name={{ ios: 'gift.fill', android: 'card_giftcard', web: 'card_giftcard' } as any}
+                  size={22}
+                  tintColor="#FFFFFF"
+                />
+              </View>
+              <Text color={theme.text} fontSize={11} fontFamily="Inter_600SemiBold" textAlign="center">
+                Claim Daily
+              </Text>
+            </TouchableOpacity>
+          </XStack>
+
+          {/* ==================== 3. RECENT TRACKED EXPENSES ==================== */}
+          <CbudgetCard 
+            marginBottom={16} 
+            padding={18} 
+            gap={12}
+            backgroundColor="#1C2541"
+            borderColor="rgba(255, 255, 255, 0.08)"
+            borderWidth={1}
+            borderRadius={16}
+            elevation={0}
+          >
+            <XStack justifyContent="space-between" alignItems="center">
+              <Text color="#FFFFFF" fontSize={14} fontFamily="Inter_700Bold" letterSpacing={-0.2} lineHeight={20}>
                 Recent Tracked Expenses
               </Text>
-
-              {store.loggedExpenses.length === 0 ? (
-                <Text color={theme.textSecondary} fontSize={12} fontStyle="italic">
-                  No simulated expenses logged yet. Add some in the Budget tab!
+              <TouchableOpacity 
+                onPress={() => router.push('/(tabs)/budget' as Href)}
+                style={styles.cardHeaderLink}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text color="#3EB47D" fontSize={12} fontFamily="Inter_700Bold">
+                  Manage
                 </Text>
-              ) : (
-                <YStack gap={8}>
-                  {store.loggedExpenses.slice(0, 3).map((exp) => (
-                    <XStack key={exp.id} justifyContent="space-between" alignItems="center" paddingBottom={4} borderBottomWidth={1} borderBottomColor={`${theme.border}30` as any}>
-                      <YStack gap={2}>
-                        <Text color={theme.text} fontSize={13} fontWeight="600">{exp.name}</Text>
-                        <Text color={theme.textSecondary} fontSize={10}>{exp.category} • {exp.date}</Text>
-                      </YStack>
-                      <Text color={theme.text} fontSize={13} fontWeight="700">
-                        ₱{exp.amount.toLocaleString()}
+              </TouchableOpacity>
+            </XStack>
+            
+            <View height={1} backgroundColor="rgba(255, 255, 255, 0.06)" marginBottom={4} />
+
+            {store.loggedExpenses.length === 0 ? (
+              <YStack alignItems="center" paddingVertical={16} gap={6}>
+                <SymbolView
+                  name={{ ios: 'creditcard', android: 'payment', web: 'payment' } as any}
+                  size={28}
+                  tintColor="#8D99AE"
+                  style={{ opacity: 0.5 }}
+                />
+                <Text color="#8D99AE" fontSize={12} fontFamily="Inter_400Regular" fontStyle="italic" textAlign="center">
+                  No simulated expenses logged yet. Tap 'Log Expense' above to start tracking!
+                </Text>
+              </YStack>
+            ) : (
+              <YStack gap={10}>
+                {store.loggedExpenses.slice(0, 3).map((exp) => {
+                  const details = getCategoryIconDetails(exp.category);
+                  return (
+                    <XStack key={exp.id} justifyContent="space-between" alignItems="center" paddingBottom={8} borderBottomWidth={1} borderBottomColor="rgba(255, 255, 255, 0.04)">
+                      <XStack gap={12} alignItems="center" flex={1}>
+                        <View width={36} height={36} borderRadius={10} backgroundColor="rgba(255, 255, 255, 0.04)" alignItems="center" justifyContent="center" borderWidth={1} borderColor="rgba(255, 255, 255, 0.06)">
+                          <SymbolView name={details.icon} size={15} tintColor={details.color} />
+                        </View>
+                        <YStack gap={1} flex={1}>
+                          <Text color="#FFFFFF" fontSize={13} fontFamily="Inter_600SemiBold" numberOfLines={1}>{exp.name}</Text>
+                          <Text color="#8D99AE" fontSize={10} fontFamily="Inter_400Regular">{exp.category} • {exp.date}</Text>
+                        </YStack>
+                      </XStack>
+                      <Text color="#FFFFFF" fontSize={14} fontFamily="Inter_700Bold" letterSpacing={-0.2}>
+                        -₱ {exp.amount.toLocaleString()}
                       </Text>
                     </XStack>
-                  ))}
+                  );
+                })}
+              </YStack>
+            )}
+          </CbudgetCard>
+
+          {/* ==================== 4. SAVINGS GOAL PROGRESS ==================== */}
+          <CbudgetCard 
+            marginBottom={16} 
+            padding={18} 
+            gap={12}
+            backgroundColor="#1C2541"
+            borderColor="rgba(255, 255, 255, 0.08)"
+            borderWidth={1}
+            borderRadius={16}
+            elevation={0}
+          >
+            <XStack justifyContent="space-between" alignItems="center">
+              <Text color="#FFFFFF" fontSize={14} fontFamily="Inter_700Bold" letterSpacing={-0.2} lineHeight={20}>
+                Savings Goals
+              </Text>
+              <TouchableOpacity 
+                onPress={() => router.push('/(tabs)/budget' as Href)}
+                style={styles.cardHeaderLink}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text color="#3EB47D" fontSize={12} fontFamily="Inter_700Bold">
+                  View Goals
+                </Text>
+              </TouchableOpacity>
+            </XStack>
+
+            <View height={1} backgroundColor="rgba(255, 255, 255, 0.06)" marginBottom={4} />
+
+            {store.savingsGoals.length === 0 ? (
+              <YStack alignItems="center" paddingVertical={16} gap={6}>
+                <SymbolView
+                  name={{ ios: 'shield.fill', android: 'shield', web: 'shield' } as any}
+                  size={26}
+                  tintColor="#8D99AE"
+                  style={{ opacity: 0.5 }}
+                />
+                <Text color="#8D99AE" fontSize={12} fontFamily="Inter_400Regular" fontStyle="italic" textAlign="center">
+                  No active savings goals. Set up an emergency fund to protect your cash!
+                </Text>
+              </YStack>
+            ) : (
+              <YStack gap={12}>
+                {store.savingsGoals.slice(0, 2).map((goal) => {
+                  const ratio = goal.targetAmount > 0 ? goal.currentSavings / goal.targetAmount : 0;
+                  const percentage = Math.min(100, Math.round(ratio * 100));
+                  return (
+                    <YStack key={goal.id} gap={6}>
+                      <XStack justifyContent="space-between" alignItems="center">
+                        <XStack gap={8} alignItems="center" flex={1}>
+                          <View width={28} height={28} borderRadius={8} backgroundColor="rgba(62, 180, 125, 0.15)" alignItems="center" justifyContent="center">
+                            <SymbolView name={{ ios: 'banknote.fill', android: 'savings', web: 'savings' } as any} size={13} tintColor="#3EB47D" />
+                          </View>
+                          <YStack gap={1} flex={1}>
+                            <Text color="#FFFFFF" fontSize={13} fontFamily="Inter_600SemiBold" numberOfLines={1}>{goal.name}</Text>
+                            <Text color="#8D99AE" fontSize={10} fontFamily="Inter_500Medium">
+                              ₱ {goal.currentSavings.toLocaleString()} / ₱ {goal.targetAmount.toLocaleString()}
+                            </Text>
+                          </YStack>
+                        </XStack>
+                        <View backgroundColor="rgba(62, 180, 125, 0.15)" borderRadius={6} paddingHorizontal={6} paddingVertical={2}>
+                          <Text color="#3EB47D" fontSize={10} fontFamily="Inter_700Bold">{percentage}%</Text>
+                        </View>
+                      </XStack>
+                      <Progress value={Math.min(100, ratio * 100)} height={6} backgroundColor="rgba(255, 255, 255, 0.06)" borderRadius={3}>
+                        <Progress.Indicator backgroundColor="#3EB47D" borderRadius={3} />
+                      </Progress>
+                    </YStack>
+                  );
+                })}
+              </YStack>
+            )}
+          </CbudgetCard>
+
+          {/* ==================== 5. INVESTMENT SIMULATION SUMMARY ==================== */}
+          <CbudgetCard 
+            marginBottom={16} 
+            padding={18} 
+            gap={12}
+            backgroundColor="#1C2541"
+            borderColor="rgba(255, 255, 255, 0.08)"
+            borderWidth={1}
+            borderRadius={16}
+            elevation={0}
+          >
+            <XStack justifyContent="space-between" alignItems="center">
+              <YStack gap={2}>
+                <Text color="#8D99AE" fontSize={10} fontFamily="Inter_600SemiBold" letterSpacing={1.2} textTransform="uppercase">
+                  MY STOCK INVESTMENTS
+                </Text>
+                <Text color="#FFFFFF" fontSize={28} fontFamily="Inter_700Bold" letterSpacing={-0.5}>
+                  ₱ {totalSimValue.toLocaleString()}
+                </Text>
+              </YStack>
+              <TouchableOpacity
+                onPress={() => handleRestrictedAction(() => router.push('/(tabs)/invest' as Href))}
+                style={styles.cardHeaderActionBtn}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text color="#FFFFFF" fontFamily="Inter_700Bold" fontSize={12}>Arena</Text>
+              </TouchableOpacity>
+            </XStack>
+
+            <View height={1} backgroundColor="rgba(255, 255, 255, 0.06)" marginBottom={2} />
+
+            <XStack justifyContent="space-between" backgroundColor="rgba(0, 0, 0, 0.15)" padding={12} borderRadius={12}>
+              <YStack gap={3}>
+                <Text color="#8D99AE" fontSize={9} fontFamily="Inter_600SemiBold" letterSpacing={0.5} textTransform="uppercase">Available Cash</Text>
+                <Text color="#FFFFFF" fontSize={15} fontFamily="Inter_700Bold" letterSpacing={-0.3}>₱ {store.virtualBalance.toLocaleString()}</Text>
+              </YStack>
+              <YStack gap={3} alignItems="flex-end">
+                <Text color="#8D99AE" fontSize={9} fontFamily="Inter_600SemiBold" letterSpacing={0.5} textTransform="uppercase">In Stocks</Text>
+                <Text color="#FFFFFF" fontSize={15} fontFamily="Inter_700Bold" letterSpacing={-0.3}>₱ {holdingsValue.toLocaleString()}</Text>
+              </YStack>
+            </XStack>
+
+            {/* Owned Holdings List */}
+            {Object.keys(store.portfolioAllocations).filter(t => store.portfolioAllocations[t] > 0).length > 0 && (
+              <YStack gap={8} marginTop={4}>
+                <Text color="#8D99AE" fontSize={11} fontFamily="Inter_700Bold" letterSpacing={0.4}>ACTIVE HOLDINGS</Text>
+                {Object.keys(store.portfolioAllocations)
+                  .filter(ticker => store.portfolioAllocations[ticker] > 0)
+                  .map((ticker) => {
+                    const qty = store.portfolioAllocations[ticker] || 0;
+                    const price = assetPrices[ticker] || 0;
+                    const totalVal = qty * price;
+                    const isPositive = ticker !== 'VOLT'; // Volt is currently down, others up
+                    const changeText = ticker === 'NOVA' ? '+2.45%' : ticker === 'VOLT' ? '-1.85%' : ticker === 'BREW' ? '+0.35%' : ticker === 'APEX' ? '+0.12%' : '+0.78%';
+                    
+                    return (
+                      <XStack key={ticker} justifyContent="space-between" alignItems="center" paddingVertical={6} borderBottomWidth={1} borderBottomColor="rgba(255, 255, 255, 0.04)">
+                        <XStack gap={8} alignItems="center">
+                          <View width={26} height={26} borderRadius={6} backgroundColor="rgba(62, 180, 125, 0.15)" alignItems="center" justifyContent="center">
+                            <Text color="#3EB47D" fontSize={10} fontFamily="Inter_800ExtraBold">{ticker}</Text>
+                          </View>
+                          <YStack gap={1}>
+                            <Text color="#FFFFFF" fontSize={12} fontFamily="Inter_600SemiBold">{qty.toFixed(2)} units</Text>
+                            <Text color="#8D99AE" fontSize={10}>Price: ₱ {price.toFixed(2)}</Text>
+                          </YStack>
+                        </XStack>
+                        <YStack alignItems="flex-end" gap={1}>
+                          <Text color="#FFFFFF" fontSize={13} fontFamily="Inter_700Bold">₱ {totalVal.toLocaleString()}</Text>
+                          <Text color={isPositive ? '#3EB47D' : '#EF4444'} fontSize={10} fontFamily="Inter_700Bold">{changeText}</Text>
+                        </YStack>
+                      </XStack>
+                    );
+                  })}
+              </YStack>
+            )}
+          </CbudgetCard>
+
+          {/* ==================== 6. ACADEMY LEARNING MODULE ==================== */}
+          <CbudgetCard
+            marginBottom={16}
+            padding={0}
+            borderRadius={16}
+            borderWidth={1}
+            borderColor="rgba(255, 255, 255, 0.08)"
+            backgroundColor="#1C2541"
+            elevation={0}
+            overflow="hidden"
+          >
+            <TouchableOpacity
+              onPress={() => handleRestrictedAction(() => router.push('/(tabs)/learn' as Href))}
+              activeOpacity={0.7}
+              style={{ minHeight: 84, justifyContent: 'center' }}
+            >
+              <XStack padding={16} gap={14} alignItems="center" justifyContent="space-between">
+                {/* Left Side: SpriteIcon showing Learning Graphic */}
+                <View width={50} height={50} borderRadius={12} backgroundColor="rgba(62, 180, 125, 0.15)" alignItems="center" justifyContent="center">
+                  <SpriteIcon name="learning" size={44} />
+                </View>
+
+                {/* Center: Course Details */}
+                <YStack flex={1} gap={2}>
+                  <Text color="#3EB47D" fontSize={11} fontFamily="Inter_600SemiBold" letterSpacing={0.5} textTransform="uppercase">
+                    ACADEMY PATHWAY
+                  </Text>
+                  <Text color="#FFFFFF" fontSize={14} fontFamily="Inter_700Bold" numberOfLines={1} lineHeight={18}>
+                    {isAllCompleted ? 'Academy Curriculum Complete!' : `Lvl ${currentLevelNum}: ${currentLevelTitle}`}
+                  </Text>
+                  <Text color="#94A3B8" fontSize={12} fontFamily="Inter_400Regular" numberOfLines={1} lineHeight={16}>
+                    {isAllCompleted ? 'Congratulations on completing the curriculum.' : currentLevelDesc}
+                  </Text>
                 </YStack>
-              )}
-            </CbudgetCard>
-          </Animated.View>
 
+                {/* Right Side: Chevron */}
+                <View width={28} height={28} borderRadius={14} backgroundColor={theme.backgroundElement} alignItems="center" justifyContent="center">
+                  <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' } as const} size={11} tintColor={theme.textSecondary} />
+                </View>
+              </XStack>
+              {/* Custom Stable Progress Bar (no sluggish layout animations) */}
+              <View height={4} backgroundColor={`${theme.primary}15`} width="100%">
+                <View 
+                  width={`${Math.min(100, store.learningScore)}%`}
+                  height="100%"
+                  backgroundColor={theme.primary}
+                />
+              </View>
+            </TouchableOpacity>
+          </CbudgetCard>
 
+          {/* ==================== 7. FINANCE ANALYTICS (HEALTH SCORE) ==================== */}
+          <CbudgetCard marginBottom={24} padding={20} gap={16}>
+            <XStack justifyContent="space-between" alignItems="center" borderBottomWidth={1} borderBottomColor={`${theme.border}35` as any} paddingBottom={14}>
+              <YStack gap={2} flex={1}>
+                <Text color={theme.text} fontSize={16} fontFamily="Inter_700Bold" letterSpacing={-0.3}>
+                  Finance Analytics
+                </Text>
+                <Text color={theme.textSecondary} fontSize={12} fontFamily="Inter_400Regular">
+                  Overall metric scoring your simulated activity.
+                </Text>
+              </YStack>
+              <View
+                width={56}
+                height={56}
+                borderRadius={28}
+                backgroundColor={`${theme.primary}12`}
+                alignItems="center"
+                justifyContent="center"
+                borderWidth={2}
+                borderColor={theme.primary}
+              >
+                <Text color={theme.primary} fontSize={16} fontFamily="Inter_800ExtraBold">
+                  {store.getFinancialHealthScore()}%
+                </Text>
+              </View>
+            </XStack>
+
+            <YStack gap={12}>
+              {[
+                { label: 'Budget Discipline', val: store.budgetingScore, color: theme.success, icon: 'chart.pie.fill', androidIcon: 'pie_chart' },
+                { label: 'Savings Efficiency', val: store.savingScore, color: theme.primary, icon: 'banknote.fill', androidIcon: 'savings' },
+                { label: 'Investment Efficiency', val: store.investingScore, color: '#F59E0B', icon: 'chart.line.uptrend.xyaxis', androidIcon: 'trending_up' },
+                { label: 'Financial Literacy', val: store.learningScore, color: '#8B5CF6', icon: 'book.closed.fill', androidIcon: 'menu_book' },
+              ].map((item) => (
+                <YStack key={item.label} gap={6}>
+                  <XStack justifyContent="space-between" alignItems="center">
+                    <XStack gap={8} alignItems="center">
+                      <SymbolView name={{ ios: item.icon, android: item.androidIcon, web: item.androidIcon } as any} size={14} tintColor={item.color as any} />
+                      <Text color={theme.text} fontSize={13} fontFamily="Inter_600SemiBold">{item.label}</Text>
+                    </XStack>
+                    <Text color={theme.text} fontSize={13} fontFamily="Inter_700Bold">{item.val}%</Text>
+                  </XStack>
+                  <Progress value={item.val} height={6} backgroundColor={(`${item.color}15`) as any} borderRadius={3}>
+                    <Progress.Indicator backgroundColor={item.color as any} borderRadius={3} />
+                  </Progress>
+                </YStack>
+              ))}
+            </YStack>
+          </CbudgetCard>
 
         </ScrollView>
       </SafeAreaView>
 
-      {/* AI COACH HELPER MODAL */}
-      <Modal visible={showAIChat} transparent={true} animationType="slide" onRequestClose={() => setShowAIChat(false)}>
+      {/* ==================== MODALS ==================== */}
+      
+      {/* Daily Reward Modal */}
+      <DailyRewardModal 
+        visible={showDailyReward} 
+        onClose={() => setShowDailyReward(false)} 
+      />
+
+      {/* Locked / Guest Account Modal */}
+      <Modal
+        visible={registerModalVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setRegisterModalVisible(false)}
+      >
         <View style={styles.modalOverlay}>
-          <CbudgetCard
-            style={styles.chatModalContainer}
-            gap={Spacing[16]}
-            borderColor={isPremium ? '#F59E0B' : theme.border}
-            borderWidth={isPremium ? 2 : 1}
+          <YStack
+            backgroundColor={theme.surface}
+            borderColor={theme.border}
+            borderWidth={1.5}
+            borderRadius={24}
+            padding={24}
+            width="85%"
+            maxWidth={340}
+            alignItems="center"
+            gap={16}
+            elevation={10}
+            shadowColor="#000"
+            shadowOffset={{ width: 0, height: 4 }}
+            shadowOpacity={0.25}
+            shadowRadius={10}
           >
-            <XStack justifyContent="space-between" alignItems="center">
-              <XStack gap={8} alignItems="center">
-                <PouchyHelper expression="smiling" size={36} />
-                <YStack>
-                  <Text color={isPremium ? '#F59E0B' : theme.text} fontSize={15} fontWeight="900">
-                    Pouchy AI Coach{isPremium ? ' PRO' : ''}
-                  </Text>
-                  <Text color={theme.textSecondary} fontSize={10}>Always here to help you learn!</Text>
-                </YStack>
-                {isPremium && (
-                  <SymbolView
-                    name={{ ios: 'crown.fill', android: 'star', web: 'star' } as any}
-                    size={14}
-                    tintColor="#F59E0B"
-                  />
-                )}
-              </XStack>
-              <TouchableOpacity onPress={() => setShowAIChat(false)}>
-                <SymbolView
-                  name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' } as const}
-                  size={24}
-                  tintColor={theme.textSecondary}
-                />
-              </TouchableOpacity>
-            </XStack>
-
-            {/* Chat History */}
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 12 }}>
-              {chatMessages.map((msg) => {
-                const isAI = msg.sender === 'ai';
-                return (
-                  <XStack key={msg.id} gap={8} width="100%" justifyContent={isAI ? 'flex-start' : 'flex-end'} alignItems="flex-end">
-                    {isAI && (
-                      <PouchyHelper expression="smiling" size={32} />
-                    )}
-                    <YStack gap={4} maxWidth="80%" alignItems={isAI ? 'flex-start' : 'flex-end'}>
-                      <View
-                        style={{
-                          backgroundColor: isAI ? theme.backgroundElement : theme.primary,
-                          paddingHorizontal: 14,
-                          paddingVertical: 10,
-                          borderRadius: 16,
-                          borderBottomLeftRadius: isAI ? 4 : 16,
-                          borderBottomRightRadius: isAI ? 16 : 4,
-                        } as any}
-                      >
-                        <Text color={isAI ? theme.text : '#FFFFFF'} fontSize={13} lineHeight={18}>
-                          {msg.text}
-                        </Text>
-                      </View>
-                      {msg.suggestion && (
-                        <Button
-                          size="$2"
-                          backgroundColor={`${theme.primary}12` as any}
-                          borderColor={`${theme.primary}35` as any}
-                          borderWidth={1}
-                          borderRadius={8}
-                          onPress={() => {
-                            setShowAIChat(false);
-                            router.push(msg.suggestion as Href);
-                          }}
-                          alignSelf={isAI ? 'flex-start' : 'flex-end'}
-                        >
-                          <Text color={theme.primary} fontSize={11} fontWeight="700">
-                            Start Lesson & Earn XP
-                          </Text>
-                        </Button>
-                      )}
-                    </YStack>
-                  </XStack>
-                );
-              })}
-            </ScrollView>
-
-            {/* Prepopulated Coach Questions */}
-            <XStack gap={6} flexWrap="wrap">
-              {[
-                'Can I afford this purchase?',
-                'How can I save faster?',
-                'Saving vs Investing?',
-                'Focus on emergency fund first?'
-              ].map((q) => (
-                <TouchableOpacity
-                  key={q}
-                  onPress={() => {
-                    const userMsg = { id: Date.now().toString(), text: q, sender: 'user' as const };
-                    setChatMessages((prev) => [...prev, userMsg]);
-                    
-                    let replyText = 'Analyzing...';
-                    let suggestionLink = '';
-                    
-                    if (q.includes('afford')) {
-                      replyText = `Before making a simulated purchase, ask: Is this a Need or a Want? If it's a Want, does it fit within your remaining ₱${budgetLeftover.toLocaleString()} budget buffer? If yes, log it. If not, wait until your next budget reset!`;
-                      suggestionLink = '/(tabs)/budget';
-                    } else if (q.includes('save faster')) {
-                      replyText = "To save faster, try the 'Pay Yourself First' strategy: save 15-20% of your budget immediately on payday. You can also identify category leaks (like entertainment or shopping) in your budget and cut back!";
-                      suggestionLink = '/(tabs)/budget';
-                    } else if (q.includes('Saving vs Investing')) {
-                      replyText = "Saving is putting money in a safe, liquid place (like savings goals) for short-term needs. Investing is allocating leftover capital to diversified assets in the Investment Lab to grow your wealth over time by taking calculated risks. Always build savings first!";
-                      suggestionLink = '/(tabs)/learn';
-                    } else if (q.includes('emergency fund')) {
-                      replyText = "Absolutely! An emergency fund is your financial shield. You should secure 3 to 6 months of basic living expenses (start with a small ₱5,000 goal) before allocating any cash into simulated investments. Safety and liquidity come first in the Budget → Save → Invest framework.";
-                      suggestionLink = '/(tabs)/budget';
-                    }
-                    
-                    setTimeout(() => {
-                      setChatMessages((prev) => [
-                        ...prev,
-                        { id: (Date.now() + 1).toString(), text: replyText, sender: 'ai', suggestion: suggestionLink }
-                      ]);
-                    }, 800);
-                  }}
-                  style={{
-                    backgroundColor: theme.backgroundElement,
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderRadius: 8
-                  }}
-                >
-                  <Text color={theme.primary} fontSize={11} fontWeight="700">
-                    {q}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </XStack>
-
-            {/* Custom Message Input */}
-            <XStack gap={8} alignItems="center">
-              <TextInput
-                placeholder="Ask your coach..."
-                placeholderTextColor={`${theme.text}45`}
-                style={[styles.chatInput, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
-                value={chatInput}
-                onChangeText={setChatInput}
+            <View width={60} height={60} borderRadius={30} backgroundColor={`${theme.primary}12`} alignItems="center" justifyContent="center">
+              <SymbolView
+                name={{ ios: 'lock.fill', android: 'lock', web: 'lock' } as const}
+                size={24}
+                tintColor={theme.primary}
               />
-              <TouchableOpacity
-                onPress={() => {
-                  if (!chatInput.trim()) return;
-                  const text = chatInput;
-                  setChatInput('');
-                  setChatMessages((prev) => [...prev, { id: Date.now().toString(), text, sender: 'user' }]);
-                  
-                  setTimeout(() => {
-                    setChatMessages((prev) => [
-                      ...prev,
-                      { id: (Date.now() + 1).toString(), text: 'Responsible wealth building requires structured steps. I highly recommend completing the budgeting and saving fundamentals (Levels 1-5) in the academy before practicing allocations in the Investment Lab!', sender: 'ai', suggestion: '/(tabs)/learn' }
-                    ]);
-                  }, 800);
+            </View>
+
+            <YStack alignItems="center" gap={6}>
+              <Text color={theme.text} fontSize={17} fontFamily="Inter_700Bold" textAlign="center">
+                Create a Free Account
+              </Text>
+              <Text color={theme.textSecondary} fontSize={12} fontFamily="Inter_400Regular" textAlign="center" lineHeight={18}>
+                To unlock financial stats tracking, investment simulations, learning academy modules, and achievements, please create your profile today!
+              </Text>
+            </YStack>
+
+            <YStack gap={10} width="100%" marginTop={6}>
+              <Button
+                backgroundColor={theme.primary}
+                borderRadius={12}
+                height={48}
+                pressStyle={{ opacity: 0.85 }}
+                onPress={async () => {
+                  setRegisterModalVisible(false);
+                  await logout();
+                  router.replace('/(auth)/register' as Href);
                 }}
-                style={[styles.chatSendBtn, { backgroundColor: theme.primary }]}
               >
-                <SymbolView
-                  name={{ ios: 'paperplane.fill', android: 'send', web: 'send' } as any}
-                  size={14}
-                  tintColor="#FFFFFF"
-                />
+                <Text color="#FFFFFF" fontSize={14} fontFamily="Inter_700Bold">
+                  Create Account
+                </Text>
+              </Button>
+
+              <TouchableOpacity
+                onPress={() => setRegisterModalVisible(false)}
+                activeOpacity={0.7}
+                style={{ height: 44, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Text color={theme.textSecondary} fontSize={13} fontFamily="Inter_600SemiBold">
+                  Continue as Guest
+                </Text>
               </TouchableOpacity>
-            </XStack>
-          </CbudgetCard>
+            </YStack>
+          </YStack>
         </View>
       </Modal>
 
@@ -736,10 +989,14 @@ export default function DashboardScreen() {
         <View style={styles.modalOverlay}>
           <CbudgetCard style={styles.avatarModalContainer} gap={Spacing[16]}>
             <XStack justifyContent="space-between" alignItems="center">
-              <Text color={theme.text} fontSize={16} fontWeight="700">
-                Choose Mastery Avatar Title
+              <Text color={theme.text} fontSize={16} fontFamily="Inter_700Bold">
+                Choose Mastery Avatar
               </Text>
-              <TouchableOpacity onPress={() => setShowAvatarPicker(false)}>
+              <TouchableOpacity 
+                onPress={() => setShowAvatarPicker(false)}
+                style={{ padding: 4 }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
                 <SymbolView
                   name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' } as const}
                   size={20}
@@ -748,9 +1005,10 @@ export default function DashboardScreen() {
               </TouchableOpacity>
             </XStack>
 
-            <YStack gap={10} width="100%" marginVertical={Spacing[8]}>
+            <YStack gap={10} width="100%" marginVertical={4}>
               {['Budget Beginner', 'Smart Saver', 'Investment Explorer', 'Financial Strategist'].map((avatarName) => {
                 const details = getMasteryAvatarDetails(avatarName);
+                const isSelected = store.customAvatar === avatarName;
                 return (
                   <TouchableOpacity
                     key={avatarName}
@@ -764,11 +1022,12 @@ export default function DashboardScreen() {
                       alignItems: 'center',
                       backgroundColor: theme.backgroundElement,
                       borderWidth: 2,
-                      borderColor: store.customAvatar === avatarName ? details.borderColor : theme.border,
+                      borderColor: isSelected ? details.borderColor : theme.border,
                       borderStyle: details.borderStyle,
-                      borderRadius: 12,
+                      borderRadius: 14,
                       padding: 12,
                       gap: 12,
+                      minHeight: 64,
                     }}
                   >
                     <View
@@ -782,17 +1041,18 @@ export default function DashboardScreen() {
                         borderWidth: 2,
                         borderColor: details.borderColor,
                         borderStyle: details.borderStyle
-                      } as any}
+                      }}
                     >
-                      <Text color={details.color as any} fontWeight="900" fontSize={13}>
+                      <Text color={details.color as any} fontFamily="Inter_800ExtraBold" fontSize={13}>
                         {details.initials}
                       </Text>
                     </View>
-                    <YStack flex={1}>
-                      <Text color={theme.text} fontWeight="700" fontSize={14}>
+                    
+                    <YStack flex={1} gap={2}>
+                      <Text color={theme.text} fontFamily="Inter_700Bold" fontSize={13}>
                         {avatarName}
                       </Text>
-                      <Text color={theme.textSecondary} fontSize={11}>
+                      <Text color={theme.textSecondary} fontSize={10} fontFamily="Inter_400Regular" lineHeight={13}>
                         {avatarName === 'Budget Beginner' && 'Perfect path for learning cash-flow principles.'}
                         {avatarName === 'Smart Saver' && 'Optimized for high-yield savings & emergency plans.'}
                         {avatarName === 'Investment Explorer' && 'For testing asset allocations in the lab.'}
@@ -816,7 +1076,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 32,
   },
@@ -828,28 +1088,43 @@ const styles = StyleSheet.create({
     padding: 20,
     zIndex: 1000,
   },
-  chatModalContainer: {
-    width: '100%',
-    height: 480,
-    maxWidth: 400,
-  },
   avatarModalContainer: {
     width: '100%',
     maxWidth: 360,
+    borderRadius: 20,
+    padding: 20,
   },
-  chatInput: {
+  quickActionBtn: {
     flex: 1,
-    height: 42,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    fontSize: 13,
-  },
-  chatSendBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    minHeight: 88,
+    minWidth: 70,
+  },
+  quickActionCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    borderWidth: 1,
+    backgroundColor: '#1C2541',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardHeaderLink: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardHeaderActionBtn: {
+    backgroundColor: '#3EB47D',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 34,
   },
 });

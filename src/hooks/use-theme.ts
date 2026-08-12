@@ -26,7 +26,9 @@ function getPrimaryHex(color: string) {
     case 'orange':
       return '#F97316';
     case 'sky':
-    default:
       return '#0EA5E9';
+    case 'green':
+    default:
+      return '#3EB47D'; // Brand Logo Green
   }
 }

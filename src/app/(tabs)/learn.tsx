@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Alert } from 'react-native';
+import { ScrollView, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { YStack, XStack, Text, Button, Progress, View } from 'tamagui';
 import { useTheme } from '@/hooks/use-theme';
@@ -354,6 +354,31 @@ export default function LearnScreen() {
     return store.learningScore >= requiredScore;
   };
 
+  const isLevelCompleted = (levelNum: number) => {
+    return store.learningScore >= levelNum * 11 || (levelNum === 9 && store.learningScore >= 99);
+  };
+
+  const chapters = [
+    {
+      title: 'Budgeting Foundations',
+      description: 'Master cash-flow principles and log daily expenses.',
+      levelsRange: [1, 2],
+      badge: 'Chapter 1'
+    },
+    {
+      title: 'Saving & Security',
+      description: 'Build your emergency shield and set savings goals.',
+      levelsRange: [3, 5],
+      badge: 'Chapter 2'
+    },
+    {
+      title: 'Wealth & Investment Lab',
+      description: 'Learn compounding, risk profiles, and asset allocation.',
+      levelsRange: [6, 9],
+      badge: 'Chapter 3'
+    }
+  ];
+
   const handleStartLesson = (idx: number) => {
     setActiveLevelIdx(idx);
     setQuizState('reading');
@@ -392,98 +417,259 @@ export default function LearnScreen() {
 
   return (
     <YStack flex={1} backgroundColor={theme.background}>
-      <BackgroundSystem mode="tabs" />
+      <BackgroundSystem mode="tabs" height={380} />
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           
           {/* Header */}
           <YStack gap={4} marginBottom={20}>
-            <Text color={theme.text} fontSize={22} fontWeight="700" letterSpacing={-0.5}>
+            <Text color="#FFFFFF" fontSize={22} fontWeight="700" letterSpacing={-0.5}>
               Academy Roadmap
             </Text>
-            <Text color={theme.textSecondary} fontSize={14}>
+            <Text color="rgba(255,255,255,0.7)" fontSize={14}>
               Master the financial journey in order: Budget → Save → Invest.
             </Text>
           </YStack>
 
           {/* ROADMAP VIEW */}
           {quizState === 'roadmap' && (
-            <YStack gap={Spacing[16]}>
-              {levels.map((lvl, idx) => {
-                const unlocked = isLevelUnlocked(lvl.levelNumber);
-                const isInvestLevel = lvl.levelNumber >= 6;
-                const cardBg = unlocked ? theme.surface : theme.backgroundElement;
-                const borderCol = unlocked ? theme.border : 'transparent';
-                const titleColor = unlocked ? theme.text : theme.textSecondary;
+            <YStack gap={24}>
+              {/* Progress Summary Card */}
+              <View>
+                <CbudgetCard padding={16} gap={12} backgroundColor={`${theme.primary}05` as any}>
+                  <XStack justifyContent="space-between" alignItems="center">
+                    <YStack gap={2} flex={1}>
+                      <Text color={theme.text} fontSize={16} fontWeight="800">
+                        Academy Progress
+                      </Text>
+                      <Text color={theme.textSecondary} fontSize={12}>
+                        {store.learningScore >= 99 ? "Congratulations! You've completed the curriculum." : "Complete modules in order to level up your financial score."}
+                      </Text>
+                    </YStack>
+                    <YStack
+                      width={50}
+                      height={50}
+                      borderRadius={25}
+                      backgroundColor={`${theme.primary}15` as any}
+                      alignItems="center"
+                      justifyContent="center"
+                      borderWidth={2}
+                      borderColor={theme.primary}
+                    >
+                      <Text color={theme.primary as any} fontSize={14} fontWeight="800">
+                        {store.learningScore}%
+                      </Text>
+                    </YStack>
+                  </XStack>
+                  <Progress value={store.learningScore} height={6} backgroundColor={theme.backgroundElement}>
+                    <Progress.Indicator backgroundColor={theme.primary} />
+                  </Progress>
+                </CbudgetCard>
+              </View>
+
+              {/* Chapters */}
+              {chapters.map((chap, chapIdx) => {
+                const chapterLevels = levels.filter(
+                  (lvl) => lvl.levelNumber >= chap.levelsRange[0] && lvl.levelNumber <= chap.levelsRange[1]
+                );
                 
-                // Alert if investment is locked specifically
-                const showLockWarning = isInvestLevel && !unlocked;
+                // A chapter is completed if all of its levels are completed
+                const completedCount = chapterLevels.filter(lvl => isLevelCompleted(lvl.levelNumber)).length;
+                const isChapterCompleted = completedCount === chapterLevels.length;
+                const isChapterUnlocked = chapterLevels.some(lvl => isLevelUnlocked(lvl.levelNumber));
 
                 return (
-                  <Animated.View key={lvl.levelNumber} entering={FadeInDown.delay(60 * idx).duration(400)}>
-                    <Button
-                      padding={0}
-                      height="auto"
-                      backgroundColor="transparent"
-                      pressStyle={{ opacity: unlocked ? 0.9 : 1 }}
-                      onPress={() => unlocked && handleStartLesson(idx)}
-                      borderWidth={0}
-                      disabled={!unlocked}
-                    >
-                      <CbudgetCard
-                        width="100%"
-                        padding={14}
-                        backgroundColor={cardBg}
-                        borderColor={borderCol}
-                        borderWidth={unlocked ? 1 : 0}
-                        borderLeftWidth={unlocked ? 5 : 0}
-                        borderLeftColor={unlocked ? theme.primary : 'transparent'}
-                      >
-                        <XStack gap={12} alignItems="center">
-                          <YStack
-                            width={38}
-                            height={38}
-                            borderRadius={10}
-                            backgroundColor={(unlocked ? `${theme.primary}12` : `${theme.textSecondary}10`) as any}
-                            alignItems="center"
-                            justifyContent="center"
+                  <YStack key={chap.title} gap={16}>
+                    {/* Chapter Header */}
+                    <YStack gap={4} paddingHorizontal={4}>
+                      <XStack gap={8} alignItems="center">
+                        <View
+                          backgroundColor={(isChapterCompleted ? `${theme.success}15` : isChapterUnlocked ? `${theme.primary}15` : `${theme.textSecondary}15`) as any}
+                          paddingHorizontal={8}
+                          paddingVertical={2}
+                          borderRadius={6}
+                        >
+                          <Text
+                            color={isChapterCompleted ? theme.success : isChapterUnlocked ? theme.primary : theme.textSecondary}
+                            fontSize={10}
+                            fontWeight="800"
+                            letterSpacing={0.5}
                           >
-                            <SymbolView
-                              name={
-                                unlocked 
-                                  ? ({ ios: 'book.closed.fill', android: 'book', web: 'book' } as const)
-                                  : ({ ios: 'lock.fill', android: 'lock', web: 'lock' } as const)
-                              }
-                              size={16}
-                              tintColor={unlocked ? theme.primary : theme.textSecondary}
-                            />
-                          </YStack>
+                            {chap.badge.toUpperCase()}
+                          </Text>
+                        </View>
+                        <Text color={theme.textSecondary} fontSize={11} fontWeight="600">
+                          {completedCount} / {chapterLevels.length} COMPLETED
+                        </Text>
+                      </XStack>
+                      <Text color={theme.text} fontSize={17} fontWeight="800">
+                        {chap.title}
+                      </Text>
+                      <Text color={theme.textSecondary} fontSize={12} lineHeight={16}>
+                        {chap.description}
+                      </Text>
+                    </YStack>
 
-                          <YStack flex={1} gap={2} alignItems="flex-start">
-                            <Text color={titleColor} fontSize={14} fontWeight="700" textAlign="left">
-                              {lvl.title}
-                            </Text>
-                            <Text color={theme.textSecondary} fontSize={11} textAlign="left">
-                              {unlocked 
-                                ? `Est. Time: ${lvl.lesson.estTime} • +${lvl.lesson.xpReward} XP` 
-                                : showLockWarning 
-                                ? 'Locked • Finish budgeting & savings (Levels 1-5) first'
-                                : 'Locked • Complete preceding level'
-                              }
-                            </Text>
-                          </YStack>
+                    {/* Timeline List of Levels */}
+                    <YStack paddingHorizontal={4}>
+                      {chapterLevels.map((lvl, idx) => {
+                        const levelIdx = levels.indexOf(lvl); // original index in levels array
+                        const unlocked = isLevelUnlocked(lvl.levelNumber);
+                        const completed = isLevelCompleted(lvl.levelNumber);
+                        const isInvestLevel = lvl.levelNumber >= 6;
+                        const isLastItem = idx === chapterLevels.length - 1;
 
-                          {unlocked && (
-                            <SymbolView
-                              name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' } as const}
-                              size={14}
-                              tintColor={theme.textSecondary}
-                            />
-                          )}
-                        </XStack>
-                      </CbudgetCard>
-                    </Button>
-                  </Animated.View>
+                        // Visual definitions
+                        const cardBg = completed 
+                          ? theme.surface 
+                          : unlocked 
+                          ? theme.surface 
+                          : theme.backgroundElement;
+                        const cardBorderColor = completed
+                          ? theme.border
+                          : unlocked
+                          ? theme.primary
+                          : 'transparent';
+                        const titleColor = unlocked ? theme.text : theme.textSecondary;
+
+                        // Node style
+                        const circleBg = completed
+                          ? theme.success
+                          : unlocked
+                          ? `${theme.primary}15`
+                          : `${theme.textSecondary}10`;
+                        const circleBorderColor = completed
+                          ? theme.success
+                          : unlocked
+                          ? theme.primary
+                          : theme.border;
+                        const nodeIcon = completed
+                          ? ({ ios: 'checkmark', android: 'check', web: 'check' } as const)
+                          : unlocked
+                          ? ({ ios: 'book.fill', android: 'menu_book', web: 'menu_book' } as const)
+                          : ({ ios: 'lock.fill', android: 'lock', web: 'lock' } as const);
+                        const nodeIconColor = completed
+                          ? '#FFFFFF'
+                          : unlocked
+                          ? theme.primary
+                          : theme.textSecondary;
+
+                        const unlockedNext = levelIdx < levels.length - 1 && isLevelUnlocked(levels[levelIdx + 1].levelNumber);
+
+                        return (
+                          <XStack key={lvl.levelNumber} gap={16} position="relative">
+                            {/* Left Timeline Node & Line */}
+                            <YStack alignItems="center" width={32} position="relative">
+                              {/* Dotted or solid vertical line */}
+                              {!isLastItem && (
+                                <View
+                                  position="absolute"
+                                  top={32}
+                                  bottom={-24}
+                                  width={2}
+                                  backgroundColor={unlockedNext ? theme.primary : theme.border}
+                                  zIndex={0}
+                                />
+                              )}
+                              
+                              {/* Node Circle */}
+                              <View
+                                width={32}
+                                height={32}
+                                borderRadius={16}
+                                backgroundColor={circleBg as any}
+                                borderColor={circleBorderColor}
+                                borderWidth={2}
+                                alignItems="center"
+                                justifyContent="center"
+                                zIndex={1}
+                                style={{ elevation: 1 } as any}
+                              >
+                                <SymbolView name={nodeIcon} size={13} tintColor={nodeIconColor} />
+                              </View>
+                            </YStack>
+
+                            {/* Right Content Card */}
+                            <View flex={1} marginBottom={24}>
+                              <TouchableOpacity
+                                onPress={() => unlocked && handleStartLesson(levelIdx)}
+                                disabled={!unlocked}
+                                activeOpacity={0.85}
+                              >
+                                <CbudgetCard
+                                  padding={14}
+                                  backgroundColor={cardBg}
+                                  borderColor={cardBorderColor}
+                                  borderWidth={unlocked ? 1 : 0}
+                                  borderRadius={16}
+                                  flexDirection="row"
+                                  alignItems="center"
+                                  gap={12}
+                                  elevation={unlocked ? 2 : 0}
+                                  shadowColor="#0F172A"
+                                  shadowOffset={{ width: 0, height: 2 }}
+                                  shadowOpacity={unlocked ? 0.04 : 0}
+                                  shadowRadius={6}
+                                >
+                                  <YStack flex={1} gap={4}>
+                                    <XStack gap={6} alignItems="center">
+                                      <Text color={unlocked ? theme.primary : theme.textSecondary} fontSize={10} fontWeight="800" letterSpacing={0.5} textTransform="uppercase">
+                                        Level {lvl.levelNumber}
+                                      </Text>
+                                      {completed && (
+                                        <View backgroundColor={(`${theme.success}15`) as any} paddingHorizontal={6} paddingVertical={1.5} borderRadius={4}>
+                                          <Text color={theme.success} fontSize={8} fontWeight="800">DONE</Text>
+                                        </View>
+                                      )}
+                                      {!completed && unlocked && (
+                                        <View backgroundColor={(`${theme.primary}15`) as any} paddingHorizontal={6} paddingVertical={1.5} borderRadius={4}>
+                                          <Text color={theme.primary} fontSize={8} fontWeight="800">ACTIVE</Text>
+                                        </View>
+                                      )}
+                                    </XStack>
+                                    <Text color={titleColor} fontSize={14} fontWeight="700">
+                                      {lvl.lesson.title}
+                                    </Text>
+                                    <Text color={theme.textSecondary} fontSize={11}>
+                                      {unlocked 
+                                        ? `Est. Time: ${lvl.lesson.estTime} • +${lvl.lesson.xpReward} XP`
+                                        : isInvestLevel
+                                        ? 'Locked • Complete Levels 1-5 first'
+                                        : 'Locked • Complete preceding level'
+                                      }
+                                    </Text>
+                                  </YStack>
+
+                                  {unlocked ? (
+                                    <View
+                                      width={26}
+                                      height={26}
+                                      borderRadius={13}
+                                      backgroundColor={(completed ? `${theme.success}10` : `${theme.primary}10`) as any}
+                                      alignItems="center"
+                                      justifyContent="center"
+                                    >
+                                      <SymbolView
+                                        name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' } as const}
+                                        size={10}
+                                        tintColor={completed ? theme.success : theme.primary}
+                                      />
+                                    </View>
+                                  ) : (
+                                    <SymbolView
+                                      name={{ ios: 'lock.fill', android: 'lock', web: 'lock' } as const}
+                                      size={12}
+                                      tintColor={theme.textSecondary}
+                                    />
+                                  )}
+                                </CbudgetCard>
+                              </TouchableOpacity>
+                            </View>
+                          </XStack>
+                        );
+                      })}
+                    </YStack>
+                  </YStack>
                 );
               })}
             </YStack>
@@ -491,7 +677,7 @@ export default function LearnScreen() {
 
           {/* READING VIEW */}
           {quizState === 'reading' && (
-            <Animated.View entering={FadeInDown.duration(400)}>
+            <View>
               <CbudgetCard gap={16}>
                 <XStack justifyContent="space-between" alignItems="center">
                   <XStack
@@ -572,12 +758,12 @@ export default function LearnScreen() {
                   </FormButton>
                 </XStack>
               </CbudgetCard>
-            </Animated.View>
+            </View>
           )}
 
           {/* QUIZ VIEW */}
           {quizState === 'quiz' && (
-            <Animated.View entering={FadeInDown.duration(400)}>
+            <View>
               <CbudgetCard gap={16}>
                 <XStack justifyContent="space-between" alignItems="center">
                   <Text color={theme.primary} fontSize={11} fontWeight="700" letterSpacing={0.5}>
@@ -651,12 +837,12 @@ export default function LearnScreen() {
                   {currentQuestionIdx < questions.length - 1 ? 'Next Question' : 'Finish Quiz'}
                 </FormButton>
               </CbudgetCard>
-            </Animated.View>
+            </View>
           )}
 
           {/* QUIZ COMPLETED */}
           {quizState === 'completed' && (
-            <Animated.View entering={ZoomIn.duration(500)}>
+            <View>
               <CbudgetCard alignItems="center" gap={16} padding={24}>
                 <YStack position="relative" alignItems="center" justifyContent="center">
                   <YStack
@@ -709,7 +895,7 @@ export default function LearnScreen() {
                   Academy Roadmap
                 </FormButton>
               </CbudgetCard>
-            </Animated.View>
+            </View>
           )}
 
         </ScrollView>
@@ -723,7 +909,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 6,
     paddingTop: 20,
     paddingBottom: 32,
   },

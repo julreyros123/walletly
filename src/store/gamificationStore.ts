@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useAuthStore } from './authStore';
 
 export interface Achievement {
   id: string;
@@ -32,6 +33,7 @@ interface GamificationState {
   level: number;
   streakDays: number;
   lastActiveDate: string | null;
+  lastClaimedRewardDate: string | null; // Tracks daily reward claims
   achievements: Achievement[];
   
   // Educational Subscores (0 - 100)
@@ -48,6 +50,7 @@ interface GamificationState {
   budgetType: 'daily' | 'weekly' | 'monthly' | null;
   totalBudget: number;
   selectedCategories: string[];
+  categoryLimits: Record<string, number>;
   
   // Logged Expenses & Savings Goals
   loggedExpenses: Expense[];
@@ -56,15 +59,18 @@ interface GamificationState {
   // Simulated Investing Cash Balance (transferred from remaining budget)
   virtualBalance: number; 
   portfolioAllocations: Record<string, number>; // ticker -> units owned
+  riskProfile: 'Conservative' | 'Moderate' | 'Aggressive' | null;
+  spareChangeAccumulated: number;
   
   // Actions
   addXP: (amount: number) => void;
   checkAndUpdateStreak: () => void;
+  claimDailyReward: () => { success: boolean; xp: number; cash: number };
   unlockAchievement: (achievementId: string) => void;
   
-  // Budgeting Actions
-  setupBudget: (type: 'daily' | 'weekly' | 'monthly', amount: number, categories: string[]) => void;
+  setupBudget: (type: 'daily' | 'weekly' | 'monthly', amount: number, categories: string[], limits: Record<string, number>) => void;
   addExpense: (name: string, category: string, amount: number, date: string, notes?: string) => void;
+  deleteExpense: (id: string) => void;
   resetBudget: () => void;
   
   // Savings Actions
@@ -73,7 +79,9 @@ interface GamificationState {
   
   // Simulator Actions
   allocateToSimulation: (amount: number) => boolean;
+  sweepSpareChange: () => void;
   tradeAssetSim: (ticker: string, type: 'buy' | 'sell', qty: number, price: number) => boolean;
+  setRiskProfile: (profile: 'Conservative' | 'Moderate' | 'Aggressive' | null) => void;
   
   // General Updates
   completeLesson: (moduleName: string) => void;
@@ -139,14 +147,22 @@ export const ALL_ACHIEVEMENTS: Achievement[] = [
     description: 'Completed the Emergency Funds saving strategy lesson.',
     icon: 'shield.fill',
     color: '#EF4444', // Red
+  },
+  {
+    id: 'compound_master',
+    title: 'Time Compounding Guru',
+    description: 'Simulated a long-term 20-year compound interest savings timeline.',
+    icon: 'hourglass.badge.plus',
+    color: '#10B981', // Success green
   }
 ];
 
 export const useGamificationStore = create<GamificationState>()((set, get) => ({
   xp: 45, // start with some XP
   level: 1,
-  streakDays: 3, // start with a small active streak to make it engaging
+  streakDays: 1,
   lastActiveDate: null,
+  lastClaimedRewardDate: null,
   achievements: [],
 
   // Subscores initialize at 0 and grow through actions
@@ -162,6 +178,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
   budgetType: null,
   totalBudget: 0,
   selectedCategories: [],
+  categoryLimits: {},
   
   // Collections
   loggedExpenses: [],
@@ -170,8 +187,12 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
   // Investment Lab simulator state
   virtualBalance: 0, // cash left inside Investment Lab simulator
   portfolioAllocations: {}, // ticker -> units owned
+  riskProfile: null,
+  spareChangeAccumulated: 0,
 
   addXP: (amount) => {
+    const isGuest = useAuthStore.getState().user?.id === 'guest';
+    if (isGuest) return;
     set((state) => {
       const newXp = state.xp + amount;
       let newLevel = 1;
@@ -218,7 +239,54 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
     });
   },
 
+  claimDailyReward: () => {
+    const isGuest = useAuthStore.getState().user?.id === 'guest';
+    if (isGuest) return { success: false, xp: 0, cash: 0 };
+    let result = { success: false, xp: 0, cash: 0 };
+    
+    set((state) => {
+      const today = new Date().toISOString().split('T')[0];
+      if (state.lastClaimedRewardDate === today) {
+        return state; // Already claimed today
+      }
+
+      // Calculate reward based on streak day (1-7 loop)
+      const dayInCycle = ((state.streakDays - 1) % 7) + 1;
+      
+      let xpReward = dayInCycle * 10;
+      let cashReward = 0;
+      
+      // Bonus cash on milestone days
+      if (dayInCycle === 3) cashReward = 500;
+      if (dayInCycle === 7) cashReward = 2000;
+
+      result = { success: true, xp: xpReward, cash: cashReward };
+
+      // Calculate new XP and level
+      const newXp = state.xp + xpReward;
+      let newLevel = 1;
+      for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
+        if (newXp >= LEVEL_THRESHOLDS[i]) {
+          newLevel = i + 1;
+          break;
+        }
+      }
+
+      return {
+        lastClaimedRewardDate: today,
+        xp: newXp,
+        level: newLevel,
+        virtualBalance: state.virtualBalance + cashReward,
+        learningScore: Math.min(100, state.learningScore + (dayInCycle * 2)), // Helps unlock Academy lessons
+      };
+    });
+
+    return result;
+  },
+
   unlockAchievement: (achievementId) => {
+    const isGuest = useAuthStore.getState().user?.id === 'guest';
+    if (isGuest) return;
     set((state) => {
       if (state.achievements.some((a) => a.id === achievementId)) {
         return state;
@@ -236,10 +304,11 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
   },
 
   // Setup Budget (Onboarding)
-  setupBudget: (type, amount, categories) => {
+  setupBudget: (type, amount, categories, limits) => {
+    const isGuest = useAuthStore.getState().user?.id === 'guest';
     set((state) => {
       let updatedAchievements = [...state.achievements];
-      if (!updatedAchievements.some(a => a.id === 'first_budget')) {
+      if (!isGuest && !updatedAchievements.some(a => a.id === 'first_budget')) {
         const ach = ALL_ACHIEVEMENTS.find(a => a.id === 'first_budget');
         if (ach) updatedAchievements.push({ ...ach, unlockedAt: new Date().toISOString() });
       }
@@ -249,15 +318,17 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         budgetType: type,
         totalBudget: amount,
         selectedCategories: categories,
-        budgetingScore: 80, // initial budgeting score for starting setup
+        categoryLimits: limits,
+        budgetingScore: isGuest ? 0 : 80, // initial budgeting score for starting setup
         achievements: updatedAchievements,
-        xp: state.xp + 30 // reward for onboarding
+        xp: isGuest ? state.xp : state.xp + 30 // reward for onboarding
       };
     });
   },
 
   // Log simulated expense
   addExpense: (name, category, amount, date, notes) => {
+    const isGuest = useAuthStore.getState().user?.id === 'guest';
     set((state) => {
       const newExpense: Expense = {
         id: Date.now().toString(),
@@ -280,16 +351,43 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       }
 
       let updatedAchievements = [...state.achievements];
-      if (nextBudgetingScore >= 90 && !updatedAchievements.some(a => a.id === 'budget_master')) {
+      if (!isGuest && nextBudgetingScore >= 90 && !updatedAchievements.some(a => a.id === 'budget_master')) {
         const ach = ALL_ACHIEVEMENTS.find(a => a.id === 'budget_master');
         if (ach) updatedAchievements.push({ ...ach, unlockedAt: new Date().toISOString() });
       }
 
+      // Calculate Acorns-style round-up to nearest ₱100
+      const cents = amount % 100;
+      const roundUp = cents === 0 ? 0 : 100 - cents;
+      const nextSpareChange = state.spareChangeAccumulated + roundUp;
+
       return {
         loggedExpenses: updatedExpenses,
-        budgetingScore: nextBudgetingScore,
+        budgetingScore: isGuest ? 0 : nextBudgetingScore,
         achievements: updatedAchievements,
-        xp: state.xp + 10 // +10 XP
+        xp: isGuest ? state.xp : state.xp + 10, // +10 XP
+        spareChangeAccumulated: nextSpareChange
+      };
+    });
+  },
+
+  deleteExpense: (id) => {
+    const isGuest = useAuthStore.getState().user?.id === 'guest';
+    set((state) => {
+      const updatedExpenses = state.loggedExpenses.filter((e) => e.id !== id);
+      
+      // Recalculate budgeting score
+      const totalSpent = updatedExpenses.reduce((sum, e) => sum + e.amount, 0);
+      let nextBudgetingScore = state.budgetingScore;
+      if (totalSpent > state.totalBudget) {
+        nextBudgetingScore = Math.max(20, state.budgetingScore - 10);
+      } else {
+        nextBudgetingScore = Math.min(100, state.budgetingScore + 5);
+      }
+
+      return {
+        loggedExpenses: updatedExpenses,
+        budgetingScore: isGuest ? 0 : nextBudgetingScore
       };
     });
   },
@@ -300,13 +398,15 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       budgetType: null,
       totalBudget: 0,
       selectedCategories: [],
+      categoryLimits: {},
       loggedExpenses: [],
       savingsGoals: [],
       virtualBalance: 0,
       portfolioAllocations: {},
       budgetingScore: 0,
       savingScore: 0,
-      investingScore: 0
+      investingScore: 0,
+      spareChangeAccumulated: 0
     });
   },
 
@@ -382,6 +482,20 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
   },
 
   // Allocate leftover budget cash to Investment Simulator
+  setRiskProfile: (profile) => set({ riskProfile: profile }),
+
+  sweepSpareChange: () => {
+    set((state) => {
+      const amount = state.spareChangeAccumulated;
+      if (amount <= 0) return state;
+      return {
+        spareChangeAccumulated: 0,
+        virtualBalance: state.virtualBalance + amount,
+        xp: state.xp + 10 // XP for sweeping spare change to invest
+      };
+    });
+  },
+
   allocateToSimulation: (amount) => {
     let success = false;
     set((state) => {
