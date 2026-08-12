@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { Alert } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { YStack, Text, XStack } from 'tamagui';
 import { Link, useRouter, Href } from 'expo-router';
+import { useAuthStore } from '@/store/authStore';
 import { forgotPasswordSchema, ForgotPasswordFormData } from '@/validation/auth.schema';
 import { AuthLayout } from '@/components/ui/AuthLayout';
 import { FormInput } from '@/components/ui/FormInput';
@@ -13,6 +15,7 @@ import { SymbolView } from 'expo-symbols';
 export default function ForgotPasswordScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const sendPasswordReset = useAuthStore((state) => state.sendPasswordReset);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
@@ -31,12 +34,11 @@ export default function ForgotPasswordScreen() {
   const onSubmit = async (data: ForgotPasswordFormData) => {
     setLoading(true);
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1200));
+      await sendPasswordReset(data.email);
       setResetEmail(data.email);
       setSubmitted(true);
-    } catch (err) {
-      // error handling
+    } catch (err: any) {
+      Alert.alert('Reset Failed', err.message || 'Unable to send password recovery link.');
     } finally {
       setLoading(false);
     }

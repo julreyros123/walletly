@@ -909,7 +909,7 @@ export default function ProfileScreen() {
                   fontWeight="700"
                   fontSize={14}
                   pressStyle={{ opacity: 0.9 }}
-                  onPress={() => {
+                  onPress={async () => {
                     if (!editName.trim()) {
                       Alert.alert('Validation Error', 'Please enter your name.');
                       return;
@@ -918,9 +918,13 @@ export default function ProfileScreen() {
                       Alert.alert('Validation Error', 'Please enter a valid email address.');
                       return;
                     }
-                    updateProfile(editName, editEmail, editAvatarColor, editAvatarEmoji);
-                    setEditProfileVisible(false);
-                    Alert.alert('Profile Saved', 'Your sandbox profile preferences have been successfully updated.');
+                    try {
+                      await updateProfile(editName, editEmail, editAvatarColor, editAvatarEmoji);
+                      setEditProfileVisible(false);
+                      Alert.alert('Profile Saved', 'Your profile preferences have been successfully updated.');
+                    } catch (err: any) {
+                      Alert.alert('Save Failed', err.message || 'Unable to update profile.');
+                    }
                   }}
                   marginTop={6}
                 >

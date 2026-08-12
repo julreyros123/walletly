@@ -14,18 +14,14 @@ import { SymbolView } from 'expo-symbols';
 export default function WelcomeScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const login = useAuthStore((state) => state.login);
+  const loginAsGuest = useAuthStore((state) => state.loginAsGuest);
   const [faqVisible, setFaqVisible] = useState(false);
   const [guestLoading, setGuestLoading] = useState(false);
 
   const handleGuestLogin = async () => {
     setGuestLoading(true);
     try {
-      await login('mock-guest-token-56789', {
-        id: 'guest',
-        name: 'Guest Explorer',
-        email: 'guest@cbudget.com',
-      });
+      await loginAsGuest();
       router.replace('/(tabs)' as Href);
     } catch (err) {
       Alert.alert('Guest Mode Error', 'Unable to start guest session.');

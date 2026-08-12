@@ -64,15 +64,10 @@ export default function LoginScreen() {
   const onSubmit = async (data: LoginFormData) => {
     setLoading(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-      await login('mock-jwt-token-12345', {
-        id: '1',
-        name: 'Demo User',
-        email: data.email,
-      });
+      await login(data.email, data.password);
       router.replace('/(tabs)' as Href);
-    } catch (err) {
-      Alert.alert('Login Failed', 'Please check your credentials and try again.');
+    } catch (err: any) {
+      Alert.alert('Login Failed', err.message || 'Please check your credentials and try again.');
     } finally {
       setLoading(false);
     }

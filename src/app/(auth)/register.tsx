@@ -5,6 +5,7 @@ import { YStack, Text, XStack, View } from 'tamagui';
 import { Link, useRouter, Href } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import { registerSchema, RegisterFormData } from '@/validation/auth.schema';
+import { supabase } from '@/utils/supabase';
 import { AuthLayout } from '@/components/ui/AuthLayout';
 import { FormInput } from '@/components/ui/FormInput';
 import { FormButton } from '@/components/ui/FormButton';
@@ -46,7 +47,7 @@ function SocialIconButton({
 export default function RegisterScreen() {
   const router = useRouter();
   const theme = useTheme();
-  const login = useAuthStore((state) => state.login);
+  const signUp = useAuthStore((state) => state.signUp);
   const [loading, setLoading] = useState(false);
 
   const {
@@ -82,19 +83,21 @@ export default function RegisterScreen() {
   const onSubmit = async (data: RegisterFormData) => {
     setLoading(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      // Extract name prefix from email dynamically
-      const derivedName = data.email.split('@')[0];
-      const capitalizedName = derivedName.charAt(0).toUpperCase() + derivedName.slice(1);
+      await signUp(data.email, data.password);
       
-      await login('mock-jwt-token-12345', {
-        id: '1',
-        name: capitalizedName,
-        email: data.email,
-      });
-      router.replace('/(onboarding)' as Href);
-    } catch (err) {
-      Alert.alert('Registration Failed', 'Please check your inputs and try again.');
+      // Check if user is logged in (email verification disabled)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        router.replace('/(onboarding)' as Href);
+      } else {
+        Alert.alert(
+          'Verification Required',
+          'Please check your inbox and verify your email address to continue.',
+          [{ text: 'OK', onPress: () => router.replace('/(auth)/login' as Href) }]
+        );
+      }
+    } catch (err: any) {
+      Alert.alert('Registration Failed', err.message || 'Please check your inputs and try again.');
     } finally {
       setLoading(false);
     }
