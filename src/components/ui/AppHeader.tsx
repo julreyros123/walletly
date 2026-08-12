@@ -1,0 +1,287 @@
+import React, { useState } from 'react';
+import { StyleSheet, Modal, Alert, Platform } from 'react-native';
+import { YStack, XStack, Text, Button, View } from 'tamagui';
+import { useAuthStore } from '@/store/authStore';
+import { useGamificationStore } from '@/store/gamificationStore';
+import { useTheme } from '@/hooks/use-theme';
+import { SymbolView } from 'expo-symbols';
+import { useRouter, Href } from 'expo-router';
+import { Image } from 'expo-image';
+
+export function AppHeader() {
+  const router = useRouter();
+  const theme = useTheme();
+  const { user, logout } = useAuthStore();
+  const { 
+    xp, 
+    level, 
+    streakDays, 
+    getFinancialHealthScore,
+    achievements
+  } = useGamificationStore();
+
+  const [showDrawer, setShowDrawer] = useState(false);
+
+  const handleLogout = async () => {
+    setShowDrawer(false);
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          await logout();
+          router.replace('/(auth)/login' as Href);
+        },
+      },
+    ]);
+  };
+
+  const handleResetData = () => {
+    Alert.alert(
+      'Reset Simulated Data',
+      'This will reset your simulated academy scores, XP, level, and achievements back to defaults. This action cannot be undone. Proceed?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: () => {
+            // Reset state
+            useGamificationStore.setState({
+              xp: 45,
+              level: 1,
+              streakDays: 3,
+              budgetingScore: 75,
+              learningScore: 60,
+              savingScore: 80,
+              investingScore: 65,
+              achievements: [],
+              customAvatar: 'Budget Beginner',
+            });
+            setShowDrawer(false);
+            Alert.alert('Data Reset', 'All simulated sandbox data has been reset to defaults.');
+          },
+        },
+      ]
+    );
+  };
+
+  return (
+    <>
+      <XStack
+        height={64}
+        alignItems="center"
+        justifyContent="space-between"
+        paddingHorizontal={20}
+        borderBottomWidth={1}
+        borderBottomColor={theme.border}
+        backgroundColor={theme.surface}
+      >
+        {/* Left: Brand logo & name */}
+        <XStack alignItems="center">
+          <Image
+            source={require('../../../assets/images/walletly-logo.png')}
+            style={{ width: 34, height: 34, transform: [{ translateY: 1 }] }}
+            contentFit="contain"
+          />
+          <Text
+            color={theme.text}
+            fontSize={24}
+            fontWeight="800"
+            letterSpacing={-0.8}
+            marginLeft={-2}
+          >
+            budget
+          </Text>
+        </XStack>
+
+        {/* Right: Actions (Notification & Settings Burger) */}
+        <XStack alignItems="center" gap={12}>
+          <Button
+            chromeless
+            circular
+            padding={0}
+            width={40}
+            height={40}
+            alignItems="center"
+            justifyContent="center"
+            pressStyle={{ opacity: 0.7 }}
+            onPress={() => 
+              Alert.alert(
+                'Academy Notification', 
+                'You are all caught up! Complete your lessons and track your budget to boost your score.'
+              )
+            }
+          >
+            <View style={{ position: 'relative' }}>
+              <SymbolView
+                name={{ ios: 'bell', android: 'notifications', web: 'notifications' } as const}
+                size={22}
+                tintColor={theme.text}
+              />
+              <View
+                style={{
+                  position: 'absolute',
+                  top: -2,
+                  right: -2,
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: theme.error,
+                }}
+              />
+            </View>
+          </Button>
+
+          <Button
+            chromeless
+            circular
+            padding={0}
+            width={40}
+            height={40}
+            alignItems="center"
+            justifyContent="center"
+            pressStyle={{ opacity: 0.7 }}
+            onPress={() => setShowDrawer(true)}
+          >
+            <SymbolView
+              name={{ ios: 'line.3.horizontal', android: 'menu', web: 'menu' } as const}
+              size={22}
+              tintColor={theme.text}
+            />
+          </Button>
+        </XStack>
+      </XStack>
+
+      {/* Settings Burger Drawer Modal */}
+      <Modal
+        visible={showDrawer}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDrawer(false)}
+      >
+        <View style={styles.modalOverlay} onPress={() => setShowDrawer(false)}>
+          <View style={[styles.drawerContent, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={(e: any) => e.stopPropagation()}>
+            <YStack gap={16} width="100%">
+              {/* Header inside drawer */}
+              <XStack justifyContent="space-between" alignItems="center" borderBottomWidth={1} borderBottomColor={theme.border} paddingBottom={12}>
+                <Text color={theme.text} fontSize={16} fontWeight="700">
+                  App Settings
+                </Text>
+                <Button
+                  chromeless
+                  circular
+                  width={30}
+                  height={30}
+                  padding={0}
+                  alignItems="center"
+                  justifyContent="center"
+                  onPress={() => setShowDrawer(false)}
+                >
+                  <SymbolView
+                    name={{ ios: 'xmark', android: 'close', web: 'close' } as const}
+                    size={16}
+                    tintColor={theme.textSecondary}
+                  />
+                </Button>
+              </XStack>
+
+              {/* User Account Info */}
+              <YStack gap={4} paddingBottom={4}>
+                <Text color={theme.text} fontSize={15} fontWeight="700">
+                  {user?.name || 'Academy Learner'}
+                </Text>
+                <Text color={theme.textSecondary} fontSize={12}>
+                  {user?.email || 'learner@cbudget.com'}
+                </Text>
+              </YStack>
+
+              {/* Quick Stats Summary */}
+              <YStack gap={8} backgroundColor={theme.backgroundElement} padding={12} borderRadius={8}>
+                <XStack justifyContent="space-between" alignItems="center">
+                  <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Financial Health</Text>
+                  <Text color={theme.text} fontSize={13} fontWeight="700">{getFinancialHealthScore()}/100</Text>
+                </XStack>
+                <XStack justifyContent="space-between" alignItems="center">
+                  <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Streak</Text>
+                  <Text color={theme.warning} fontSize={13} fontWeight="700">🔥 {streakDays} days</Text>
+                </XStack>
+                <XStack justifyContent="space-between" alignItems="center">
+                  <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Academy Level</Text>
+                  <Text color={theme.primary} fontSize={13} fontWeight="700">Lvl {level} ({xp} XP)</Text>
+                </XStack>
+              </YStack>
+
+              {/* Actions List */}
+              <YStack gap={10} marginTop={8}>
+                {/* Reset simulated data */}
+                <Button
+                  backgroundColor={theme.backgroundElement}
+                  pressStyle={{ opacity: 0.8 }}
+                  borderWidth={0}
+                  borderRadius={8}
+                  height={40}
+                  onPress={handleResetData}
+                >
+                  <XStack gap={8} alignItems="center" justifyContent="center">
+                    <SymbolView
+                      name={{ ios: 'arrow.clockwise', android: 'refresh', web: 'refresh' } as const}
+                      size={14}
+                      tintColor={theme.text}
+                    />
+                    <Text color={theme.text} fontSize={13} fontWeight="600">
+                      Reset Simulated Data
+                    </Text>
+                  </XStack>
+                </Button>
+
+                {/* Simulated Academy Sign Out */}
+                <Button
+                  backgroundColor={`${theme.error}10` as any}
+                  borderColor={`${theme.error}20` as any}
+                  borderWidth={1}
+                  pressStyle={{ opacity: 0.8 }}
+                  borderRadius={8}
+                  height={40}
+                  onPress={handleLogout}
+                >
+                  <XStack gap={8} alignItems="center" justifyContent="center">
+                    <SymbolView
+                      name={{ ios: 'power', android: 'power_settings_new', web: 'power_settings_new' } as const}
+                      size={14}
+                      tintColor={theme.error}
+                    />
+                    <Text color={theme.error} fontSize={13} fontWeight="600">
+                      Sign Out
+                    </Text>
+                  </XStack>
+                </Button>
+              </YStack>
+            </YStack>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+  },
+  drawerContent: {
+    width: Platform.OS === 'web' ? 300 : '75%',
+    height: '100%',
+    padding: 20,
+    borderLeftWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: -2, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+});

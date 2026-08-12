@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "walletly",
-    "slug": "walletly",
+    "name": "cbudget",
+    "slug": "cbudget",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "walletly",
+    "scheme": "cbudget",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon"
@@ -18,7 +18,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.julreyros123.walletly"
+      "package": "com.julreyros123.cbudget"
     },
     "web": {
       "output": "static",

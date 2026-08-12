@@ -1,5 +1,5 @@
 {
-  "name": "walletly",
+  "name": "cbudget",
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
@@ -26,6 +26,7 @@
     "expo-symbols": "~56.0.6",
     "expo-system-ui": "~56.0.5",
     "expo-web-browser": "~56.0.5",
+    "jimp": "^0.22.12",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-hook-form": "^7.78.0",
@@ -48,11 +49,13 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "start": "expo start",
+    "start": "node scripts/remove-background.js && expo start",
+    "copy-pouchy": "node scripts/copy-pouchy.js",
+    "remove-bg": "node scripts/remove-background.js",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web",
+    "web": "node scripts/remove-background.js && expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit"
   },
