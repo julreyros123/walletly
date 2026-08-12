@@ -1,8 +1,11 @@
 import { create } from 'zustand';
-import { storage } from '@/utils/storage';
+import { sqliteStorage } from '@/utils/sqliteStorage';
 import { supabase } from '@/utils/supabase';
 
 const AUTH_TOKEN_KEY = 'cbudget_auth_token';
+const GUEST_USER_KEY = 'cbudget_user';
+const GUEST_PREMIUM_KEY = 'cbudget_is_premium';
+const PROFILE_CACHE_PREFIX = 'cbudget_profile_cache:';
 
 export interface User {
   id: string;
@@ -10,6 +13,34 @@ export interface User {
   email: string;
   avatarColor?: string;
   avatarEmoji?: string;
+}
+
+type RemoteProfileRow = {
+  id: string;
+  name: string;
+  email: string;
+  avatar_color: string;
+  avatar_emoji: string;
+  is_premium: boolean;
+  updated_at?: string;
+};
+
+async function upsertRemoteProfile(userId: string, profile: Partial<RemoteProfileRow>) {
+  const nextProfile: RemoteProfileRow = {
+    id: userId,
+    name: profile.name ?? '',
+    email: profile.email ?? '',
+    avatar_color: profile.avatar_color ?? '#0EA5E9',
+    avatar_emoji: profile.avatar_emoji ?? '💼',
+    is_premium: profile.is_premium ?? false,
+  };
+
+  const { error } = await supabase.from('profiles').upsert(nextProfile, { onConflict: 'id' });
+  if (error) {
+    console.warn('Supabase profile upsert failed:', error);
+  }
+
+  return nextProfile;
 }
 
 interface AuthState {
@@ -38,9 +69,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   login: async (email, password) => {
     // Clear any local guest state before logging in
-    await storage.deleteItem(AUTH_TOKEN_KEY);
-    await storage.deleteItem('cbudget_user');
-    await storage.deleteItem('cbudget_is_premium');
+    await sqliteStorage.deleteItem(AUTH_TOKEN_KEY);
+    await sqliteStorage.deleteItem(GUEST_USER_KEY);
+    await sqliteStorage.deleteItem(GUEST_PREMIUM_KEY);
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
@@ -48,9 +79,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signUp: async (email, password) => {
     // Clear any local guest state before signing up
-    await storage.deleteItem(AUTH_TOKEN_KEY);
-    await storage.deleteItem('cbudget_user');
-    await storage.deleteItem('cbudget_is_premium');
+    await sqliteStorage.deleteItem(AUTH_TOKEN_KEY);
+    await sqliteStorage.deleteItem(GUEST_USER_KEY);
+    await sqliteStorage.deleteItem(GUEST_PREMIUM_KEY);
 
     const { error } = await supabase.auth.signUp({ email, password });
     if (error) throw error;
@@ -72,9 +103,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         avatarColor: '#14B8A6',
         avatarEmoji: '💼',
       };
-      await storage.setItem(AUTH_TOKEN_KEY, 'mock-guest-token-56789');
-      await storage.setItem('cbudget_user', JSON.stringify(mockUser));
-      await storage.setItem('cbudget_is_premium', 'false');
+      await sqliteStorage.setItem(AUTH_TOKEN_KEY, 'mock-guest-token-56789');
+      await sqliteStorage.setItem(GUEST_USER_KEY, JSON.stringify(mockUser));
+      await sqliteStorage.setItem(GUEST_PREMIUM_KEY, 'false');
 
       set({
         token: 'mock-guest-token-56789',
@@ -90,9 +121,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const currentUser = get().user;
 
     // Clear local guest storage
-    await storage.deleteItem(AUTH_TOKEN_KEY);
-    await storage.deleteItem('cbudget_user');
-    await storage.deleteItem('cbudget_is_premium');
+    await sqliteStorage.deleteItem(AUTH_TOKEN_KEY);
+    await sqliteStorage.deleteItem(GUEST_USER_KEY);
+    await sqliteStorage.deleteItem(GUEST_PREMIUM_KEY);
+    if (currentUser && currentUser.id !== 'guest') {
+      await sqliteStorage.deleteItem(`${PROFILE_CACHE_PREFIX}${currentUser.id}`);
+    }
 
     if (currentUser && currentUser.id !== 'guest') {
       await supabase.auth.signOut();
@@ -105,9 +139,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const currentUser = get().user;
 
     // Clear local guest storage
-    await storage.deleteItem(AUTH_TOKEN_KEY);
-    await storage.deleteItem('cbudget_user');
-    await storage.deleteItem('cbudget_is_premium');
+    await sqliteStorage.deleteItem(AUTH_TOKEN_KEY);
+    await sqliteStorage.deleteItem(GUEST_USER_KEY);
+    await sqliteStorage.deleteItem(GUEST_PREMIUM_KEY);
+    if (currentUser && currentUser.id !== 'guest') {
+      await sqliteStorage.deleteItem(`${PROFILE_CACHE_PREFIX}${currentUser.id}`);
+    }
 
     if (currentUser && currentUser.id !== 'guest') {
       // Call the database RPC function to delete the auth user (which cascades to profiles)
@@ -125,10 +162,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   hydrate: async () => {
     try {
       // Check if a local guest session is active
-      const guestToken = await storage.getItem(AUTH_TOKEN_KEY);
+      const guestToken = await sqliteStorage.getItem(AUTH_TOKEN_KEY);
       if (guestToken === 'mock-guest-token-56789') {
-        const userStr = await storage.getItem('cbudget_user');
-        const storedPremium = await storage.getItem('cbudget_is_premium');
+        const userStr = await sqliteStorage.getItem(GUEST_USER_KEY);
+        const storedPremium = await sqliteStorage.getItem(GUEST_PREMIUM_KEY);
         const isPremium = storedPremium === 'true';
         let user: User = {
           id: 'guest',
@@ -155,12 +192,50 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Initialize Supabase session listener
       supabase.auth.onAuthStateChange(async (event, session) => {
         if (session) {
-          // Fetch user profile from the database 'profiles' table
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
+          const cacheKey = `${PROFILE_CACHE_PREFIX}${session.user.id}`;
+          let profile: {
+            name?: string | null;
+            email?: string | null;
+            avatar_color?: string | null;
+            avatar_emoji?: string | null;
+            is_premium?: boolean | null;
+          } | null = null;
+
+          try {
+            // Prefer live Supabase data when online.
+            const { data: remoteProfile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .maybeSingle();
+
+            if (remoteProfile) {
+              profile = remoteProfile;
+              await sqliteStorage.setItem(cacheKey, JSON.stringify(remoteProfile));
+            } else {
+              profile = await upsertRemoteProfile(session.user.id, {
+                name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
+                email: session.user.email || '',
+                avatar_color: '#0EA5E9',
+                avatar_emoji: '💼',
+                is_premium: false,
+              });
+              await sqliteStorage.setItem(cacheKey, JSON.stringify(profile));
+            }
+          } catch (error) {
+            console.warn('Supabase profile fetch failed, falling back to SQLite cache:', error);
+          }
+
+          if (!profile) {
+            const cachedProfile = await sqliteStorage.getItem(cacheKey);
+            if (cachedProfile) {
+              try {
+                profile = JSON.parse(cachedProfile);
+              } catch (cacheError) {
+                console.warn('Failed to parse cached profile:', cacheError);
+              }
+            }
+          }
 
           const user: User = {
             id: session.user.id,
@@ -201,17 +276,38 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!currentUser) return;
 
     if (currentUser.id === 'guest') {
-      await storage.setItem('cbudget_is_premium', premium ? 'true' : 'false');
+      await sqliteStorage.setItem(GUEST_PREMIUM_KEY, premium ? 'true' : 'false');
       set({ isPremium: premium });
       return;
     }
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({ is_premium: premium })
-      .eq('id', currentUser.id);
+    const cacheKey = `${PROFILE_CACHE_PREFIX}${currentUser.id}`;
+    const cachedProfileRaw = await sqliteStorage.getItem(cacheKey);
+    let cachedProfile: Record<string, unknown> = {};
 
-    if (error) throw error;
+    if (cachedProfileRaw) {
+      try {
+        cachedProfile = JSON.parse(cachedProfileRaw);
+      } catch (error) {
+        console.warn('Failed to parse cached profile before premium update:', error);
+      }
+    }
+
+    cachedProfile.is_premium = premium;
+
+    try {
+      await upsertRemoteProfile(currentUser.id, {
+        name: (cachedProfile.name as string) || currentUser.name,
+        email: (cachedProfile.email as string) || currentUser.email,
+        avatar_color: (cachedProfile.avatar_color as string) || currentUser.avatarColor || '#0EA5E9',
+        avatar_emoji: (cachedProfile.avatar_emoji as string) || currentUser.avatarEmoji || '💼',
+        is_premium: premium,
+      });
+    } catch (error) {
+      console.warn('Supabase premium update failed, saving locally only:', error);
+    }
+
+    await sqliteStorage.setItem(cacheKey, JSON.stringify(cachedProfile));
 
     set({ isPremium: premium });
   },
@@ -232,23 +328,34 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         ...currentUser,
         ...updatedFields,
       };
-      await storage.setItem('cbudget_user', JSON.stringify(updatedUser));
+      await sqliteStorage.setItem(GUEST_USER_KEY, JSON.stringify(updatedUser));
       set({ user: updatedUser });
       return;
     }
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({
+    const cacheKey = `${PROFILE_CACHE_PREFIX}${currentUser.id}`;
+    const nextProfile = {
+      name,
+      email,
+      avatar_color: updatedFields.avatarColor,
+      avatar_emoji: updatedFields.avatarEmoji,
+      is_premium: get().isPremium,
+      updated_at: new Date().toISOString(),
+    };
+
+    try {
+      await upsertRemoteProfile(currentUser.id, {
         name,
         email,
         avatar_color: updatedFields.avatarColor,
         avatar_emoji: updatedFields.avatarEmoji,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', currentUser.id);
+        is_premium: get().isPremium,
+      });
+    } catch (error) {
+      console.warn('Supabase profile update failed, saving locally only:', error);
+    }
 
-    if (error) throw error;
+    await sqliteStorage.setItem(cacheKey, JSON.stringify(nextProfile));
 
     set({
       user: {

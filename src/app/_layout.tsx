@@ -17,12 +17,16 @@ import {
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import tamaguiConfig from '../../tamagui.config';
 import { CustomAlertProvider } from '@/components/ui/CustomAlert';
+import { initializeOfflineSchema } from '@/utils/offlineSchema';
+import { seedLocalReferenceData } from '@/utils/domainSync';
+import { useSyncStore } from '@/store/syncStore';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const hydrateAuth = useAuthStore((state) => state.hydrate);
   const hydrateTheme = useThemeStore((state) => state.hydrate);
+  const hydrateSync = useSyncStore((state) => state.hydrate);
   const mode = useThemeStore((state) => state.mode);
 
   const [fontsLoaded] = useFonts({
@@ -35,9 +39,12 @@ export default function RootLayout() {
 
   // Hydrate authentication token and theme settings on app mount
   useEffect(() => {
+    void initializeOfflineSchema();
+    void seedLocalReferenceData();
+    void hydrateSync();
     hydrateAuth();
     hydrateTheme();
-  }, [hydrateAuth, hydrateTheme]);
+  }, [hydrateAuth, hydrateSync, hydrateTheme]);
 
   useEffect(() => {
     if (fontsLoaded) {

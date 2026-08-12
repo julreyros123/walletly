@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Modal, Alert, Platform } from 'react-native';
 import { YStack, XStack, Text, Button, View } from 'tamagui';
 import { useAuthStore } from '@/store/authStore';
 import { useGamificationStore } from '@/store/gamificationStore';
+import { useSyncStore } from '@/store/syncStore';
 import { useTheme } from '@/hooks/use-theme';
 import { SymbolView } from 'expo-symbols';
 import { useRouter, Href } from 'expo-router';
@@ -17,10 +18,27 @@ export function AppHeader() {
     level, 
     streakDays, 
     getFinancialHealthScore,
-    achievements
   } = useGamificationStore();
+  const syncStatus = useSyncStore((state) => ({
+    backend: state.backend,
+    connection: state.connection,
+    lastSyncedAt: state.lastSyncedAt,
+    hydrated: state.hydrated,
+  }));
+  const hydrateSync = useSyncStore((state) => state.hydrate);
 
   const [showDrawer, setShowDrawer] = useState(false);
+
+  useEffect(() => {
+    void hydrateSync();
+  }, [hydrateSync]);
+
+  const syncLabel = syncStatus.backend === 'supabase' ? 'Supabase online' : 'SQLite offline';
+  const syncDisplayLabel = syncStatus.hydrated ? syncLabel : 'Sync loading';
+  const syncTone = syncStatus.connection === 'online' ? theme.success : theme.warning;
+  const lastSyncLabel = syncStatus.lastSyncedAt
+    ? new Date(syncStatus.lastSyncedAt).toLocaleString()
+    : 'Not synced yet';
 
   const handleLogout = async () => {
     setShowDrawer(false);
@@ -99,6 +117,29 @@ export function AppHeader() {
 
         {/* Right: Actions (Notification & Settings Burger) */}
         <XStack alignItems="center" gap={12}>
+          <XStack
+            alignItems="center"
+            gap={6}
+            paddingHorizontal={10}
+            height={30}
+            borderRadius={999}
+            backgroundColor={`${syncTone}15` as any}
+            borderWidth={1}
+            borderColor={`${syncTone}35` as any}
+          >
+            <View
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: syncTone,
+              }}
+            />
+            <Text color={theme.text} fontSize={11} fontWeight="700">
+              {syncDisplayLabel}
+            </Text>
+          </XStack>
+
           <Button
             chromeless
             circular
@@ -225,20 +266,27 @@ export function AppHeader() {
                   </Button>
                 </YStack>
               ) : (
-                <YStack gap={8} backgroundColor={theme.backgroundElement} padding={12} borderRadius={8}>
-                  <XStack justifyContent="space-between" alignItems="center">
-                    <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Financial Health</Text>
-                    <Text color={theme.text} fontSize={13} fontWeight="700">{getFinancialHealthScore()}/100</Text>
-                  </XStack>
+              <YStack gap={8} backgroundColor={theme.backgroundElement} padding={12} borderRadius={8}>
+                <XStack justifyContent="space-between" alignItems="center">
+                  <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Financial Health</Text>
+                  <Text color={theme.text} fontSize={13} fontWeight="700">{getFinancialHealthScore()}/100</Text>
+                </XStack>
                   <XStack justifyContent="space-between" alignItems="center">
                     <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Streak</Text>
                     <Text color={theme.warning} fontSize={13} fontWeight="700">🔥 {streakDays} days</Text>
                   </XStack>
-                  <XStack justifyContent="space-between" alignItems="center">
-                    <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Academy Level</Text>
-                    <Text color={theme.primary} fontSize={13} fontWeight="700">Lvl {level} ({xp} XP)</Text>
-                  </XStack>
-                </YStack>
+                <XStack justifyContent="space-between" alignItems="center">
+                  <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Academy Level</Text>
+                  <Text color={theme.primary} fontSize={13} fontWeight="700">Lvl {level} ({xp} XP)</Text>
+                </XStack>
+                <XStack justifyContent="space-between" alignItems="center">
+                  <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Storage</Text>
+                  <Text color={theme.text} fontSize={12} fontWeight="700">{syncDisplayLabel}</Text>
+                </XStack>
+                <Text color={theme.textSecondary} fontSize={11} lineHeight={16}>
+                  Last sync: {lastSyncLabel}
+                </Text>
+              </YStack>
               )}
 
               {/* Actions List */}

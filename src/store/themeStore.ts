@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { storage } from '@/utils/storage';
+import { sqliteStorage } from '@/utils/sqliteStorage';
 
 export type ThemeMode = 'light' | 'dark';
 export type AccentColor = 'green' | 'sky' | 'teal' | 'purple' | 'rose' | 'orange';
@@ -18,7 +18,7 @@ export const useThemeStore = create<ThemeState>((set) => ({
 
   setMode: async (mode: ThemeMode) => {
     try {
-      await storage.setItem('cbudget_theme_mode', mode);
+      await sqliteStorage.setItem('cbudget_theme_mode', mode);
     } catch (e) {
       console.error(e);
     }
@@ -27,7 +27,7 @@ export const useThemeStore = create<ThemeState>((set) => ({
 
   setPrimaryColor: async (color: AccentColor) => {
     try {
-      await storage.setItem('cbudget_primary_color', color);
+      await sqliteStorage.setItem('cbudget_primary_color', color);
     } catch (e) {
       console.error(e);
     }
@@ -36,8 +36,8 @@ export const useThemeStore = create<ThemeState>((set) => ({
 
   hydrate: async () => {
     try {
-      const mode = await storage.getItem('cbudget_theme_mode') as ThemeMode | null;
-      const primaryColor = await storage.getItem('cbudget_primary_color') as AccentColor | null;
+      const mode = await sqliteStorage.getItem('cbudget_theme_mode') as ThemeMode | null;
+      const primaryColor = await sqliteStorage.getItem('cbudget_primary_color') as AccentColor | null;
       
       set({
         mode: mode || 'light',

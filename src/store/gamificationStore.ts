@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { useAuthStore } from './authStore';
+import { sqliteStorage } from '@/utils/sqliteStorage';
+import { syncStructuredStateToStorage } from '@/utils/domainSync';
 
 export interface Achievement {
   id: string;
@@ -55,6 +57,7 @@ interface GamificationState {
   // Logged Expenses & Savings Goals
   loggedExpenses: Expense[];
   savingsGoals: SavingsGoal[];
+  completedLessons: string[];
   
   // Simulated Investing Cash Balance (transferred from remaining budget)
   virtualBalance: number; 
@@ -183,6 +186,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
   // Collections
   loggedExpenses: [],
   savingsGoals: [],
+  completedLessons: [],
   
   // Investment Lab simulator state
   virtualBalance: 0, // cash left inside Investment Lab simulator
@@ -401,6 +405,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       categoryLimits: {},
       loggedExpenses: [],
       savingsGoals: [],
+      completedLessons: [],
       virtualBalance: 0,
       portfolioAllocations: {},
       budgetingScore: 0,
@@ -596,9 +601,14 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         if (ach) updatedAchievements.push({ ...ach, unlockedAt: new Date().toISOString() });
       }
 
+      const completedLessons = state.completedLessons.includes(moduleName)
+        ? state.completedLessons
+        : [...state.completedLessons, moduleName];
+
       return {
         learningScore: nextLearningScore,
         achievements: updatedAchievements,
+        completedLessons,
         xp: state.xp + 50 // completing a lesson rewards 50 XP
       };
     });
@@ -627,3 +637,33 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
     return Math.round((state.budgetingScore + state.learningScore + state.savingScore + state.investingScore) / 4);
   }
 }));
+
+const GAMIFICATION_STATE_KEY = 'cbudget_gamification_state';
+
+const hydrateGamificationState = async () => {
+  try {
+    const rawState = await sqliteStorage.getItem(GAMIFICATION_STATE_KEY);
+    if (!rawState) return;
+
+    const savedState = JSON.parse(rawState) as Partial<GamificationState>;
+    useGamificationStore.setState(savedState);
+  } catch (error) {
+    console.error('Failed to hydrate gamification state:', error);
+  }
+};
+
+void hydrateGamificationState();
+
+useGamificationStore.subscribe((state) => {
+  void sqliteStorage.setItem(GAMIFICATION_STATE_KEY, JSON.stringify(state));
+});
+
+useGamificationStore.subscribe((state) => {
+  const user = useAuthStore.getState().user;
+  void syncStructuredStateToStorage(
+    user
+      ? { id: user.id, email: user.email, isPremium: useAuthStore.getState().isPremium }
+      : null,
+    state,
+  );
+});
