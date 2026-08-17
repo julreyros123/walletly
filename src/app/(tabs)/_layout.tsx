@@ -196,7 +196,7 @@ export default function TabsLayout() {
             {/* Action Buttons */}
             <YStack gap={10} width="100%" marginTop={8}>
               <Button
-                backgroundColor={theme.primary}
+                style={{ backgroundColor: theme.primary }}
                 borderRadius={14}
                 height={48}
                 pressStyle={{ opacity: 0.85, scale: 0.98 }}
@@ -261,7 +261,7 @@ export default function TabsLayout() {
             onStartShouldSetResponder={() => true}
             onTouchEnd={(e) => e.stopPropagation()}
           >
-            <Text color={theme.text} fontSize={15} fontFamily="Inter_800ExtraBold" textAlign="center" marginBottom={4}>
+            <Text color={theme.text} fontSize={15} style={{ fontFamily: "Inter_800ExtraBold" }} textAlign="center" marginBottom={4}>
               Quick Actions
             </Text>
 
@@ -278,8 +278,8 @@ export default function TabsLayout() {
                 <SymbolView name={{ ios: 'plus', android: 'add', web: 'add' } as any} size={16} tintColor="#FFFFFF" />
               </View>
               <YStack flex={1} gap={2}>
-                <Text color={theme.text} fontSize={13} fontFamily="Inter_700Bold">Log Expense</Text>
-                <Text color={theme.textSecondary} fontSize={10} fontFamily="Inter_400Regular">Record cash flow transaction</Text>
+                <Text color={theme.text} fontSize={13} style={{ fontFamily: "Inter_700Bold" }}>Log Expense</Text>
+                <Text color={theme.textSecondary} fontSize={10} style={{ fontFamily: "Inter_400Regular" }}>Record cash flow transaction</Text>
               </YStack>
               <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' } as any} size={10} tintColor={theme.textSecondary} />
             </TouchableOpacity>
@@ -297,8 +297,8 @@ export default function TabsLayout() {
                 <SymbolView name={{ ios: 'banknote.fill', android: 'savings', web: 'savings' } as any} size={15} tintColor="#FFFFFF" />
               </View>
               <YStack flex={1} gap={2}>
-                <Text color={theme.text} fontSize={13} fontFamily="Inter_700Bold">Add Savings</Text>
-                <Text color={theme.textSecondary} fontSize={10} fontFamily="Inter_400Regular">Contribute to savings goal progress</Text>
+                <Text color={theme.text} fontSize={13} style={{ fontFamily: "Inter_700Bold" }}>Add Savings</Text>
+                <Text color={theme.textSecondary} fontSize={10} style={{ fontFamily: "Inter_400Regular" }}>Contribute to savings goal progress</Text>
               </YStack>
               <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' } as any} size={10} tintColor={theme.textSecondary} />
             </TouchableOpacity>
@@ -316,8 +316,8 @@ export default function TabsLayout() {
                 <SymbolView name={{ ios: 'book.closed.fill', android: 'menu_book', web: 'menu_book' } as any} size={14} tintColor="#FFFFFF" />
               </View>
               <YStack flex={1} gap={2}>
-                <Text color={theme.text} fontSize={13} fontFamily="Inter_700Bold">Go to Learn (Academy)</Text>
-                <Text color={theme.textSecondary} fontSize={10} fontFamily="Inter_400Regular">Continue academy lesson track</Text>
+                <Text color={theme.text} fontSize={13} style={{ fontFamily: "Inter_700Bold" }}>Go to Learn (Academy)</Text>
+                <Text color={theme.textSecondary} fontSize={10} style={{ fontFamily: "Inter_400Regular" }}>Continue academy lesson track</Text>
               </YStack>
               <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' } as any} size={10} tintColor={theme.textSecondary} />
             </TouchableOpacity>
@@ -342,7 +342,7 @@ export default function TabsLayout() {
               }}
             >
               <SymbolView name={{ ios: 'xmark', android: 'close', web: 'close' } as any} size={10} tintColor={theme.text} />
-              <Text color={theme.text} fontSize={11} fontFamily="Inter_700Bold">Close</Text>
+              <Text color={theme.text} fontSize={11} style={{ fontFamily: "Inter_700Bold" }}>Close</Text>
             </TouchableOpacity>
           </YStack>
         </TouchableOpacity>

@@ -346,10 +346,10 @@ export default function InvestScreen() {
           <View marginBottom={20}>
             <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={8}>
               <YStack gap={2} flex={1} minWidth={150}>
-                <Text color="#FFFFFF" fontSize={24} fontFamily="Inter_700Bold" letterSpacing={-0.4} lineHeight={30}>
+                <Text color="#FFFFFF" fontSize={24} style={{ fontFamily: "Inter_700Bold" }} letterSpacing={-0.4} lineHeight={30}>
                   Investment Lab
                 </Text>
-                <Text color="rgba(255, 255, 255, 0.6)" fontSize={13} fontFamily="Inter_400Regular" lineHeight={18}>
+                <Text color="rgba(255, 255, 255, 0.6)" fontSize={13} style={{ fontFamily: "Inter_400Regular" }} lineHeight={18}>
                   Practice asset allocation and strategy testing risk-free.
                 </Text>
               </YStack>
@@ -379,7 +379,7 @@ export default function InvestScreen() {
           >
             <YStack alignItems="center" gap={4}>
               <XStack gap={8} alignItems="center">
-                <Text color="#8D99AE" fontSize={11} fontFamily="Inter_600SemiBold" letterSpacing={0.5} textTransform="uppercase">
+                <Text color="#8D99AE" fontSize={11} style={{ fontFamily: "Inter_600SemiBold" }} letterSpacing={0.5} textTransform="uppercase">
                   Net Portfolio Value
                 </Text>
                 {store.riskProfile && (
@@ -399,7 +399,7 @@ export default function InvestScreen() {
                           : '#EF4444'
                       }
                       fontSize={10}
-                      fontFamily="Inter_700Bold"
+                      style={{ fontFamily: "Inter_700Bold" }}
                       letterSpacing={0.5}
                       textTransform="uppercase"
                     >
@@ -410,8 +410,8 @@ export default function InvestScreen() {
               </XStack>
               
               <XStack alignItems="baseline" gap={4} marginTop={4}>
-                <Text color="#3EB47D" fontSize={20} fontFamily="Inter_700Bold">₱</Text>
-                <Text color="#FFFFFF" fontSize={28} fontFamily="Inter_700Bold" letterSpacing={-0.5} lineHeight={34}>
+                <Text color="#3EB47D" fontSize={20} style={{ fontFamily: "Inter_700Bold" }}>₱</Text>
+                <Text color="#FFFFFF" fontSize={28} style={{ fontFamily: "Inter_700Bold" }} letterSpacing={-0.5} lineHeight={34}>
                   {totalPortfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </Text>
               </XStack>
@@ -419,18 +419,18 @@ export default function InvestScreen() {
 
             <XStack justifyContent="space-between" paddingTop={14} borderTopWidth={1} borderTopColor="rgba(255, 255, 255, 0.06)">
               <YStack gap={2}>
-                <Text color="#8D99AE" fontSize={11} fontFamily="Inter_500Medium" lineHeight={16}>
+                <Text color="#8D99AE" fontSize={11} style={{ fontFamily: "Inter_500Medium" }} lineHeight={16}>
                   Invested Assets
                 </Text>
-                <Text color="#FFFFFF" fontSize={15} fontFamily="Inter_700Bold" lineHeight={20}>
+                <Text color="#FFFFFF" fontSize={15} style={{ fontFamily: "Inter_700Bold" }} lineHeight={20}>
                   ₱{holdingsValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </Text>
               </YStack>
               <YStack alignItems="flex-end" gap={2}>
-                <Text color="#8D99AE" fontSize={11} fontFamily="Inter_500Medium" lineHeight={16}>
+                <Text color="#8D99AE" fontSize={11} style={{ fontFamily: "Inter_500Medium" }} lineHeight={16}>
                   Sandbox Cash
                 </Text>
-                <Text color="#3EB47D" fontSize={15} fontFamily="Inter_700Bold" lineHeight={20}>
+                <Text color="#3EB47D" fontSize={15} style={{ fontFamily: "Inter_700Bold" }} lineHeight={20}>
                   ₱{store.virtualBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </Text>
               </YStack>
@@ -439,19 +439,19 @@ export default function InvestScreen() {
             {/* Asset Allocation Breakdown Bar */}
             <YStack gap={8} marginTop={4}>
               <XStack justifyContent="space-between" alignItems="center">
-                <Text color="#8D99AE" fontSize={10} fontFamily="Inter_600SemiBold" letterSpacing={0.5} textTransform="uppercase">
+                <Text color="#8D99AE" fontSize={10} style={{ fontFamily: "Inter_600SemiBold" }} letterSpacing={0.5} textTransform="uppercase">
                   Asset Allocation
                 </Text>
                 <XStack gap={10}>
                   <XStack gap={4} alignItems="center">
                     <View width={6} height={6} borderRadius={3} backgroundColor="#3EB47D" />
-                    <Text color="#8D99AE" fontSize={10} fontFamily="Inter_500Medium">
+                    <Text color="#8D99AE" fontSize={10} style={{ fontFamily: "Inter_500Medium" }}>
                       Stocks ({totalPortfolioValue > 0 ? Math.round((holdingsValue / totalPortfolioValue) * 100) : 0}%)
                     </Text>
                   </XStack>
                   <XStack gap={4} alignItems="center">
                     <View width={6} height={6} borderRadius={3} backgroundColor="#10B981" />
-                    <Text color="#8D99AE" fontSize={10} fontFamily="Inter_500Medium">
+                    <Text color="#8D99AE" fontSize={10} style={{ fontFamily: "Inter_500Medium" }}>
                       Cash ({totalPortfolioValue > 0 ? Math.round((store.virtualBalance / totalPortfolioValue) * 100) : 100}%)
                     </Text>
                   </XStack>
@@ -486,11 +486,11 @@ export default function InvestScreen() {
           >
             <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={10}>
               <YStack gap={2}>
-                <Text color="#8D99AE" fontSize={11} fontFamily="Inter_600SemiBold" letterSpacing={0.5} textTransform="uppercase">
+                <Text color="#8D99AE" fontSize={11} style={{ fontFamily: "Inter_600SemiBold" }} letterSpacing={0.5} textTransform="uppercase">
                   Portfolio Performance
                 </Text>
                 <XStack gap={6} alignItems="center">
-                  <Text color="#FFFFFF" fontSize={14} fontFamily="Inter_700Bold">
+                  <Text color="#FFFFFF" fontSize={14} style={{ fontFamily: "Inter_700Bold" }}>
                     {isPerformancePositive ? '+' : ''}₱{dailyGain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </Text>
                   <View 
@@ -502,7 +502,7 @@ export default function InvestScreen() {
                     <Text 
                       color={isPerformancePositive ? '#059669' : '#EF4444'} 
                       fontSize={10} 
-                      fontFamily="Inter_600SemiBold"
+                      style={{ fontFamily: "Inter_600SemiBold" }}
                     >
                       {isPerformancePositive ? '+' : ''}{dailyGainPercent.toFixed(2)}%
                     </Text>
@@ -539,7 +539,7 @@ export default function InvestScreen() {
                       <Text
                         color={isSelected ? '#FFFFFF' : '#8D99AE'}
                         fontSize={10}
-                        fontFamily={isSelected ? 'Inter_700Bold' : 'Inter_600SemiBold'}
+                        style={{ fontFamily: isSelected ? 'Inter_700Bold' : 'Inter_600SemiBold' }}
                         textAlign="center"
                       >
                         {range}
@@ -678,11 +678,11 @@ export default function InvestScreen() {
             elevation={0}
           >
             <YStack gap={2}>
-              <Text color="#FFFFFF" fontSize={14} fontFamily="Inter_700Bold" letterSpacing={-0.2} lineHeight={20}>
+              <Text color="#FFFFFF" fontSize={14} style={{ fontFamily: "Inter_700Bold" }} letterSpacing={-0.2} lineHeight={20}>
                 Simulated Sandbox Cash Manager
               </Text>
-              <Text color="#8D99AE" fontSize={11} fontFamily="Inter_500Medium" lineHeight={15}>
-                Available leftover allowance budget to invest: <Text color="#3EB47D" fontFamily="Inter_700Bold">₱{Math.round(availableToTransfer).toLocaleString()}</Text>
+              <Text color="#8D99AE" fontSize={11} style={{ fontFamily: "Inter_500Medium" }} lineHeight={15}>
+                Available leftover allowance budget to invest: <Text color="#3EB47D" style={{ fontFamily: "Inter_700Bold" }}>₱{Math.round(availableToTransfer).toLocaleString()}</Text>
               </Text>
             </YStack>
             
@@ -721,18 +721,18 @@ export default function InvestScreen() {
             </YStack>
 
             <YStack gap={6} marginTop={4}>
-              <Text color="rgba(255, 255, 255, 0.5)" fontSize={10} fontFamily="Inter_600SemiBold" letterSpacing={0.5} textTransform="uppercase" textAlign="center">
+              <Text color="rgba(255, 255, 255, 0.5)" fontSize={10} style={{ fontFamily: "Inter_600SemiBold" }} letterSpacing={0.5} textTransform="uppercase" textAlign="center">
                 Quick Sim Test Grants
               </Text>
               <XStack gap={8} justifyContent="center">
                 <TouchableOpacity onPress={() => handleQuickAddCash(500)} style={styles.quickCashBtn}>
-                  <Text color="#FFFFFF" fontSize={11} fontFamily="Inter_600SemiBold">+₱500</Text>
+                  <Text color="#FFFFFF" fontSize={11} style={{ fontFamily: "Inter_600SemiBold" }}>+₱500</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => handleQuickAddCash(1000)} style={styles.quickCashBtn}>
-                  <Text color="#FFFFFF" fontSize={11} fontFamily="Inter_600SemiBold">+₱1K</Text>
+                  <Text color="#FFFFFF" fontSize={11} style={{ fontFamily: "Inter_600SemiBold" }}>+₱1K</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => handleQuickAddCash(5000)} style={styles.quickCashBtn}>
-                  <Text color="#FFFFFF" fontSize={11} fontFamily="Inter_600SemiBold">+₱5K</Text>
+                  <Text color="#FFFFFF" fontSize={11} style={{ fontFamily: "Inter_600SemiBold" }}>+₱5K</Text>
                 </TouchableOpacity>
               </XStack>
             </YStack>
@@ -756,18 +756,18 @@ export default function InvestScreen() {
                   size={16}
                   tintColor="#3EB47D"
                 />
-                <Text color="#FFFFFF" fontSize={14} fontFamily="Inter_700Bold" letterSpacing={-0.2} lineHeight={20}>
+                <Text color="#FFFFFF" fontSize={14} style={{ fontFamily: "Inter_700Bold" }} letterSpacing={-0.2} lineHeight={20}>
                   Compound Interest Time Machine
                 </Text>
               </XStack>
-              <Text color="#8D99AE" fontSize={12} fontFamily="Inter_400Regular" lineHeight={16} marginTop={2}>
+              <Text color="#8D99AE" fontSize={12} style={{ fontFamily: "Inter_400Regular" }} lineHeight={16} marginTop={2}>
                 Simulate how small regular monthly savings compound and grow over time!
               </Text>
             </YStack>
 
             {/* 1. Allowance Monthly Savings Option Selector */}
             <YStack gap={6}>
-              <Text color="rgba(255, 255, 255, 0.7)" fontSize={11} fontFamily="Inter_600SemiBold" letterSpacing={0.5} textTransform="uppercase">
+              <Text color="rgba(255, 255, 255, 0.7)" fontSize={11} style={{ fontFamily: "Inter_600SemiBold" }} letterSpacing={0.5} textTransform="uppercase">
                 Monthly Savings Amount
               </Text>
               <XStack gap={6} flexWrap="wrap">
@@ -787,7 +787,7 @@ export default function InvestScreen() {
                         backgroundColor: isSel ? 'rgba(62, 180, 125, 0.12)' : '#0B132B',
                       }}
                     >
-                      <Text color={isSel ? '#3EB47D' : '#FFFFFF'} fontSize={11} fontFamily="Inter_700Bold">
+                      <Text color={isSel ? '#3EB47D' : '#FFFFFF'} fontSize={11} style={{ fontFamily: "Inter_700Bold" }}>
                         ₱{amt.toLocaleString()}
                       </Text>
                     </TouchableOpacity>
@@ -798,7 +798,7 @@ export default function InvestScreen() {
 
             {/* 2. Target Horizon Selection */}
             <YStack gap={6}>
-              <Text color="rgba(255, 255, 255, 0.7)" fontSize={11} fontFamily="Inter_600SemiBold" letterSpacing={0.5} textTransform="uppercase">
+              <Text color="rgba(255, 255, 255, 0.7)" fontSize={11} style={{ fontFamily: "Inter_600SemiBold" }} letterSpacing={0.5} textTransform="uppercase">
                 Years to Compounding
               </Text>
               <XStack gap={6} flexWrap="wrap">
@@ -818,8 +818,8 @@ export default function InvestScreen() {
                         backgroundColor: isSel ? 'rgba(62, 180, 125, 0.12)' : '#0B132B',
                       }}
                     >
-                      <Text color={isSel ? '#3EB47D' : '#FFFFFF'} fontSize={11} fontFamily="Inter_700Bold">
-                        {yr} {yr === 1 ? 'Year' : 'Yrs'}
+                      <Text color={isSel ? '#3EB47D' : '#FFFFFF'} fontSize={11} style={{ fontFamily: "Inter_700Bold" }}>
+                        {yr} Yrs
                       </Text>
                     </TouchableOpacity>
                   );
@@ -829,7 +829,7 @@ export default function InvestScreen() {
 
             {/* 3. Interest Rates Strategy Selection */}
             <YStack gap={6}>
-              <Text color="rgba(255, 255, 255, 0.7)" fontSize={11} fontFamily="Inter_600SemiBold" letterSpacing={0.5} textTransform="uppercase">
+              <Text color="rgba(255, 255, 255, 0.7)" fontSize={11} style={{ fontFamily: "Inter_600SemiBold" }} letterSpacing={0.5} textTransform="uppercase">
                 Compounding Strategy (Growth Rate)
               </Text>
               <XStack gap={6} flexWrap="wrap">
@@ -853,7 +853,7 @@ export default function InvestScreen() {
                         backgroundColor: isSel ? 'rgba(62, 180, 125, 0.12)' : '#0B132B',
                       }}
                     >
-                      <Text color={isSel ? '#3EB47D' : '#FFFFFF'} fontSize={11} fontFamily="Inter_700Bold">
+                      <Text color={isSel ? '#3EB47D' : '#FFFFFF'} fontSize={11} style={{ fontFamily: "Inter_700Bold" }}>
                         {strategy.label}
                       </Text>
                     </TouchableOpacity>
@@ -865,17 +865,17 @@ export default function InvestScreen() {
             {/* 4. Future Value and Visual Projections Split */}
             <YStack backgroundColor="#0B132B" padding={14} borderRadius={12} gap={10} borderWidth={1} borderColor="rgba(255, 255, 255, 0.06)">
               <XStack justifyContent="space-between">
-                <Text color="#8D99AE" fontSize={11} fontFamily="Inter_500Medium">Principal Saved</Text>
-                <Text color="#FFFFFF" fontSize={12} fontFamily="Inter_700Bold">₱{Math.round(compoundPrincipal).toLocaleString()}</Text>
+                <Text color="#8D99AE" fontSize={11} style={{ fontFamily: "Inter_500Medium" }}>Principal Saved</Text>
+                <Text color="#FFFFFF" fontSize={12} style={{ fontFamily: "Inter_700Bold" }}>₱{Math.round(compoundPrincipal).toLocaleString()}</Text>
               </XStack>
               <XStack justifyContent="space-between">
-                <Text color="#8D99AE" fontSize={11} fontFamily="Inter_500Medium">Simulated Growth</Text>
-                <Text color="#10B981" fontSize={12} fontFamily="Inter_700Bold">+₱{Math.round(compoundInterestEarned).toLocaleString()}</Text>
+                <Text color="#8D99AE" fontSize={11} style={{ fontFamily: "Inter_500Medium" }}>Simulated Growth</Text>
+                <Text color="#10B981" fontSize={12} style={{ fontFamily: "Inter_700Bold" }}>+₱{Math.round(compoundInterestEarned).toLocaleString()}</Text>
               </XStack>
               <View height={1} backgroundColor="rgba(255, 255, 255, 0.08)" />
               <XStack justifyContent="space-between" alignItems="baseline">
-                <Text color="#8D99AE" fontSize={11} fontFamily="Inter_600SemiBold">Future Wealth</Text>
-                <Text color="#FFFFFF" fontSize={18} fontFamily="Inter_700Bold">₱{Math.round(compoundFV).toLocaleString()}</Text>
+                <Text color="#8D99AE" fontSize={11} style={{ fontFamily: "Inter_600SemiBold" }}>Future Wealth</Text>
+                <Text color="#FFFFFF" fontSize={18} style={{ fontFamily: "Inter_700Bold" }}>₱{Math.round(compoundFV).toLocaleString()}</Text>
               </XStack>
 
               {/* Progress Split Bar visualization (Principal vs Interest) */}
@@ -892,17 +892,17 @@ export default function InvestScreen() {
                 />
               </View>
               <XStack justifyContent="space-between" marginTop={-2}>
-                <Text color="#8D99AE" fontSize={9} fontFamily="Inter_400Regular">• Principal ({compoundFV > 0 ? Math.round((compoundPrincipal / compoundFV) * 100) : 100}%)</Text>
-                <Text color="#10B981" fontSize={9} fontFamily="Inter_600SemiBold">• Growth ({compoundFV > 0 ? Math.round((compoundInterestEarned / compoundFV) * 100) : 0}%)</Text>
+                <Text color="#8D99AE" fontSize={9} style={{ fontFamily: "Inter_400Regular" }}>• Principal ({compoundFV > 0 ? Math.round((compoundPrincipal / compoundFV) * 100) : 100}%)</Text>
+                <Text color="#10B981" fontSize={9} style={{ fontFamily: "Inter_600SemiBold" }}>• Growth ({compoundFV > 0 ? Math.round((compoundInterestEarned / compoundFV) * 100) : 0}%)</Text>
               </XStack>
             </YStack>
 
             {/* 5. Relatable Teenage Milestone Converter Box */}
             <View backgroundColor="rgba(16, 185, 129, 0.05)" padding={12} borderRadius={10} borderWidth={1} borderColor="rgba(16, 185, 129, 0.15)">
-              <Text color="#10B981" fontSize={11} fontFamily="Inter_700Bold" letterSpacing={0.5} textTransform="uppercase">
+              <Text color="#10B981" fontSize={11} style={{ fontFamily: "Inter_700Bold" }} letterSpacing={0.5} textTransform="uppercase">
                 Relatable Teenage Milestone
               </Text>
-              <Text color="#E2E8F0" fontSize={12} fontFamily="Inter_500Medium" lineHeight={16} marginTop={4}>
+              <Text color="#E2E8F0" fontSize={12} style={{ fontFamily: "Inter_500Medium" }} lineHeight={16} marginTop={4}>
                 {(() => {
                   if (compoundFV < 15000) {
                     return "👟 That's equal to buying 2 pairs of premium sneakers or a mechanical keyboard!";
@@ -924,10 +924,10 @@ export default function InvestScreen() {
           {/* Watchlist Section */}
           <YStack gap={10}>
             <XStack justifyContent="space-between" alignItems="center" marginBottom={2} paddingHorizontal={4}>
-              <Text color="#FFFFFF" fontSize={16} fontFamily="Inter_700Bold" letterSpacing={-0.3}>
+              <Text color="#FFFFFF" fontSize={16} style={{ fontFamily: "Inter_700Bold" }} letterSpacing={-0.3}>
                 Practice Sandbox Portfolio
               </Text>
-              <Text color="#8D99AE" fontSize={11} fontFamily="Inter_600SemiBold" letterSpacing={0.5}>
+              <Text color="#8D99AE" fontSize={11} style={{ fontFamily: "Inter_600SemiBold" }} letterSpacing={0.5}>
                 TAP TO ANALYZE
               </Text>
             </XStack>
@@ -979,7 +979,7 @@ export default function InvestScreen() {
 
                           <YStack gap={2}>
                             <XStack gap={6} alignItems="center">
-                              <Text color="#FFFFFF" fontSize={14} fontFamily="Inter_700Bold" letterSpacing={-0.2} lineHeight={18}>
+                              <Text color="#FFFFFF" fontSize={14} style={{ fontFamily: "Inter_700Bold" }} letterSpacing={-0.2} lineHeight={18}>
                                 {asset.ticker}
                               </Text>
                               <Text
@@ -991,14 +991,14 @@ export default function InvestScreen() {
                                     : '#EF4444'
                                 }
                                 fontSize={10}
-                                fontFamily="Inter_700Bold"
+                                style={{ fontFamily: "Inter_700Bold" }}
                                 letterSpacing={0.5}
                                 textTransform="uppercase"
                               >
                                 • {asset.riskProfile}
                               </Text>
                             </XStack>
-                            <Text color="#8D99AE" fontSize={11} fontFamily="Inter_400Regular" numberOfLines={1} style={{ maxWidth: 140 }}>
+                            <Text color="#8D99AE" fontSize={11} numberOfLines={1} style={{ fontFamily: "Inter_400Regular", maxWidth: 140 }}>
                               {asset.name}
                             </Text>
                           </YStack>
@@ -1049,11 +1049,11 @@ export default function InvestScreen() {
                           </View>
 
                           <YStack alignItems="flex-end" gap={2} minWidth={70}>
-                            <Text color="#FFFFFF" fontSize={14} fontFamily="Inter_700Bold" lineHeight={18}>
+                            <Text color="#FFFFFF" fontSize={14} style={{ fontFamily: "Inter_700Bold" }} lineHeight={18}>
                               ₱{asset.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </Text>
                             <View backgroundColor={changeIsPositive ? 'rgba(5, 150, 105, 0.15)' : 'rgba(239, 68, 68, 0.12)'} paddingHorizontal={6} paddingVertical={2} borderRadius={4}>
-                              <Text color={changeIsPositive ? '#059669' : '#EF4444'} fontSize={10} fontFamily="Inter_600SemiBold">
+                              <Text color={changeIsPositive ? '#059669' : '#EF4444'} fontSize={10} style={{ fontFamily: "Inter_600SemiBold" }}>
                                 {changeIsPositive ? '+' : ''}
                                 {asset.change.toFixed(2)}%
                               </Text>
@@ -1065,8 +1065,8 @@ export default function InvestScreen() {
                       {/* Owned units status label footer */}
                       {ownedUnits > 0 && (
                         <View marginTop={10} backgroundColor="rgba(5, 150, 105, 0.1)" padding={10} borderRadius={8} borderWidth={1} borderColor="rgba(5, 150, 105, 0.25)">
-                          <Text color="#F8FAFC" fontSize={11} fontFamily="Inter_600SemiBold">
-                            You own: <Text color="#059669" fontFamily="Inter_700Bold">₱{assetTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+                          <Text color="#F8FAFC" fontSize={11} style={{ fontFamily: "Inter_600SemiBold" }}>
+                            You own: <Text color="#059669" style={{ fontFamily: "Inter_700Bold" }}>₱{assetTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
                           </Text>
                         </View>
                       )}

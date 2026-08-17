@@ -24,7 +24,9 @@ export const storage = {
         if (typeof window !== 'undefined') {
           localStorage.setItem(key, value);
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('localStorage.setItem failed:', e);
+      }
       return;
     }
     try {
@@ -40,7 +42,9 @@ export const storage = {
         if (typeof window !== 'undefined') {
           localStorage.removeItem(key);
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('localStorage.removeItem failed:', e);
+      }
       return;
     }
     try {

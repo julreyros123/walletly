@@ -353,7 +353,7 @@ export default function DashboardScreen() {
             }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <View width={8} height={8} borderRadius={4} backgroundColor={avatarDetails.color} />
+            <View width={8} height={8} borderRadius={4} style={{ backgroundColor: avatarDetails.color }} />
             <Text color="#FFFFFF" fontSize={11} fontFamily="Inter_600SemiBold" letterSpacing={0.5}>
               {store.customAvatar}
             </Text>
@@ -840,7 +840,7 @@ export default function DashboardScreen() {
                 </View>
               </XStack>
               {/* Custom Stable Progress Bar (no sluggish layout animations) */}
-              <View height={4} backgroundColor={`${theme.primary}15`} width="100%">
+              <View height={4} backgroundColor={`${theme.primary}15` as any} width="100%">
                 <View 
                   width={`${Math.min(100, store.learningScore)}%`}
                   height="100%"
@@ -865,7 +865,7 @@ export default function DashboardScreen() {
                 width={56}
                 height={56}
                 borderRadius={28}
-                backgroundColor={`${theme.primary}12`}
+                backgroundColor={`${theme.primary}12` as any}
                 alignItems="center"
                 justifyContent="center"
                 borderWidth={2}
@@ -936,7 +936,7 @@ export default function DashboardScreen() {
             shadowOpacity={0.25}
             shadowRadius={10}
           >
-            <View width={60} height={60} borderRadius={30} backgroundColor={`${theme.primary}12`} alignItems="center" justifyContent="center">
+            <View width={60} height={60} borderRadius={30} backgroundColor={`${theme.primary}12` as any} alignItems="center" justifyContent="center">
               <SymbolView
                 name={{ ios: 'lock.fill', android: 'lock', web: 'lock' } as const}
                 size={24}

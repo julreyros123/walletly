@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet } from 'react-native';
 import { YStack } from 'tamagui';
-import { useRouter, Redirect } from 'expo-router';
+import { Redirect } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import { useTheme } from '@/hooks/use-theme';
 

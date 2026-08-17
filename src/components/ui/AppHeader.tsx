@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Modal, Alert, Platform } from 'react-native';
+import { StyleSheet, Modal, Alert, Platform, Pressable } from 'react-native';
 import { YStack, XStack, Text, Button, View } from 'tamagui';
 import { useAuthStore } from '@/store/authStore';
 import { useGamificationStore } from '@/store/gamificationStore';
@@ -89,7 +89,7 @@ export function AppHeader() {
             color={theme.text}
             fontSize={24}
             fontWeight="800"
-            fontFamily="Inter_800ExtraBold"
+            style={{ fontFamily: "Inter_800ExtraBold" }}
             letterSpacing={-1}
             marginLeft={-2}
           >
@@ -162,8 +162,8 @@ export function AppHeader() {
         animationType="fade"
         onRequestClose={() => setShowDrawer(false)}
       >
-        <View style={styles.modalOverlay} onPress={() => setShowDrawer(false)}>
-          <View style={[styles.drawerContent, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={(e: any) => e.stopPropagation()}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowDrawer(false)}>
+          <Pressable style={[styles.drawerContent, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={(e) => e.stopPropagation()}>
             <YStack gap={16} width="100%">
               {/* Header inside drawer */}
               <XStack justifyContent="space-between" alignItems="center" borderBottomWidth={1} borderBottomColor={theme.border} paddingBottom={12}>
@@ -208,7 +208,7 @@ export function AppHeader() {
                     Create an account to save your budgets, earn XP, track streaks, and unlock simulator games!
                   </Text>
                   <Button
-                    backgroundColor={theme.primary}
+                    style={{ backgroundColor: theme.primary }}
                     pressStyle={{ opacity: 0.8 }}
                     borderWidth={0}
                     borderRadius={8}
@@ -236,7 +236,7 @@ export function AppHeader() {
                   </XStack>
                   <XStack justifyContent="space-between" alignItems="center">
                     <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Academy Level</Text>
-                    <Text color={theme.primary} fontSize={13} fontWeight="700">Lvl {level} ({xp} XP)</Text>
+                    <Text color={theme.primary as any} fontSize={13} fontWeight="700">Lvl {level} ({xp} XP)</Text>
                   </XStack>
                 </YStack>
               )}
@@ -287,8 +287,8 @@ export function AppHeader() {
                 </Button>
               </YStack>
             </YStack>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </>
   );

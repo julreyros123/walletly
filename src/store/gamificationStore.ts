@@ -614,6 +614,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
 
       return {
         customAvatar: avatar,
+        achievements: updatedAchievements,
         xp: state.xp + 10
       };
     });

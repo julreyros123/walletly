@@ -2,7 +2,14 @@ import { create } from 'zustand';
 import { storage } from '@/utils/storage';
 import { supabase } from '@/utils/supabase';
 
+// ── Storage key constants (avoid magic strings) ──────────────────────
 const AUTH_TOKEN_KEY = 'cbudget_auth_token';
+const USER_KEY = 'cbudget_user';
+const PREMIUM_KEY = 'cbudget_is_premium';
+const MOCK_GUEST_TOKEN = 'mock-guest-token-56789';
+
+// Track the Supabase auth subscription so we can unsubscribe before re-registering
+let authSubscription: { unsubscribe: () => void } | null = null;
 
 export interface User {
   id: string;
@@ -39,8 +46,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (email, password) => {
     // Clear any local guest state before logging in
     await storage.deleteItem(AUTH_TOKEN_KEY);
-    await storage.deleteItem('cbudget_user');
-    await storage.deleteItem('cbudget_is_premium');
+    await storage.deleteItem(USER_KEY);
+    await storage.deleteItem(PREMIUM_KEY);
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
@@ -72,12 +79,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         avatarColor: '#14B8A6',
         avatarEmoji: '💼',
       };
-      await storage.setItem(AUTH_TOKEN_KEY, 'mock-guest-token-56789');
-      await storage.setItem('cbudget_user', JSON.stringify(mockUser));
-      await storage.setItem('cbudget_is_premium', 'false');
+      await storage.setItem(AUTH_TOKEN_KEY, MOCK_GUEST_TOKEN);
+      await storage.setItem(USER_KEY, JSON.stringify(mockUser));
+      await storage.setItem(PREMIUM_KEY, 'false');
 
       set({
-        token: 'mock-guest-token-56789',
+        token: MOCK_GUEST_TOKEN,
         user: mockUser,
         isAuthenticated: true,
         isPremium: false,
@@ -126,9 +133,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       // Check if a local guest session is active
       const guestToken = await storage.getItem(AUTH_TOKEN_KEY);
-      if (guestToken === 'mock-guest-token-56789') {
-        const userStr = await storage.getItem('cbudget_user');
-        const storedPremium = await storage.getItem('cbudget_is_premium');
+      if (guestToken === MOCK_GUEST_TOKEN) {
+        const userStr = await storage.getItem(USER_KEY);
+        const storedPremium = await storage.getItem(PREMIUM_KEY);
         const isPremium = storedPremium === 'true';
         let user: User = {
           id: 'guest',
@@ -140,7 +147,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (userStr) {
           try {
             user = JSON.parse(userStr);
-          } catch (e) {}
+          } catch (e) {
+            console.warn('[Auth] Failed to parse stored user JSON:', e);
+          }
         }
         set({
           token: guestToken,
@@ -152,8 +161,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return;
       }
 
+      // Unsubscribe any previous listener to prevent leaks on re-hydration / hot-reload
+      if (authSubscription) {
+        authSubscription.unsubscribe();
+        authSubscription = null;
+      }
+
       // Initialize Supabase session listener
-      supabase.auth.onAuthStateChange(async (event, session) => {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (session) {
           // Fetch user profile from the database 'profiles' table
           const { data: profile } = await supabase
@@ -179,7 +194,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           });
         } else {
           // If we had a local guest session, don't clear it. Otherwise, clean up auth state
-          if (get().token !== 'mock-guest-token-56789') {
+          if (get().token !== MOCK_GUEST_TOKEN) {
             set({
               token: null,
               user: null,
@@ -190,6 +205,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           }
         }
       });
+
+      // Store subscription for cleanup on next hydrate call
+      authSubscription = subscription;
     } catch (error) {
       console.error('Failed to hydrate auth state:', error);
       set({ isLoading: false });
@@ -201,7 +219,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!currentUser) return;
 
     if (currentUser.id === 'guest') {
-      await storage.setItem('cbudget_is_premium', premium ? 'true' : 'false');
+      await storage.setItem(PREMIUM_KEY, premium ? 'true' : 'false');
       set({ isPremium: premium });
       return;
     }
@@ -232,7 +250,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         ...currentUser,
         ...updatedFields,
       };
-      await storage.setItem('cbudget_user', JSON.stringify(updatedUser));
+      await storage.setItem(USER_KEY, JSON.stringify(updatedUser));
       set({ user: updatedUser });
       return;
     }

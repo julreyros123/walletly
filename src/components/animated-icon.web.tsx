@@ -3,8 +3,6 @@ import { Image } from 'expo-image';
 import { StyleSheet, View } from 'react-native';
 import Animated, { Keyframe, Easing } from 'react-native-reanimated';
 
-import classes from './animated-icon.module.css';
-import stylesModule from './ui/cbudget-logo.module.css';
 import { CbudgetLogoSVG } from '@/components/ui/CbudgetLogoSVG';
 
 const DURATION = 300;

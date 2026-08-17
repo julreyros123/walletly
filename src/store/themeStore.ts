@@ -41,7 +41,7 @@ export const useThemeStore = create<ThemeState>((set) => ({
       
       set({
         mode: mode || 'light',
-        primaryColor: 'green', // Force Apple Green as default regardless of saved state
+        primaryColor: primaryColor || 'green',
       });
     } catch (e) {
       console.error('Failed to hydrate theme state:', e);

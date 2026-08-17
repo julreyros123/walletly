@@ -276,7 +276,7 @@ export default function BudgetScreen() {
             
             <YStack gap={Spacing[16]} paddingVertical={Spacing[16]} alignItems="center">
               <Text color={theme.primary as any} fontSize={14} fontWeight="700" letterSpacing={1} textTransform="uppercase">
-                Step {onboardingStep} of 3
+                Step {onboardingStep} of 4
               </Text>
               <Text color="#FFFFFF" fontSize={22} fontWeight="700" textAlign="center" letterSpacing={-0.5}>
                 Let's Create Your First Budget
@@ -413,10 +413,10 @@ export default function BudgetScreen() {
                           {fixed > 0 && (
                             <XStack justifyContent="space-between">
                               <XStack gap={4} alignItems="center">
-                                <View width={8} height={8} borderRadius={4} backgroundColor={CATEGORY_COLORS['Bills']} />
+                                <View width={8} height={8} borderRadius={4} backgroundColor={CATEGORY_COLORS['Bills'] as any} />
                                 <Text color={theme.textSecondary} fontSize={12}>Fixed Commitments</Text>
                               </XStack>
-                              <Text color={CATEGORY_COLORS['Bills']} fontSize={12} fontWeight="700">₱{fixed.toLocaleString()}</Text>
+                              <Text color={CATEGORY_COLORS['Bills'] as any} fontSize={12} fontWeight="700">₱{fixed.toLocaleString()}</Text>
                             </XStack>
                           )}
                           <XStack justifyContent="space-between">
@@ -724,7 +724,7 @@ export default function BudgetScreen() {
                                 paddingVertical={2}
                                 borderRadius={4}
                               >
-                                <Text color={CATEGORY_COLORS['Bills']} fontSize={9} fontWeight="800">
+                                <Text color={CATEGORY_COLORS['Bills'] as any} fontSize={9} fontWeight="800">
                                   FIXED
                                 </Text>
                               </View>

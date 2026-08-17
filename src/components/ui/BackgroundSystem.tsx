@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, View, Platform } from 'react-native';
+import { StyleSheet, View, Platform, DimensionValue } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -12,7 +12,7 @@ import { useTheme } from '@/hooks/use-theme';
 
 interface BackgroundSystemProps {
   mode?: 'auth' | 'tabs';
-  height?: number | string;
+  height?: DimensionValue;
 }
 
 export function BackgroundSystem({ mode = 'auth', height = 180 }: BackgroundSystemProps) {
