@@ -60,7 +60,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "upgrade:tamagui": "npm install tamagui@latest @tamagui/core@latest @tamagui/config@latest @tamagui/babel-plugin@latest --save-exact"
   },
   "private": true
 }
