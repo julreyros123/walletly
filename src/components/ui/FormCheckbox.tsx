@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable } from 'react-native';
 import { YStack, XStack, Label, Text, View } from 'tamagui';
 import { useTheme } from '@/hooks/use-theme';
-import { SymbolView } from 'expo-symbols';
+import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
 
 interface FormCheckboxProps {
   checked: boolean;
@@ -21,7 +21,12 @@ export function FormCheckbox({
 
   return (
     <YStack gap={4}>
-      <Pressable onPress={() => onCheckedChange(!checked)}>
+      <Pressable
+        onPress={() => onCheckedChange(!checked)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked }}
+        accessibilityLabel={typeof label === 'string' ? label : undefined}
+      >
         <XStack gap={12} alignItems="flex-start" paddingVertical={6}>
           <View
             width={20}
@@ -35,11 +40,7 @@ export function FormCheckbox({
             marginTop={1}
           >
             {checked && (
-              <SymbolView
-                name={{ ios: 'checkmark', android: 'check', web: 'check' } as const}
-                size={12}
-                tintColor="#FFFFFF"
-              />
+              <PhosphorIcon name="Check" size={12} color="#FFFFFF" weight="bold" />
             )}
           </View>
           {typeof label === 'string' ? (

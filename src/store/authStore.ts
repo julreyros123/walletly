@@ -1,6 +1,45 @@
+import { Platform, NativeModules } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { create } from 'zustand';
 import { storage } from '@/utils/storage';
 import { supabase } from '@/utils/supabase';
+
+WebBrowser.maybeCompleteAuthSession();
+
+let googleSigninConfigured = false;
+
+function getGoogleSigninModule() {
+  try {
+    if (Platform.OS === 'web') return null;
+
+    // Check if the native binary actually has RNGoogleSignin registered
+    // to avoid triggering TurboModuleRegistry.getEnforcing invariant crash
+    const globalObj = globalThis as Record<string, unknown>;
+    const turboRegistry = globalObj.TurboModuleRegistry as { get?: (name: string) => unknown } | undefined;
+    const hasTurbo = typeof turboRegistry?.get === 'function' && turboRegistry.get('RNGoogleSignin') != null;
+    const hasNative = typeof NativeModules !== 'undefined' && NativeModules?.RNGoogleSignin != null;
+
+    if (!hasTurbo && !hasNative) {
+      // Native module is not in the current APK binary (e.g. Expo Go or dev client without rebuild)
+      return null;
+    }
+
+    const googleSigninModule = require('@react-native-google-signin/google-signin');
+    if (!googleSigninConfigured && googleSigninModule?.GoogleSignin) {
+      googleSigninModule.GoogleSignin.configure({
+        webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '',
+        scopes: ['email', 'profile'],
+        offlineAccess: true,
+      });
+      googleSigninConfigured = true;
+    }
+    return googleSigninModule;
+  } catch (err) {
+    console.warn('[Auth] Native Google Sign-In module is not linked in current APK:', err);
+    return null;
+  }
+}
 
 // ── Storage key constants (avoid magic strings) ──────────────────────
 const AUTH_TOKEN_KEY = 'cbudget_auth_token';
@@ -26,6 +65,7 @@ interface AuthState {
   isLoading: boolean;
   isPremium: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   loginAsGuest: () => Promise<void>;
   logout: () => Promise<void>;
@@ -51,6 +91,105 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
+  },
+
+  loginWithGoogle: async () => {
+    // Clear any local guest state before OAuth
+    await storage.deleteItem(AUTH_TOKEN_KEY);
+    await storage.deleteItem(USER_KEY);
+    await storage.deleteItem(PREMIUM_KEY);
+
+    if (Platform.OS === 'web') {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+        },
+      });
+      if (error) throw error;
+      return;
+    }
+
+    // 1. Native Google One-Tap Sign-In (Direct Android/iOS native popup)
+    const googleModule = getGoogleSigninModule();
+    if (googleModule?.GoogleSignin) {
+      const { GoogleSignin, isSuccessResponse, isErrorWithCode, statusCodes } = googleModule;
+      try {
+        await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+        const response = await GoogleSignin.signIn();
+
+        if (isSuccessResponse(response)) {
+          const idToken = response.data?.idToken ?? (response as any).idToken;
+          if (!idToken) {
+            throw new Error(
+              'No ID token returned from Google. Please verify EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID in your .env file.'
+            );
+          }
+          const { error } = await supabase.auth.signInWithIdToken({
+            provider: 'google',
+            token: idToken,
+          });
+          if (error) throw error;
+          return;
+        } else {
+          console.log('[Auth] Google sign in did not return success response:', response);
+          return;
+        }
+      } catch (error: unknown) {
+        if (isErrorWithCode && isErrorWithCode(error)) {
+          const errWithCode = error as { code: string };
+          if (errWithCode.code === statusCodes.SIGN_IN_CANCELLED) {
+            console.log('[Auth] User cancelled Google sign in flow');
+            return;
+          }
+          if (errWithCode.code === statusCodes.IN_PROGRESS) {
+            console.log('[Auth] Google sign in operation in progress');
+            return;
+          }
+          if (errWithCode.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+            throw new Error('Google Play Services is not available or outdated on this device.');
+          }
+        }
+        console.error('[Auth] Native Google Sign-In failed:', error);
+        throw error;
+      }
+    }
+
+    // 2. Browser OAuth fallback for Web / Expo Go
+    const redirectUrl = Linking.createURL('auth/callback');
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: redirectUrl,
+        skipBrowserRedirect: true,
+      },
+    });
+
+    if (error) throw error;
+
+    if (data?.url) {
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+      if (result.type === 'success' && result.url) {
+        const url = result.url;
+        let params: Record<string, string> = {};
+        if (url.includes('#')) {
+          const fragment = url.split('#')[1];
+          params = Object.fromEntries(new URLSearchParams(fragment));
+        } else if (url.includes('?')) {
+          const query = url.split('?')[1];
+          params = Object.fromEntries(new URLSearchParams(query));
+        }
+
+        if (params.access_token && params.refresh_token) {
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: params.access_token,
+            refresh_token: params.refresh_token,
+          });
+          if (sessionError) throw sessionError;
+        }
+      }
+      return;
+    }
   },
 
   signUp: async (email, password) => {
@@ -170,28 +309,62 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Initialize Supabase session listener
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (session) {
-          // Fetch user profile from the database 'profiles' table
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-
-          const user: User = {
+          const initialUser: User = {
             id: session.user.id,
-            name: profile?.name || session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
+            name:
+              session.user.user_metadata?.full_name ||
+              session.user.user_metadata?.name ||
+              session.user.email?.split('@')[0] ||
+              'User',
             email: session.user.email || '',
-            avatarColor: profile?.avatar_color || '#0EA5E9',
-            avatarEmoji: profile?.avatar_emoji || '💼',
+            avatarColor: '#0EA5E9',
+            avatarEmoji: '💼',
           };
 
+          // 1. INSTANTLY authenticate the user (0ms delay to navigate)
           set({
             token: session.access_token,
-            user,
+            user: initialUser,
             isAuthenticated: true,
-            isPremium: profile?.is_premium || false,
+            isPremium: false,
             isLoading: false,
           });
+
+          // 2. Concurrently fetch or create user profile in background
+          (async () => {
+            try {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', session.user.id)
+                .maybeSingle();
+
+              if (!profile) {
+                await supabase.from('profiles').upsert({
+                  id: session.user.id,
+                  email: session.user.email,
+                  name: initialUser.name,
+                  avatar_color: initialUser.avatarColor,
+                  avatar_emoji: initialUser.avatarEmoji,
+                  is_premium: false,
+                });
+              } else {
+                set((state) => ({
+                  user: state.user
+                    ? {
+                        ...state.user,
+                        name: profile.name || state.user.name,
+                        avatarColor: profile.avatar_color || state.user.avatarColor,
+                        avatarEmoji: profile.avatar_emoji || state.user.avatarEmoji,
+                      }
+                    : state.user,
+                  isPremium: profile.is_premium || false,
+                }));
+              }
+            } catch (err) {
+              console.warn('[Auth] Background profile sync warning:', err);
+            }
+          })();
         } else {
           // If we had a local guest session, don't clear it. Otherwise, clean up auth state
           if (get().token !== MOCK_GUEST_TOKEN) {

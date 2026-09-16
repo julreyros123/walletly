@@ -2,18 +2,21 @@ import React from 'react';
 import { ActivityIndicator, StyleSheet, Pressable } from 'react-native';
 import { Text, XStack, ButtonProps } from 'tamagui';
 import { useTheme } from '@/hooks/use-theme';
-import { SymbolView } from 'expo-symbols';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
-import type { SymbolViewProps } from 'expo-symbols';
+import { Fonts } from '@/constants/theme';
+import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
+import type { PhosphorIconName } from '@/components/ui/PhosphorIcon';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, useReducedMotion } from 'react-native-reanimated';
 
 interface FormButtonProps extends Omit<ButtonProps, 'theme' | 'variant'> {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'social';
   loading?: boolean;
-  leftIcon?: SymbolViewProps['name'];
-  rightIcon?: SymbolViewProps['name'];
+  leftIcon?: PhosphorIconName;
+  rightIcon?: PhosphorIconName;
   customIcon?: React.ReactNode;
   glow?: boolean;
   fullWidth?: boolean;
+  /** Screen reader hint providing additional context */
+  accessibilityHint?: string;
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -29,24 +32,33 @@ export function FormButton({
   style,
   glow = false,
   onPress,
-  height = 52,
-  borderRadius = 100, // Google Pay & GCash uniform pill style
+  height = 48,
+  borderRadius = 8, // Flat modern fintech aesthetic (PayPal/Stripe)
   fullWidth = true,
+  accessibilityHint,
   ...props
 }: FormButtonProps) {
   const theme = useTheme();
   const isDisabled = disabled || loading;
+  const reduceMotion = useReducedMotion();
+
+  // Derive a screen reader label from children text content
+  const derivedLabel = loading
+    ? 'Loading'
+    : typeof children === 'string'
+      ? children
+      : undefined;
 
   const scale = useSharedValue(1);
 
   const handlePressIn = () => {
-    if (!isDisabled) {
+    if (!isDisabled && !reduceMotion) {
       scale.value = withSpring(0.97, { damping: 16, stiffness: 350 });
     }
   };
 
   const handlePressOut = () => {
-    if (!isDisabled) {
+    if (!isDisabled && !reduceMotion) {
       scale.value = withSpring(1, { damping: 16, stiffness: 350 });
     }
   };
@@ -131,6 +143,10 @@ export function FormButton({
         shadowStyle,
         style as any,
       ]}
+      accessibilityRole="button"
+      accessibilityLabel={derivedLabel}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={{ disabled: isDisabled }}
       {...(props as any)}
     >
       <XStack space="$2.5" alignItems="center" justifyContent="center">
@@ -140,27 +156,27 @@ export function FormButton({
           <>
             {customIcon}
             {leftIcon && !customIcon && (
-              <SymbolView
+              <PhosphorIcon
                 name={leftIcon}
                 size={18}
-                tintColor={textColor}
+                color={textColor}
               />
             )}
             <Text
               color={textColor as any}
               fontSize={15}
-              fontWeight="600"
-              fontFamily={"Inter_600SemiBold" as any}
-              letterSpacing={0.2}
+              fontWeight="700"
+              fontFamily={Fonts.bold as any}
+              letterSpacing={-0.2}
               textAlign="center"
             >
               {children}
             </Text>
             {rightIcon && (
-              <SymbolView
+              <PhosphorIcon
                 name={rightIcon}
                 size={18}
-                tintColor={textColor}
+                color={textColor}
               />
             )}
           </>

@@ -84,25 +84,8 @@ export function BackgroundSystem({ mode = 'auth', height = 180 }: BackgroundSyst
     );
   }
 
-  // Tabs Mode (top banner)
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* Top Accent Background Banner */}
-      <View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: height,
-          backgroundColor: '#001a36',
-          borderBottomLeftRadius: 24,
-          borderBottomRightRadius: 24,
-          overflow: 'hidden',
-        }}
-      />
-    </View>
-  );
+  // Tabs Mode — pure seamless background (no banner overlay)
+  return null;
 }
 
 const styles = StyleSheet.create({

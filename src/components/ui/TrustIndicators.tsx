@@ -1,6 +1,6 @@
 import React from 'react';
 import { XStack, YStack, Text } from 'tamagui';
-import { SymbolView } from 'expo-symbols';
+import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
 import { useTheme } from '@/hooks/use-theme';
 
 export function TrustIndicators() {
@@ -25,12 +25,7 @@ export function TrustIndicators() {
               alignItems="center"
               justifyContent="center"
             >
-              <SymbolView
-                name={{ ios: 'checkmark', android: 'check', web: 'check' } as any}
-                size={12}
-                tintColor={theme.primary}
-                weight="bold"
-              />
+              <PhosphorIcon name="Check" size={12} color={theme.primary} weight="bold" />
             </YStack>
             <Text color={theme.textSecondary} fontSize={13} fontWeight="500">
               {text}

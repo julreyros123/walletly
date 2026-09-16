@@ -1,5 +1,6 @@
 import React from 'react';
-import { SafeAreaView, StyleSheet, Platform, View } from 'react-native';
+import { StyleSheet, Platform, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { YStack, Text } from 'tamagui';
 import { useRouter, Href } from 'expo-router';
 import { Image } from 'expo-image';

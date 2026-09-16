@@ -3,6 +3,9 @@ import { Animated, StyleSheet, View, Platform } from 'react-native';
 import { YStack, Text } from 'tamagui';
 import { Image } from 'expo-image';
 
+import { Fonts } from '@/constants/theme';
+import { CbudgetLogoSVG } from '@/components/ui/CbudgetLogoSVG';
+
 interface HeroGraphicProps {
   title?: string;
   subtitle?: string;
@@ -53,23 +56,19 @@ export function HeroGraphic({ title, subtitle }: HeroGraphicProps) {
 
   return (
     <View style={styles.container}>
-      {/* App Logo */}
+      {/* App Vector Logo without background */}
       <Animated.View
         style={[
           styles.logoWrap,
           { opacity: logoOpacity, transform: [{ scale: logoScale }] },
         ]}
       >
-        <Image
-          source={require('@/assets/images/walletly-logo.png')}
-          style={styles.logo}
-          contentFit="contain"
-        />
+        <CbudgetLogoSVG size={72} showText={false} />
       </Animated.View>
 
       {/* Title & Subtitle */}
       {(title || subtitle) && (
-        <YStack alignItems="center" gap={6} marginTop={16}>
+        <YStack alignItems="center" gap={8} marginTop={16}>
           {title && (
             <Animated.Text
               style={[
@@ -102,11 +101,11 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   logoWrap: {
-    shadowColor: '#0052FF',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-    elevation: 12,
+    shadowColor: '#2ECC71',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
   },
   logo: {
     width: 72,
@@ -115,19 +114,18 @@ const styles = StyleSheet.create({
   },
   title: {
     color: '#FFFFFF',
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 26,
     letterSpacing: -0.6,
-    lineHeight: 34,
+    lineHeight: 32,
     textAlign: 'center',
-    fontFamily: Platform.OS === 'ios' ? 'Inter-Bold' : undefined,
+    fontFamily: Fonts.bold,
   },
   subtitle: {
-    color: 'rgba(255, 255, 255, 0.5)',
+    color: 'rgba(255, 255, 255, 0.6)',
     fontSize: 14,
-    fontWeight: '400',
     lineHeight: 20,
     textAlign: 'center',
-    fontFamily: Platform.OS === 'ios' ? 'Inter-Regular' : undefined,
+    fontFamily: Fonts.regular,
+    letterSpacing: -0.1,
   },
 });

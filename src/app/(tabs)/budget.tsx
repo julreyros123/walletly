@@ -1,32 +1,38 @@
-import React, { useState, useEffect } from 'react';
-import { ScrollView, StyleSheet, Alert, Modal, TouchableOpacity, TextInput } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { YStack, XStack, Text, Button, Progress, View } from 'tamagui';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ScrollView, StyleSheet, Alert, Modal, TouchableOpacity, TextInput, Platform } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { YStack, XStack, Text as TamaguiText, Button, Progress, View } from 'tamagui';
+const Text = (props: any) => <TamaguiText {...props} />;
 import { useTheme } from '@/hooks/use-theme';
-import { SymbolView, SymbolViewProps } from 'expo-symbols';
+import { PhosphorIcon, PhosphorIconName } from '@/components/ui/PhosphorIcon';
 import { useGamificationStore } from '@/store/gamificationStore';
 import type { Expense, SavingsGoal } from '@/store/gamificationStore';
 import { CbudgetCard } from '@/components/ui/CbudgetCard';
 import { FormInput } from '@/components/ui/FormInput';
 import { FormButton } from '@/components/ui/FormButton';
 import { AppHeader } from '@/components/ui/AppHeader';
-import { Spacing } from '@/constants/theme';
-import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
+import { Spacing, Fonts } from '@/constants/theme';
 import { BackgroundSystem } from '@/components/ui/BackgroundSystem';
+import { AnimatedSegmentSwitch } from '@/components/ui/AnimatedSegmentSwitch';
 import { useAuthStore } from '@/store/authStore';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { setStatusBarStyle } from 'expo-status-bar';
+import Svg, { Circle, G, Defs, LinearGradient, Stop, Path, Rect } from 'react-native-svg';
+import { safeHaptic } from '@/utils/haptics';
+import { PhosphorCategoryIcon } from '@/components/ui/PhosphorCategoryIcon';
+import { useCurrency } from '@/utils/currency';
 
-// Map categories to Symbol Names
-const CATEGORY_ICONS: Record<string, SymbolViewProps['name']> = {
-  Food: { ios: 'fork.knife', android: 'restaurant', web: 'restaurant' } as const,
-  Transportation: { ios: 'car.fill', android: 'directions_car', web: 'directions_car' } as const,
-  School: { ios: 'book.fill', android: 'school', web: 'school' } as const,
-  Bills: { ios: 'doc.text.fill', android: 'receipt_long', web: 'receipt_long' } as const,
-  Shopping: { ios: 'bag.fill', android: 'local_mall', web: 'local_mall' } as const,
-  Entertainment: { ios: 'gamecontroller.fill', android: 'sports_esports', web: 'sports_esports' } as const,
-  Savings: { ios: 'banknote.fill', android: 'savings', web: 'savings' } as const,
-  'Emergency Fund': { ios: 'shield.fill', android: 'shield', web: 'shield' } as const,
-  Custom: { ios: 'questionmark.circle.fill', android: 'help', web: 'help' } as const,
+// Map categories to Phosphor Icon Names
+const CATEGORY_ICONS: Record<string, PhosphorIconName> = {
+  Food: 'ForkKnife',
+  Transportation: 'Car',
+  School: 'GraduationCap',
+  Bills: 'Receipt',
+  Shopping: 'ShoppingBag',
+  Entertainment: 'GameController',
+  Savings: 'PiggyBank',
+  'Emergency Fund': 'ShieldCheck',
+  Custom: 'Question',
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -35,188 +41,287 @@ const CATEGORY_COLORS: Record<string, string> = {
   School: '#8B5CF6', // Purple
   Bills: '#EF4444', // Red
   Shopping: '#EC4899', // Pink
-  Entertainment: '#84CC16', // Lime
-  Savings: '#10B981', // Emerald
-  'Emergency Fund': '#06B6D4', // Cyan
+  Entertainment: '#10B981', // Emerald
+  Savings: '#06B6D4', // Cyan
+  'Emergency Fund': '#6366F1', // Indigo
   Custom: '#64748B', // Slate
 };
 
-const SAVINGS_CATEGORY_ICONS: Record<string, SymbolViewProps['name']> = {
-  'Emergency Fund': { ios: 'shield.fill', android: 'shield', web: 'shield' } as const,
-  'New Laptop': { ios: 'laptopcomputer', android: 'laptop', web: 'laptop' } as const,
-  'School Tuition': { ios: 'graduationcap.fill', android: 'school', web: 'school' } as const,
-  'Travel Fund': { ios: 'airplane', android: 'flight', web: 'flight' } as const,
-  'Phone Upgrade': { ios: 'iphone', android: 'smartphone', web: 'smartphone' } as const,
-  'Business Capital': { ios: 'briefcase.fill', android: 'work', web: 'work' } as const,
-  Custom: { ios: 'star.fill', android: 'star', web: 'star' } as const,
+const SAVINGS_CATEGORY_ICONS: Record<string, PhosphorIconName> = {
+  'Emergency Fund': 'ShieldCheck',
+  'New Laptop': 'Laptop',
+  'School Tuition': 'GraduationCap',
+  'Travel Fund': 'AirplaneTilt',
+  'Phone Upgrade': 'DeviceMobile',
+  'Business Capital': 'Briefcase',
+  Custom: 'Star',
 };
 
 export default function BudgetScreen() {
   const theme = useTheme() as any;
+  const insets = useSafeAreaInsets();
   const store = useGamificationStore();
   const { user } = useAuthStore();
   const isGuest = user?.id === 'guest';
 
+  useFocusEffect(
+    React.useCallback(() => {
+      setStatusBarStyle(theme.mode === 'dark' ? 'light' : 'dark');
+    }, [theme.mode])
+  );
+
   const params = useLocalSearchParams<{ action?: string }>();
+  const { currency: currencyCode, symbol: currencySymbol } = useCurrency();
 
   useEffect(() => {
     if (params.action === 'log') {
       setShowExpenseForm(true);
+    } else if (params.action === 'savings') {
+      setActiveTab('savings');
+      setShowAddGoalModal(true);
     }
   }, [params.action]);
 
-  // Onboarding Wizard local states
-  const [onboardingStep, setOnboardingStep] = useState(1);
-  const [setupBudgetType, setSetupBudgetType] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
-  const [setupAmount, setSetupAmount] = useState('');
-  const [setupCategories, setSetupCategories] = useState<string[]>(['Food', 'Transportation', 'School']);
-  const [setupCategoryLimits, setSetupCategoryLimits] = useState<Record<string, string>>({});
-  const [setupBillsAmount, setSetupBillsAmount] = useState('');
-  const [setupDailyAmount, setSetupDailyAmount] = useState('');
-  const [selectedCategoryBreakdown, setSelectedCategoryBreakdown] = useState<string | null>(null);
-  const [customCategoryName, setCustomCategoryName] = useState('');
-  const [showCustomCatInput, setShowCustomCatInput] = useState(false);
-
   // Tab State
-  const [activeTab, setActiveTab] = useState<'budget' | 'savings' | 'history'>('budget');
+  const [activeTab, setActiveTab] = useState<'budget' | 'calendar' | 'savings'>('budget');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'overspent' | 'inbudget'>('all');
+  const [activityFilter, setActivityFilter] = useState<'all' | 'expenses' | 'income'>('all');
 
-  // Add Expense Form local states
+  // Calendar & Date Explorer State
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [activeSelectedDay, setActiveSelectedDay] = useState<string | null>(null); // YYYY-MM-DD or null for all month
+
+  // Add Expense/Income Form local states
   const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [transactionType, setTransactionType] = useState<'expense' | 'income'>('expense');
   const [expenseName, setExpenseName] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
-  const [expenseCategory, setExpenseCategory] = useState('');
+  const [expenseCategory, setExpenseCategory] = useState('Food');
   const [expenseNotes, setExpenseNotes] = useState('');
+
+  // Edit Expense Modal states
+  const [showEditExpenseModal, setShowEditExpenseModal] = useState(false);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+  const [editExpenseName, setEditExpenseName] = useState('');
+  const [editExpenseAmount, setEditExpenseAmount] = useState('');
+  const [editExpenseCategory, setEditExpenseCategory] = useState('Food');
+  const [editExpenseNotes, setEditExpenseNotes] = useState('');
 
   // Add Savings Goal Modal states
   const [showAddGoalModal, setShowAddGoalModal] = useState(false);
   const [goalName, setGoalName] = useState('');
   const [goalTargetAmount, setGoalTargetAmount] = useState('');
   const [goalCategory, setGoalCategory] = useState('Emergency Fund');
-  const [goalTargetDate, setGoalTargetDate] = useState('120'); // days to achieve
+  const [goalTargetDate, setGoalTargetDate] = useState('120');
 
-  // Contribute Savings Modal states
+  // Contribute & Withdraw Savings Modal states
   const [contributeGoalId, setContributeGoalId] = useState<string | null>(null);
   const [contributeAmount, setContributeAmount] = useState('');
+  const [withdrawGoalId, setWithdrawGoalId] = useState<string | null>(null);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [selectedCategoryBreakdown, setSelectedCategoryBreakdown] = useState<string | null>(null);
 
-  // Derived Budget calculations
-  const totalSpent = store.loggedExpenses.reduce((sum, e) => sum + e.amount, 0);
+  // Allowance Cycle & Edit Modal states
+  const currentCycle = store.budgetType || 'monthly';
+  const [showEditAllowanceModal, setShowEditAllowanceModal] = useState(false);
+  const [allowanceAmountInput, setAllowanceAmountInput] = useState('');
+
+  // Accounts Balance expansion
+  const [isAccountsExpanded, setIsAccountsExpanded] = useState(false);
+
+  // Derived calculations
+  const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const todayISO = new Date().toISOString().split('T')[0];
+  const todaySpent = store.loggedExpenses
+    .filter((e) => e.type !== 'income' && (e.date === todayStr || e.date === todayISO))
+    .reduce((sum, e) => sum + e.amount, 0);
+
+  const totalSpent = store.loggedExpenses
+    .filter((e) => e.type !== 'income')
+    .reduce((sum, e) => sum + e.amount, 0);
   const totalSavingsContribution = store.savingsGoals.reduce((sum, g) => sum + g.currentSavings, 0);
-  const budgetRemaining = store.totalBudget - totalSpent;
-  // Available budget leftover (excluding what's already saved and what's in invest simulator)
+  const budgetRemaining = Math.max(0, store.totalBudget - totalSpent);
   const budgetLeftover = Math.max(0, budgetRemaining - totalSavingsContribution - store.virtualBalance);
+  const totalNetWorth = budgetRemaining + store.virtualBalance + totalSavingsContribution;
 
-  // Categories list options
-  const defaultCategories = ['Food', 'Transportation', 'School', 'Bills', 'Shopping', 'Entertainment', 'Savings', 'Emergency Fund'];
+  // Dynamic budget metrics based on cycle
+  const effectiveBudget = store.totalBudget > 0 ? store.totalBudget : (currentCycle === 'daily' ? 150 : currentCycle === 'weekly' ? 1000 : 4000);
+  const effectiveSpent = currentCycle === 'daily' ? todaySpent : totalSpent;
+  const effectiveRemaining = Math.max(0, effectiveBudget - effectiveSpent);
+  const spendRatio = effectiveBudget > 0 ? Math.min(1, effectiveSpent / effectiveBudget) : 0;
+  const spendPercentage = Math.round(spendRatio * 100);
 
-  // Handle Onboarding Completion
-  // Transition to Step 4 Limits Allocation
-  const handleGoToStep4 = () => {
-    if (setupCategories.length === 0) {
-      Alert.alert('Categories Required', 'Please select at least one category to track.');
-      return;
+  // Month navigation helpers
+  const currentMonthName = selectedDate.toLocaleDateString('en-US', { month: 'long' });
+  const currentYear = selectedDate.getFullYear();
+
+  const handlePrevMonth = () => {
+    safeHaptic('light');
+    const newD = new Date(selectedDate);
+    newD.setMonth(newD.getMonth() - 1);
+    setSelectedDate(newD);
+    setActiveSelectedDay(null);
+  };
+
+  const handleNextMonth = () => {
+    safeHaptic('light');
+    const newD = new Date(selectedDate);
+    newD.setMonth(newD.getMonth() + 1);
+    setSelectedDate(newD);
+    setActiveSelectedDay(null);
+  };
+
+  // Generate days in month for the interactive Calendar Strip
+  const daysInCurrentMonth = useMemo(() => {
+    const year = selectedDate.getFullYear();
+    const month = selectedDate.getMonth();
+    const daysCount = new Date(year, month + 1, 0).getDate();
+    const daysArr: { dateStr: string; dayNum: number; dayName: string; hasPurchases: boolean }[] = [];
+
+    for (let d = 1; d <= daysCount; d++) {
+      const dateObj = new Date(year, month, d);
+      const yyyy = year;
+      const mm = String(month + 1).padStart(2, '0');
+      const dd = String(d).padStart(2, '0');
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+      const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+
+      // Check if there are expenses on this date
+      const shortStr = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const hasPurchases = store.loggedExpenses.some((e) => e.date === dateStr || e.date === shortStr);
+
+      daysArr.push({ dateStr, dayNum: d, dayName, hasPurchases });
     }
-    
-    const totalAmt = parseFloat(setupAmount) || 0;
-    const billsAmt = parseFloat(setupBillsAmount) || 0;
-    // Daily spending = total minus fixed commitments
-    const dailyAmt = Math.max(0, totalAmt - billsAmt);
-    
-    const otherCategories = setupCategories.filter(c => c !== 'Bills');
-    const equalShare = otherCategories.length > 0
-      ? Math.round(dailyAmt / otherCategories.length)
-      : 0;
-      
-    const initialLimits: Record<string, string> = {};
-    
-    if (setupCategories.includes('Bills') && billsAmt > 0) {
-      initialLimits['Bills'] = billsAmt.toString();
+    return daysArr;
+  }, [selectedDate, store.loggedExpenses]);
+
+  // Group transactions by date
+  const groupedTransactions = useMemo(() => {
+    const groups: { dateLabel: string; dateSub: string; expenses: Expense[]; total: number }[] = [];
+
+    // Filter by category or activeSelectedDay
+    let filtered = [...store.loggedExpenses];
+    if (activeSelectedDay) {
+      const targetObj = new Date(activeSelectedDay);
+      const shortStr = targetObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      filtered = filtered.filter((e) => e.date === activeSelectedDay || e.date === shortStr);
     }
-    
-    otherCategories.forEach((cat, idx) => {
-      if (idx === otherCategories.length - 1) {
-        const sumOfPrev = equalShare * (otherCategories.length - 1);
-        initialLimits[cat] = Math.max(0, dailyAmt - sumOfPrev).toString();
-      } else {
-        initialLimits[cat] = equalShare.toString();
+
+    // Filter by activity type
+    if (activityFilter === 'expenses') {
+      filtered = filtered.filter((e) => e.type !== 'income');
+    } else if (activityFilter === 'income') {
+      filtered = filtered.filter((e) => e.type === 'income');
+    }
+
+    // Sort by id / date descending
+    filtered.reverse();
+
+    filtered.forEach((exp) => {
+      const dateKey = exp.date || 'Today';
+      let existing = groups.find((g) => g.dateLabel === dateKey || g.dateSub === dateKey);
+
+      if (!existing) {
+        // Parse date for clean header like "Tuesday, Jun 10"
+        let label = 'Tuesday';
+        let sub = exp.date;
+        try {
+          const parsed = new Date(exp.date);
+          if (!isNaN(parsed.getTime())) {
+            label = parsed.toLocaleDateString('en-US', { weekday: 'long' });
+            sub = parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          } else {
+            label = exp.date;
+          }
+        } catch (e) {}
+
+        existing = { dateLabel: label, dateSub: sub, expenses: [], total: 0 };
+        groups.push(existing);
       }
-    });
-    
-    setSetupCategoryLimits(initialLimits);
-    setOnboardingStep(4);
-  };
 
-  const handleOnboardingComplete = () => {
-    const amt = parseFloat(setupAmount);
-    if (isNaN(amt) || amt <= 0) {
-      Alert.alert('Invalid Budget', 'Please enter a valid budget limit.');
-      return;
-    }
-    if (setupCategories.length === 0) {
-      Alert.alert('Categories Required', 'Please select at least one category to track.');
-      return;
-    }
-
-    const numericLimits: Record<string, number> = {};
-    setupCategories.forEach((cat) => {
-      numericLimits[cat] = parseFloat(setupCategoryLimits[cat]) || 0;
+      existing.expenses.push(exp);
+      existing.total += exp.amount;
     });
 
-    store.setupBudget(setupBudgetType, amt, setupCategories, numericLimits);
-    Alert.alert('Onboarding Complete!', `Your ${setupBudgetType} budget of ₱${amt.toLocaleString()} has been set up!${isGuest ? '' : ' (+30 XP)'}`);
-  };
+    return groups;
+  }, [store.loggedExpenses, activeSelectedDay, activityFilter]);
 
-  // Add Custom Category in Onboarding
-  const handleAddCustomCategory = () => {
-    const name = customCategoryName.trim();
-    if (!name) return;
-    if (setupCategories.includes(name)) {
-      Alert.alert('Duplicate Category', 'This category is already added.');
-      return;
-    }
-    setSetupCategories([...setupCategories, name]);
-    setCustomCategoryName('');
-    setShowCustomCatInput(false);
-  };
+  // Filtered categories
+  const filteredCategories = useMemo(() => {
+    return store.selectedCategories.filter((cat) => {
+      const spent = store.loggedExpenses
+        .filter((e) => e.type !== 'income' && e.category === cat)
+        .reduce((s, e) => s + e.amount, 0);
+      const limit = store.categoryLimits?.[cat] || store.totalBudget / (store.selectedCategories.length || 1);
+      if (categoryFilter === 'overspent') return spent > limit;
+      if (categoryFilter === 'inbudget') return spent <= limit;
+      return true;
+    });
+  }, [store.selectedCategories, store.loggedExpenses, store.categoryLimits, categoryFilter]);
 
-  // Handle Log Simulated Expense
+  // Handlers
   const handleLogExpense = () => {
+    safeHaptic('medium');
     const amt = parseFloat(expenseAmount);
     if (!expenseCategory) {
       Alert.alert('Missing Field', 'Please select a category.');
       return;
     }
     if (isNaN(amt) || amt <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter a valid price amount.');
+      Alert.alert('Invalid Amount', 'Please enter a valid amount.');
       return;
     }
 
-    const finalExpenseName = expenseName.trim() || `${expenseCategory} Purchase`;
     const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    store.addExpense(finalExpenseName, expenseCategory, amt, todayStr, expenseNotes.trim());
-    
-    // Quick Reset
+
+    if (transactionType === 'income') {
+      const finalIncomeName = expenseName.trim() || `${expenseCategory} Income`;
+      store.addIncome(finalIncomeName, expenseCategory, amt, todayStr, expenseNotes.trim());
+      Alert.alert('Income Logged!', `Simulated income of ${currencySymbol}${amt.toLocaleString()} recorded.`);
+    } else {
+      const finalExpenseName = expenseName.trim() || `${expenseCategory} Purchase`;
+      store.addExpense(finalExpenseName, expenseCategory, amt, todayStr, expenseNotes.trim());
+      Alert.alert('Expense Logged!', `Simulated purchase of ${currencySymbol}${amt.toLocaleString()} recorded.${isGuest ? '' : ' (+10 XP)'}`);
+    }
+
     setExpenseName('');
     setExpenseAmount('');
     setExpenseNotes('');
     setShowExpenseForm(false);
-    
-    // Check if limit exceeded in this category
-    const catTotalSpent = store.loggedExpenses
-      .filter((e) => e.category === expenseCategory)
-      .reduce((sum, e) => sum + e.amount, 0) + amt;
-    
-    // Custom limit per category if set, fallback to equal share
-    const categoryLimit = store.categoryLimits?.[expenseCategory] || (store.totalBudget / (store.selectedCategories.length || 1));
+  };
 
-    if (catTotalSpent > categoryLimit) {
-      Alert.alert('Budget Alert!', `You've exceeded your limit allocation for ${expenseCategory}! Be mindful of overspending.${isGuest ? '' : ' (+10 XP)'}`);
-    } else {
-      Alert.alert('Expense Logged!', `Simulated purchase of ₱${amt.toLocaleString()} recorded.${isGuest ? '' : ' (+10 XP)'}`);
+  const handleOpenEditExpense = (exp: Expense) => {
+    safeHaptic('light');
+    setEditingExpenseId(exp.id);
+    setEditExpenseName(exp.name);
+    setEditExpenseAmount(exp.amount.toString());
+    setEditExpenseCategory(exp.category);
+    setEditExpenseNotes(exp.notes || '');
+    setShowEditExpenseModal(true);
+  };
+
+  const handleSaveEditExpense = () => {
+    safeHaptic('medium');
+    const amt = parseFloat(editExpenseAmount);
+    if (isNaN(amt) || amt <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid amount.');
+      return;
+    }
+    if (editingExpenseId) {
+      store.editExpense(editingExpenseId, {
+        name: editExpenseName.trim() || 'Updated Transaction',
+        amount: amt,
+        category: editExpenseCategory,
+        notes: editExpenseNotes.trim(),
+      });
+      setShowEditExpenseModal(false);
+      setEditingExpenseId(null);
+      Alert.alert('Updated', 'Transaction updated successfully.');
     }
   };
 
-  // Handle Add Savings Goal
   const handleAddGoal = () => {
+    safeHaptic('medium');
     const target = parseFloat(goalTargetAmount);
     if (!goalName.trim()) {
       Alert.alert('Missing Field', 'Please enter a goal name.');
@@ -228,1311 +333,714 @@ export default function BudgetScreen() {
     }
 
     store.addSavingsGoal(goalName.trim(), target, goalTargetDate, goalCategory);
-    
     setGoalName('');
     setGoalTargetAmount('');
     setGoalCategory('Emergency Fund');
-    setGoalTargetDate('120');
     setShowAddGoalModal(false);
-
-    Alert.alert('Savings Goal Set!', `Goal "${goalName.trim()}" created with target ₱${target.toLocaleString()}.${isGuest ? '' : ' (+15 XP)'}`);
+    Alert.alert('Goal Created!', `Savings goal "${goalName.trim()}" created.`);
   };
 
-  // Handle Contribute Savings Goal
   const handleContributeSavings = () => {
+    safeHaptic('success');
     const amt = parseFloat(contributeAmount);
     if (isNaN(amt) || amt <= 0) {
       Alert.alert('Invalid Amount', 'Please enter a valid contribution amount.');
       return;
     }
     if (amt > budgetLeftover) {
-      Alert.alert(
-        'Insufficient Budget Leftover',
-        `You only have ₱${budgetLeftover.toLocaleString()} remaining in your budget after bills, spending, and other savings.`
-      );
+      Alert.alert('Insufficient Balance', `You only have ${currencySymbol}${budgetLeftover.toLocaleString()} available.`);
       return;
     }
-
     if (contributeGoalId) {
-      const success = store.contributeToSavingsGoal(contributeGoalId, amt);
+      store.contributeToSavingsGoal(contributeGoalId, amt);
+      setContributeGoalId(null);
+      setContributeAmount('');
+      Alert.alert('Contributed!', `${currencySymbol}${amt.toLocaleString()} added to savings goal.`);
+    }
+  };
+
+  const handleWithdrawSavings = () => {
+    safeHaptic('medium');
+    const amt = parseFloat(withdrawAmount);
+    if (isNaN(amt) || amt <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid withdrawal amount.');
+      return;
+    }
+    if (withdrawGoalId) {
+      const success = store.withdrawSavingsGoal(withdrawGoalId, amt);
       if (success) {
-        Alert.alert('Contribution Logged!', `₱${amt.toLocaleString()} contributed to savings goal!${isGuest ? '' : ' (+15 XP)'}`);
-        setContributeAmount('');
-        setContributeGoalId(null);
+        setWithdrawGoalId(null);
+        setWithdrawAmount('');
+        Alert.alert('Withdrawn', `${currencySymbol}${amt.toLocaleString()} withdrawn from savings goal.`);
       } else {
-        Alert.alert('Error', 'Unable to complete savings goal contribution.');
+        Alert.alert('Error', 'Insufficient savings in this goal to withdraw that amount.');
       }
     }
   };
 
-
-  // Render First-Time Setup
-  if (!store.isBudgetSetupComplete) {
-    return (
-      <YStack flex={1} backgroundColor={theme.background}>
-        <BackgroundSystem mode="tabs" height={380} />
-        <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-          <ScrollView contentContainerStyle={styles.scrollContent}>
-            
-            <YStack gap={Spacing[16]} paddingVertical={Spacing[16]} alignItems="center">
-              <Text color={theme.primary as any} fontSize={14} fontWeight="700" letterSpacing={1} textTransform="uppercase">
-                Step {onboardingStep} of 4
-              </Text>
-              <Text color="#FFFFFF" fontSize={22} fontWeight="700" textAlign="center" letterSpacing={-0.5}>
-                Let's Create Your First Budget
-              </Text>
-              <Text color="rgba(255,255,255,0.7)" fontSize={14} textAlign="center" paddingHorizontal={10}>
-                Cbudget helps you build healthy financial habits starting with structured budgeting rules.
-              </Text>
-            </YStack>
-
-
-            {/* STEP 1: Budget Type */}
-            {onboardingStep === 1 && (
-              <View>
-                <CbudgetCard gap={20} marginTop={Spacing[16]}>
-                  <Text color={theme.text} fontSize={16} fontWeight="700">
-                    What type of budget are you creating?
-                  </Text>
-                  
-                  <YStack gap={10}>
-                    {(['daily', 'weekly', 'monthly'] as const).map((type) => {
-                      const isSelected = setupBudgetType === type;
-                      return (
-                        <Button
-                          key={type}
-                          backgroundColor={isSelected ? (`${theme.primary}12` as any) : theme.backgroundElement}
-                          borderColor={isSelected ? theme.primary : 'transparent'}
-                          borderWidth={1.5}
-                          borderRadius={12}
-                          height={54}
-                          onPress={() => setSetupBudgetType(type)}
-                          pressStyle={{ opacity: 0.9 }}
-                        >
-                          <XStack width="100%" alignItems="center" gap={12}>
-                            <SymbolView
-                              name={
-                                type === 'daily' 
-                                  ? ({ ios: 'calendar.day.timeline.left', android: 'calendar_today', web: 'calendar_today' } as const)
-                                  : type === 'weekly'
-                                  ? ({ ios: 'calendar.badge.clock', android: 'date_range', web: 'date_range' } as const)
-                                  : ({ ios: 'calendar', android: 'calendar_month', web: 'calendar_month' } as const)
-                              }
-                              size={18}
-                              tintColor={isSelected ? theme.primary : theme.textSecondary}
-                            />
-                            <Text color={theme.text} fontSize={15} fontWeight={isSelected ? '700' : '400'} textTransform="capitalize">
-                              {type} Budget
-                            </Text>
-                          </XStack>
-                        </Button>
-                      );
-                    })}
-                  </YStack>
-
-                  <Button
-                    backgroundColor={theme.primary as any}
-                    borderRadius={6}
-                    borderWidth={0}
-                    height={46}
-                    pressStyle={{ opacity: 0.85 }}
-                    onPress={() => setOnboardingStep(2)}
-                    marginTop={10}
-                  >
-                    <Text color="#FFFFFF" fontSize={13} fontWeight="700">Next Step</Text>
-                  </Button>
-                </CbudgetCard>
-              </View>
-            )}
-
-            {/* STEP 2: Budget Amount — Single total + optional fixed commitments */}
-            {onboardingStep === 2 && (
-              <View>
-                <CbudgetCard gap={18} marginTop={Spacing[16]}>
-                  <YStack gap={4}>
-                    <Text color={theme.text} fontSize={16} fontWeight="700">
-                      How much is your {setupBudgetType} budget?
-                    </Text>
-                    <Text color={theme.textSecondary} fontSize={12}>
-                      Enter your total spending limit first, then optionally set aside a fixed portion for recurring commitments.
-                    </Text>
-                  </YStack>
-
-                  <YStack gap={14}>
-                    {/* Total budget — primary input */}
-                    <FormInput
-                      label="Total Budget (₱)"
-                      placeholder="e.g. 10000"
-                      keyboardType="numeric"
-                      value={setupAmount}
-                      onChangeText={(val) => {
-                        let cleanVal = val.replace(/[^0-9]/g, '');
-                        if (cleanVal.length > 1 && cleanVal.startsWith('0')) cleanVal = cleanVal.replace(/^0+/, '');
-                        setSetupAmount(cleanVal);
-                      }}
-                      leftIcon={{ ios: 'banknote', android: 'payments', web: 'payments' } as any}
-                    />
-
-                    {/* Optional fixed commitments divider */}
-                    <YStack gap={6}>
-                      <XStack alignItems="center" gap={8}>
-                        <View height={1} flex={1} backgroundColor={theme.border} />
-                        <Text color={theme.textSecondary} fontSize={11} fontWeight="600">OPTIONAL</Text>
-                        <View height={1} flex={1} backgroundColor={theme.border} />
-                      </XStack>
-                      <Text color={theme.textSecondary} fontSize={12}>
-                        Do you have recurring fixed commitments? (e.g. tuition installment, load plan, transportation pass)
-                      </Text>
-                    </YStack>
-
-                    <FormInput
-                      label="Fixed Commitments (₱)"
-                      placeholder="e.g. 2000  —  leave blank if none"
-                      keyboardType="numeric"
-                      value={setupBillsAmount}
-                      onChangeText={(val) => {
-                        let cleanVal = val.replace(/[^0-9]/g, '');
-                        if (cleanVal.length > 1 && cleanVal.startsWith('0')) cleanVal = cleanVal.replace(/^0+/, '');
-                        setSetupBillsAmount(cleanVal);
-                      }}
-                      leftIcon={{ ios: 'doc.text.fill', android: 'receipt_long', web: 'receipt_long' } as any}
-                    />
-
-                    {/* Live breakdown banner — only shown if both have values */}
-                    {(() => {
-                      const total = parseFloat(setupAmount) || 0;
-                      const fixed = parseFloat(setupBillsAmount) || 0;
-                      const daily = Math.max(0, total - fixed);
-                      if (total <= 0) return null;
-                      return (
-                        <YStack gap={6} backgroundColor={`${theme.primary}08` as any} padding={12} borderRadius={8} borderWidth={1} borderColor={`${theme.primary}20` as any}>
-                          <XStack justifyContent="space-between">
-                            <Text color={theme.textSecondary} fontSize={12}>Total Budget</Text>
-                            <Text color={theme.text} fontSize={12} fontWeight="700">₱{total.toLocaleString()}</Text>
-                          </XStack>
-                          {fixed > 0 && (
-                            <XStack justifyContent="space-between">
-                              <XStack gap={4} alignItems="center">
-                                <View width={8} height={8} borderRadius={4} backgroundColor={CATEGORY_COLORS['Bills'] as any} />
-                                <Text color={theme.textSecondary} fontSize={12}>Fixed Commitments</Text>
-                              </XStack>
-                              <Text color={CATEGORY_COLORS['Bills'] as any} fontSize={12} fontWeight="700">₱{fixed.toLocaleString()}</Text>
-                            </XStack>
-                          )}
-                          <XStack justifyContent="space-between">
-                            <XStack gap={4} alignItems="center">
-                              <View width={8} height={8} borderRadius={4} backgroundColor={theme.success} />
-                              <Text color={theme.textSecondary} fontSize={12}>Daily Spending Left</Text>
-                            </XStack>
-                            <Text color={theme.success} fontSize={12} fontWeight="700">₱{daily.toLocaleString()}</Text>
-                          </XStack>
-                        </YStack>
-                      );
-                    })()}
-                  </YStack>
-
-                  <XStack gap={10} marginTop={6}>
-                    <Button
-                      flex={1}
-                      backgroundColor={theme.backgroundElement}
-                      borderRadius={6}
-                      borderColor={theme.border}
-                      borderWidth={1}
-                      height={46}
-                      pressStyle={{ opacity: 0.85 }}
-                      onPress={() => setOnboardingStep(1)}
-                    >
-                      <Text color={theme.text} fontSize={13} fontWeight="700">Back</Text>
-                    </Button>
-                    <Button
-                      flex={1.8}
-                      backgroundColor={theme.primary as any}
-                      borderRadius={6}
-                      borderWidth={0}
-                      height={46}
-                      pressStyle={{ opacity: 0.85 }}
-                      onPress={() => {
-                        const total = parseFloat(setupAmount) || 0;
-                        if (total <= 0) {
-                          Alert.alert('Invalid Amount', 'Please enter a valid total budget amount.');
-                          return;
-                        }
-                        const fixed = parseFloat(setupBillsAmount) || 0;
-                        if (fixed > total) {
-                          Alert.alert('Too High', 'Fixed commitments cannot exceed your total budget.');
-                          return;
-                        }
-                        // Auto-add Bills category only if fixed commitments > 0
-                        if (fixed > 0 && !setupCategories.includes('Bills')) {
-                          setSetupCategories(prev => [...prev, 'Bills']);
-                        }
-                        // If fixed is 0, remove Bills from pre-selection gracefully
-                        if (fixed === 0) {
-                          setSetupCategories(prev => prev.filter(c => c !== 'Bills'));
-                        }
-                        setOnboardingStep(3);
-                      }}
-                    >
-                      <Text color="#FFFFFF" fontSize={13} fontWeight="700">Next Step</Text>
-                    </Button>
-                  </XStack>
-                </CbudgetCard>
-              </View>
-            )}
-
-            {/* STEP 3: Categories Select */}
-            {onboardingStep === 3 && (
-              <View>
-                <CbudgetCard gap={16} marginTop={Spacing[16]}>
-                  <Text color={theme.text} fontSize={16} fontWeight="700">
-                    Which categories would you like to track?
-                  </Text>
-                  
-                  <XStack flexWrap="wrap" gap={8} marginVertical={8} justifyContent="space-between">
-                    {defaultCategories.map((cat) => {
-                      const isSelected = setupCategories.includes(cat);
-                      const catColor = CATEGORY_COLORS[cat] || CATEGORY_COLORS['Custom'];
-                      const catIcon = CATEGORY_ICONS[cat] || CATEGORY_ICONS['Custom'];
-                      
-                      return (
-                        <TouchableOpacity
-                          key={cat}
-                          activeOpacity={0.8}
-                          onPress={() => {
-                            if (isSelected) {
-                              setSetupCategories(setupCategories.filter((c) => c !== cat));
-                            } else {
-                              setSetupCategories([...setupCategories, cat]);
-                            }
-                          }}
-                          style={{
-                            width: '48.5%',
-                            marginBottom: 4,
-                          }}
-                        >
-                          <XStack
-                            backgroundColor={(isSelected ? `${catColor}12` : theme.backgroundElement) as any}
-                            borderColor={(isSelected ? catColor : theme.border) as any}
-                            borderWidth={1.5}
-                            borderRadius={6}
-                            padding={10}
-                            alignItems="center"
-                            gap={10}
-                            height={48}
-                          >
-                            <View
-                              width={28}
-                              height={28}
-                              borderRadius={6}
-                              backgroundColor={(isSelected ? `${catColor}20` : `${theme.textSecondary}15`) as any}
-                              alignItems="center"
-                              justifyContent="center"
-                            >
-                              <SymbolView name={catIcon} size={13} tintColor={isSelected ? catColor : theme.textSecondary} />
-                            </View>
-                            <YStack flex={1} justifyContent="center">
-                              <Text color={theme.text} fontSize={12} fontWeight="700" numberOfLines={1}>
-                                {cat}
-                              </Text>
-                            </YStack>
-                            {isSelected && (
-                              <View
-                                width={16}
-                                height={16}
-                                borderRadius={8}
-                                backgroundColor={catColor as any}
-                                alignItems="center"
-                                justifyContent="center"
-                              >
-                                <SymbolView name={{ ios: 'checkmark', android: 'check', web: 'check' } as any} size={10} tintColor="#FFFFFF" />
-                              </View>
-                            )}
-                          </XStack>
-                        </TouchableOpacity>
-                      );
-                    })}
-
-                    {/* Render custom categories user added */}
-                    {setupCategories.filter(c => !defaultCategories.includes(c)).map((cat) => {
-                      const catColor = CATEGORY_COLORS['Custom'];
-                      const catIcon = CATEGORY_ICONS['Custom'];
-                      return (
-                        <TouchableOpacity
-                          key={cat}
-                          activeOpacity={0.8}
-                          onPress={() => {
-                            setSetupCategories(setupCategories.filter((c) => c !== cat));
-                          }}
-                          style={{
-                            width: '48.5%',
-                            marginBottom: 4,
-                          }}
-                        >
-                          <XStack
-                            backgroundColor={`${catColor}12` as any}
-                            borderColor={catColor as any}
-                            borderWidth={1.5}
-                            borderRadius={6}
-                            padding={10}
-                            alignItems="center"
-                            gap={10}
-                            height={48}
-                          >
-                            <View
-                              width={28}
-                              height={28}
-                              borderRadius={6}
-                              backgroundColor={`${catColor}20` as any}
-                              alignItems="center"
-                              justifyContent="center"
-                            >
-                              <SymbolView name={catIcon} size={13} tintColor={catColor} />
-                            </View>
-                            <YStack flex={1} justifyContent="center">
-                              <Text color={theme.text} fontSize={12} fontWeight="700" numberOfLines={1}>
-                                {cat}
-                              </Text>
-                            </YStack>
-                            <View
-                              width={16}
-                              height={16}
-                              borderRadius={8}
-                              backgroundColor={theme.error}
-                              alignItems="center"
-                              justifyContent="center"
-                            >
-                              <Text color="#FFFFFF" fontSize={9} fontWeight="900">✕</Text>
-                            </View>
-                          </XStack>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </XStack>
-
-                  {showCustomCatInput ? (
-                    <XStack gap={8} alignItems="center" marginTop={4}>
-                      <TextInput
-                        placeholder="Custom Category name"
-                        placeholderTextColor={`${theme.text}45`}
-                        value={customCategoryName}
-                        onChangeText={setCustomCategoryName}
-                        style={[styles.customInput, { color: theme.text, borderColor: theme.border, borderRadius: 6 }]}
-                      />
-                      <Button
-                        backgroundColor={theme.primary as any}
-                        height={38}
-                        borderRadius={6}
-                        borderWidth={0}
-                        onPress={handleAddCustomCategory}
-                      >
-                        <Text color="#FFFFFF" fontSize={12} fontWeight="700">Add</Text>
-                      </Button>
-                    </XStack>
-                  ) : (
-                    <Button
-                      chromeless
-                      height={32}
-                      alignSelf="flex-start"
-                      onPress={() => setShowCustomCatInput(true)}
-                    >
-                      <Text color={theme.primary} fontSize={13} fontWeight="600">+ Add Custom Category</Text>
-                    </Button>
-                  )}
-
-                  <XStack gap={10} marginTop={12}>
-                    <Button
-                      flex={1}
-                      backgroundColor={theme.backgroundElement}
-                      borderRadius={6}
-                      borderColor={theme.border}
-                      borderWidth={1}
-                      height={46}
-                      pressStyle={{ opacity: 0.85 }}
-                      onPress={() => setOnboardingStep(2)}
-                    >
-                      <Text color={theme.text} fontSize={13} fontWeight="700">Back</Text>
-                    </Button>
-                    <Button
-                      flex={1.8}
-                      backgroundColor={theme.primary as any}
-                      borderRadius={6}
-                      borderWidth={0}
-                      height={46}
-                      pressStyle={{ opacity: 0.85 }}
-                      onPress={handleGoToStep4}
-                    >
-                      <Text color="#FFFFFF" fontSize={13} fontWeight="700">Next Step</Text>
-                    </Button>
-                  </XStack>
-                </CbudgetCard>
-              </View>
-            )}
-
-            {/* STEP 4: Category Limits Allocation */}
-            {onboardingStep === 4 && (
-              <View>
-                <CbudgetCard gap={16} marginTop={Spacing[16]}>
-                  <YStack gap={4}>
-                    <Text color={theme.text} fontSize={16} fontWeight="700">
-                      Set Spending Limits
-                    </Text>
-                    <Text color={theme.textSecondary} fontSize={12}>
-                      Divide your ₱{parseFloat(setupAmount).toLocaleString()} budget across your spending categories.
-                    </Text>
-                  </YStack>
-
-                  <YStack gap={0} marginVertical={4}>
-                    {setupCategories.map((cat, index) => {
-                      const catColor = CATEGORY_COLORS[cat] || CATEGORY_COLORS['Custom'];
-                      const catIcon = CATEGORY_ICONS[cat] || CATEGORY_ICONS['Custom'];
-                      const limitVal = setupCategoryLimits[cat] || '0';
-                      const isFixed = cat === 'Bills';
-                      const isLast = index === setupCategories.length - 1;
-
-                      return (
-                        <XStack
-                          key={cat}
-                          alignItems="center"
-                          paddingVertical={12}
-                          paddingHorizontal={4}
-                          borderBottomWidth={isLast ? 0 : 1}
-                          borderBottomColor={`${theme.border}60` as any}
-                        >
-                          {/* Icon */}
-                          <View
-                            width={34}
-                            height={34}
-                            borderRadius={8}
-                            backgroundColor={`${catColor}15` as any}
-                            alignItems="center"
-                            justifyContent="center"
-                            marginRight={10}
-                          >
-                            <SymbolView name={catIcon} size={15} tintColor={catColor} />
-                          </View>
-
-                          {/* Name + badge */}
-                          <YStack flex={1} gap={3}>
-                            <Text color={theme.text} fontSize={13} fontWeight="700" numberOfLines={1}>
-                              {cat}
-                            </Text>
-                            {isFixed && (
-                              <View
-                                alignSelf="flex-start"
-                                backgroundColor={`${CATEGORY_COLORS['Bills']}18` as any}
-                                paddingHorizontal={6}
-                                paddingVertical={2}
-                                borderRadius={4}
-                              >
-                                <Text color={CATEGORY_COLORS['Bills'] as any} fontSize={9} fontWeight="800">
-                                  FIXED
-                                </Text>
-                              </View>
-                            )}
-                          </YStack>
-
-                          {/* Amount input — fixed right side */}
-                          <XStack alignItems="center" gap={4} marginLeft={8}>
-                            <Text color={theme.textSecondary} fontSize={14} fontWeight="500">₱</Text>
-                            <TextInput
-                              placeholder="0"
-                              placeholderTextColor={`${theme.text}40`}
-                              keyboardType="numeric"
-                              value={limitVal}
-                              onChangeText={(val) => {
-                                let cleanVal = val.replace(/[^0-9]/g, '');
-                                if (cleanVal.length > 1 && cleanVal.startsWith('0')) {
-                                  cleanVal = cleanVal.replace(/^0+/, '');
-                                }
-                                setSetupCategoryLimits(prev => ({
-                                  ...prev,
-                                  [cat]: cleanVal
-                                }));
-                              }}
-                              style={{
-                                width: 90,
-                                height: 38,
-                                borderRadius: 8,
-                                borderWidth: 1.5,
-                                borderColor: isFixed ? CATEGORY_COLORS['Bills'] : theme.border,
-                                paddingHorizontal: 10,
-                                fontSize: 14,
-                                fontWeight: '700',
-                                textAlign: 'right',
-                                color: theme.text,
-                                backgroundColor: isFixed ? `${CATEGORY_COLORS['Bills']}08` : 'transparent',
-                              }}
-                            />
-                          </XStack>
-                        </XStack>
-                      );
-                    })}
-                  </YStack>
-
-
-                  {/* Allocation Status message */}
-                  {(() => {
-                    const totalLimitSum = Object.values(setupCategoryLimits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
-                    const budgetAmt = parseFloat(setupAmount) || 0;
-                    const diff = budgetAmt - totalLimitSum;
-                    
-                    let statusText = '';
-                    let statusColor = theme.text;
-                    if (diff > 0) {
-                      statusText = `₱${diff.toLocaleString()} remaining to allocate`;
-                      statusColor = theme.warning;
-                    } else if (diff < 0) {
-                      statusText = `Overallocated by ₱${Math.abs(diff).toLocaleString()}! Please reduce limits.`;
-                      statusColor = theme.error;
-                    } else {
-                      statusText = 'Budget fully allocated!';
-                      statusColor = theme.success;
-                    }
-
-                    return (
-                      <XStack justifyContent="space-between" alignItems="center" backgroundColor={`${statusColor}10` as any} padding={10} borderRadius={6} borderLeftWidth={3} borderLeftColor={statusColor as any}>
-                        <Text color={statusColor} fontSize={12} fontWeight="700">
-                          {statusText}
-                        </Text>
-                        <Text color={theme.textSecondary} fontSize={11}>
-                          Total: ₱{totalLimitSum.toLocaleString()} / ₱{budgetAmt.toLocaleString()}
-                        </Text>
-                      </XStack>
-                    );
-                  })()}
-
-                  <XStack gap={10} marginTop={12}>
-                    <Button
-                      flex={1}
-                      backgroundColor={theme.backgroundElement}
-                      borderRadius={6}
-                      borderColor={theme.border}
-                      borderWidth={1}
-                      height={46}
-                      pressStyle={{ opacity: 0.85 }}
-                      onPress={() => setOnboardingStep(3)}
-                    >
-                      <Text color={theme.text} fontSize={13} fontWeight="700">Back</Text>
-                    </Button>
-                    {(() => {
-                      const totalLimitSum = Object.values(setupCategoryLimits).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
-                      const budgetAmt = parseFloat(setupAmount) || 0;
-                      const isMatching = totalLimitSum === budgetAmt;
-                      return (
-                        <Button
-                          flex={1.8}
-                          backgroundColor={isMatching ? theme.primary as any : theme.backgroundElement}
-                          borderRadius={6}
-                          borderWidth={0}
-                          height={46}
-                          pressStyle={{ opacity: 0.85 }}
-                          disabled={!isMatching}
-                          onPress={handleOnboardingComplete}
-                        >
-                          <Text color={isMatching ? '#FFFFFF' : theme.textSecondary} fontSize={13} fontWeight="700">Create Budget</Text>
-                        </Button>
-                      );
-                    })()}
-                  </XStack>
-                </CbudgetCard>
-              </View>
-            )}
-
-          </ScrollView>
-        </SafeAreaView>
-      </YStack>
-    );
-  }
+  // Radial Ring Dimensions
+  const radius = 56;
+  const strokeWidth = 10;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - spendRatio * circumference;
 
   return (
-    <YStack flex={1} backgroundColor={theme.background}>
-      <BackgroundSystem mode="tabs" height={380} />
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <BackgroundSystem />
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        
-        {/* Custom Segmented Tab Controller */}
-        <XStack paddingHorizontal={12} marginVertical={Spacing[8]} gap={6}>
-          <Button
-            flex={1}
+        {/* ==================== EXECUTIVE TOP SCREEN HEADER ==================== */}
+        <View style={styles.topHeaderBar}>
+          <YStack gap={2}>
+            <Text color={theme.text} fontSize={22} fontFamily={Fonts.bold} letterSpacing={-0.4}>
+              Budget & Baon
+            </Text>
+            <Text color={theme.textSecondary} fontSize={11.5} fontFamily={Fonts.medium}>
+              {currencyCode} ({currencySymbol}) • Smart Guard
+            </Text>
+          </YStack>
+
+          {/* Month / Status Pill */}
+          <View style={[styles.topStatusPill, { backgroundColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#FFFFFF' : '#131D31' }]}>
+            <View width={7} height={7} borderRadius={3.5} backgroundColor="#10B981" />
+            <Text color={theme.text} fontSize={12} fontFamily={Fonts.bold}>
+              {currentMonthName} {currentYear}
+            </Text>
+          </View>
+        </View>
+
+        {/* ==================== SEGMENTED TOP SWITCHER (SINGLE CAPSULE TRACK) ==================== */}
+        <View style={styles.capsuleTrackWrapper}>
+          <AnimatedSegmentSwitch<'budget' | 'calendar' | 'savings'>
+            options={[
+              { id: 'budget', label: 'Budget' },
+              { id: 'calendar', label: 'Calendar' },
+              { id: 'savings', label: 'Goals' },
+            ]}
+            activeId={activeTab}
+            onChange={(tab) => setActiveTab(tab)}
             height={40}
-            borderRadius={10}
-            backgroundColor={activeTab === 'budget' ? theme.surface : theme.backgroundElement}
-            borderWidth={activeTab === 'budget' ? 1 : 0}
-            borderColor={theme.border}
-            pressStyle={{ opacity: 0.85 }}
-            onPress={() => setActiveTab('budget')}
-          >
-            <XStack gap={4} alignItems="center">
-              <SymbolView
-                name={{ ios: 'chart.pie.fill', android: 'pie_chart', web: 'pie_chart' } as const}
-                size={13}
-                tintColor={activeTab === 'budget' ? theme.primary : theme.textSecondary}
-              />
-              <Text color={activeTab === 'budget' ? theme.text : theme.textSecondary} fontSize={12} fontWeight="700">
-                Budget
-              </Text>
+          />
+        </View>
+
+        {/* ==================== ALLOWANCE CYCLE SELECTOR (SINGLE CAPSULE ROW) ==================== */}
+        {activeTab === 'budget' && (
+          <View style={styles.allowanceTrackWrapper}>
+            <XStack gap={8} alignItems="center">
+              <View flex={1}>
+                <AnimatedSegmentSwitch<'daily' | 'weekly' | 'monthly'>
+                  options={[
+                    { id: 'daily', label: 'Daily Baon' },
+                    { id: 'weekly', label: 'Weekly' },
+                    { id: 'monthly', label: 'Monthly' },
+                  ]}
+                  activeId={currentCycle}
+                  onChange={(cycle) => store.setBudgetType(cycle as any)}
+                  height={36}
+                  fontSize={12}
+                />
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  safeHaptic('light');
+                  setAllowanceAmountInput(effectiveBudget.toString());
+                  setShowEditAllowanceModal(true);
+                }}
+                style={styles.allowanceEditBtn}
+                activeOpacity={0.8}
+              >
+                <Text color="#10B981" fontSize={11.5} fontFamily={Fonts.bold}>
+                  Set {currencySymbol}
+                </Text>
+              </TouchableOpacity>
             </XStack>
-          </Button>
+          </View>
+        )}
 
-          <Button
-            flex={1}
-            height={40}
-            borderRadius={10}
-            backgroundColor={activeTab === 'savings' ? theme.surface : theme.backgroundElement}
-            borderWidth={activeTab === 'savings' ? 1 : 0}
-            borderColor={theme.border}
-            pressStyle={{ opacity: 0.85 }}
-            onPress={() => setActiveTab('savings')}
-          >
-            <XStack gap={4} alignItems="center">
-              <SymbolView
-                name={{ ios: 'heart.circle.fill', android: 'favorite', web: 'favorite' } as const}
-                size={13}
-                tintColor={activeTab === 'savings' ? theme.primary : theme.textSecondary}
-              />
-              <Text color={activeTab === 'savings' ? theme.text : theme.textSecondary} fontSize={12} fontWeight="700">
-                Savings
-              </Text>
-            </XStack>
-          </Button>
-
-          <Button
-            flex={1}
-            height={40}
-            borderRadius={10}
-            backgroundColor={activeTab === 'history' ? theme.surface : theme.backgroundElement}
-            borderWidth={activeTab === 'history' ? 1 : 0}
-            borderColor={theme.border}
-            pressStyle={{ opacity: 0.85 }}
-            onPress={() => setActiveTab('history')}
-          >
-            <XStack gap={4} alignItems="center">
-              <SymbolView
-                name={{ ios: 'clock.fill', android: 'history', web: 'history' } as const}
-                size={13}
-                tintColor={activeTab === 'history' ? theme.primary : theme.textSecondary}
-              />
-              <Text color={activeTab === 'history' ? theme.text : theme.textSecondary} fontSize={12} fontWeight="700">
-                History
-              </Text>
-            </XStack>
-          </Button>
-        </XStack>
-
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-
-          {/* ==================== BUDGET TAB VIEW ==================== */}
+        <ScrollView
+          style={styles.scrollContainer}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 60 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* ========================================================================= */}
+          {/* TAB 1: BUDGET OVERVIEW (Radial Gauge Hero Dashboard)                      */}
+          {/* ========================================================================= */}
           {activeTab === 'budget' && (
-            <YStack gap={Spacing.five}>
+            <YStack gap={16}>
 
-              {/* Overall Analytics Card */}
-              <View>
-                <YStack 
-                  marginBottom={Spacing[8]}
-                  paddingHorizontal={8}
-                  paddingVertical={12}
-                  gap={16}
-                >
-                  <YStack alignItems="center" gap={4}>
-                    <Text color="rgba(255,255,255,0.7)" fontSize={11} fontWeight="700" letterSpacing={1} textTransform="uppercase" marginBottom={4}>
-                      {store.budgetType?.toUpperCase()} BUDGET REMAINING
-                    </Text>
-                    <XStack alignItems="baseline" gap={4}>
-                      <Text color={theme.primary as any} fontSize={24} fontWeight="700">₱</Text>
-                      <Text color={theme.primary as any} fontSize={42} fontWeight="900" letterSpacing={-1}>
-                        {budgetLeftover.toLocaleString()}
+              {/* Modern Fintech Hero Budget Card */}
+              <View style={styles.premiumHeroCard}>
+                <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
+                  <Defs>
+                    <LinearGradient id="budgetHeroGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <Stop offset="0%" stopColor="#042F24" stopOpacity={1} />
+                      <Stop offset="50%" stopColor="#064E3B" stopOpacity={1} />
+                      <Stop offset="100%" stopColor="#0B1E28" stopOpacity={1} />
+                    </LinearGradient>
+                  </Defs>
+                  <Rect width="100%" height="100%" rx={20} fill="url(#budgetHeroGrad)" />
+                </Svg>
+
+                <YStack padding={20} gap={16} zIndex={2}>
+                  {/* Top Header Row: Cycle Overline + Edit Allowance Pill */}
+                  <XStack justifyContent="space-between" alignItems="center">
+                    <YStack gap={3}>
+                      <Text color="#A7F3D0" fontSize={11} fontFamily={Fonts.bold} letterSpacing={0.8} textTransform="uppercase">
+                        {currentCycle === 'daily'
+                          ? "TODAY'S BAON REMAINING"
+                          : currentCycle === 'weekly'
+                          ? 'WEEKLY ALLOWANCE REMAINING'
+                          : 'MONTHLY BUDGET REMAINING'}
                       </Text>
-                    </XStack>
-                    <Text color="rgba(255,255,255,0.7)" fontSize={13} textAlign="center">
-                      leftover of ₱{store.totalBudget.toLocaleString()} total budget limit
-                    </Text>
-                  </YStack>
-
-                  <Progress
-                    value={(totalSpent / store.totalBudget) * 100}
-                    height={8}
-                    backgroundColor="rgba(255,255,255,0.05)"
-                    borderRadius={4}
-                  >
-                    <Progress.Indicator 
-                      backgroundColor={totalSpent > store.totalBudget ? theme.error : theme.success} 
-                      borderRadius={4} 
-                    />
-                  </Progress>
-
-                  {/* Summary Breakdown Row */}
-                  <XStack justifyContent="space-between" width="100%" paddingTop={12}>
-                    <YStack gap={2}>
-                      <Text color="rgba(255,255,255,0.7)" fontSize={11}>Spent</Text>
-                      <Text color="#FFFFFF" fontSize={13} fontWeight="700">₱{totalSpent.toLocaleString()}</Text>
+                      <XStack alignItems="baseline" gap={4}>
+                        <Text color="#D1FAE5" fontSize={22} fontFamily={Fonts.bold}>{currencySymbol}</Text>
+                        <Text color="#FFFFFF" fontSize={32} fontFamily={Fonts.extraBold} letterSpacing={-0.8}>
+                          {effectiveRemaining.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </Text>
+                      </XStack>
                     </YStack>
-                    <YStack gap={2} alignItems="center">
-                      <Text color="rgba(255,255,255,0.7)" fontSize={11}>Sim Savings</Text>
-                      <Text color={theme.primary as any} fontSize={13} fontWeight="700">₱{totalSavingsContribution.toLocaleString()}</Text>
-                    </YStack>
-                    <YStack gap={2} alignItems="flex-end">
-                      <Text color="rgba(255,255,255,0.7)" fontSize={11}>Sim Cash</Text>
-                      <Text color={theme.primary as any} fontSize={13} fontWeight="700">₱{store.virtualBalance.toLocaleString()}</Text>
-                    </YStack>
-                  </XStack>
-                </YStack>
-              </View>
 
-              {/* Action Button: Log simulated expense */}
-              {!showExpenseForm && (
-                <View>
-                  <XStack gap={10}>
-                    <Button
-                      flex={1}
-                      height={46}
-                      backgroundColor={theme.primary as any}
-                      borderRadius={6}
-                      borderWidth={0}
-                      pressStyle={{ opacity: 0.85 }}
-                      onPress={() => setShowExpenseForm(true)}
-                    >
-                      <Text color="#FFFFFF" fontSize={13} fontWeight="700">Log Purchase</Text>
-                    </Button>
-                    <Button
-                      flex={1}
-                      height={46}
-                      backgroundColor={theme.backgroundElement}
-                      borderRadius={6}
-                      borderColor={theme.border}
-                      borderWidth={1}
-                      pressStyle={{ opacity: 0.85 }}
+                    <TouchableOpacity
                       onPress={() => {
-                        Alert.alert(
-                          'Reset Budget?',
-                          'This will wipe out all categories, expenses, and savings. Complete this only to restart the onboarding simulation.',
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Reset', style: 'destructive', onPress: () => store.resetBudget() }
-                          ]
-                        );
+                        safeHaptic('light');
+                        setAllowanceAmountInput(effectiveBudget.toString());
+                        setShowEditAllowanceModal(true);
                       }}
+                      style={styles.heroEditBtn}
+                      activeOpacity={0.8}
                     >
-                      <Text color={theme.error} fontSize={13} fontWeight="700">Reset Budget</Text>
-                    </Button>
-                  </XStack>
-                </View>
-              )}
-
-              {/* Rapid Expense Logger Modal/Card */}
-              {showExpenseForm && (
-                <View>
-                  <CbudgetCard borderColor={theme.primary} borderWidth={1.5} gap={14}>
-                    <Text color={theme.text} fontSize={17} fontWeight="700">
-                      Log an Expense
-                    </Text>
-
-                    {/* Category quick selectors */}
-                    <YStack gap={6}>
-                      <Text color={theme.textSecondary} fontSize={11} fontWeight="600" textTransform="uppercase">
-                        Category
-                      </Text>
-                      <XStack gap={6} flexWrap="wrap">
-                        {store.selectedCategories.map((cat) => {
-                          const isSelected = expenseCategory === cat;
-                          const catColor = CATEGORY_COLORS[cat] || CATEGORY_COLORS['Custom'];
-                          return (
-                            <Button
-                              key={cat}
-                              backgroundColor={(isSelected ? `${catColor}15` : theme.backgroundElement) as any}
-                              borderColor={(isSelected ? catColor : theme.border) as any}
-                              borderWidth={1.5}
-                              borderRadius={8}
-                              height={34}
-                              paddingHorizontal={12}
-                              onPress={() => {
-                                setExpenseCategory(cat);
-                                setExpenseName(''); // reset name when category changes
-                              }}
-                            >
-                              <Text color={isSelected ? catColor : theme.text} fontSize={11} fontWeight="600">
-                                {cat}
-                              </Text>
-                            </Button>
-                          );
-                        })}
-                      </XStack>
-                    </YStack>
-
-                    {/* Quick Name Suggestions — shown when a category is selected */}
-                    {expenseCategory ? (() => {
-                      const suggestions: Record<string, string[]> = {
-                        Food: ['Lunch', 'Breakfast', 'Dinner', 'Snack', 'Merienda', 'Groceries', 'Coffee', 'Milk Tea'],
-                        Transportation: ['Jeepney', 'Bus Fare', 'Grab', 'Tricycle', 'Train', 'Toll Fee', 'Gas'],
-                        School: ['Photocopy', 'Supplies', 'Materials', 'Books', 'Printing', 'Project'],
-                        Bills: ['Electric Bill', 'Water Bill', 'Internet', 'Load', 'Rent', 'Subscription'],
-                        Shopping: ['Clothes', 'Online Order', 'Toiletries', 'Accessories', 'Shoes'],
-                        Entertainment: ['Movie', 'Streaming', 'Game', 'Concert', 'Sports'],
-                        Savings: ['Emergency Fund', 'Goal Deposit'],
-                        'Emergency Fund': ['Medical', 'Repair', 'Emergency'],
-                      };
-                      const chips = suggestions[expenseCategory] || [];
-                      if (chips.length === 0) return null;
-                      return (
-                        <YStack gap={6}>
-                          <Text color={theme.textSecondary} fontSize={11} fontWeight="600" textTransform="uppercase">
-                            Quick Name — what did you buy?
-                          </Text>
-                          <XStack gap={6} flexWrap="wrap">
-                            {chips.map((chip) => {
-                              const isActive = expenseName === chip;
-                              return (
-                                <TouchableOpacity
-                                  key={chip}
-                                  onPress={() => setExpenseName(isActive ? '' : chip)}
-                                  style={{
-                                    paddingHorizontal: 12,
-                                    paddingVertical: 7,
-                                    borderRadius: 20,
-                                    borderWidth: 1.5,
-                                    borderColor: isActive ? (CATEGORY_COLORS[expenseCategory] || theme.primary) : theme.border,
-                                    backgroundColor: isActive ? `${CATEGORY_COLORS[expenseCategory] || theme.primary}12` : 'transparent',
-                                    marginBottom: 4,
-                                  }}
-                                >
-                                  <Text style={{ color: isActive ? (CATEGORY_COLORS[expenseCategory] || theme.primary) : theme.textSecondary, fontSize: 12, fontWeight: isActive ? '700' : '500' }}>
-                                    {chip}
-                                  </Text>
-                                </TouchableOpacity>
-                              );
-                            })}
-                          </XStack>
-                        </YStack>
-                      );
-                    })() : null}
-
-                    {/* Expense Name text input — always visible for custom entry */}
-                    <FormInput
-                      label="Or Type a Name (Optional)"
-                      placeholder="e.g. Lunch, Bus Fare (or leave blank)"
-                      value={expenseName}
-                      onChangeText={setExpenseName}
-                    />
-
-                    {/* Amount + quick presets */}
-                    <YStack gap={8}>
-                      <FormInput
-                        label="Amount (₱)"
-                        placeholder="e.g. 120"
-                        keyboardType="numeric"
-                        value={expenseAmount}
-                        onChangeText={setExpenseAmount}
-                        leftIcon={{ ios: 'banknote', android: 'payments', web: 'payments' } as any}
+                      <PhosphorIcon
+                        name="Pencil"
+                        size={12}
+                        color="#FFFFFF"
                       />
-                      {/* Amount Quick Presets */}
-                      <XStack gap={6} flexWrap="wrap">
-                        {[20, 50, 100, 150, 200, 500, 1000].map((preset) => {
-                          const isActive = expenseAmount === preset.toString();
-                          return (
-                            <TouchableOpacity
-                              key={preset}
-                              onPress={() => setExpenseAmount(isActive ? '' : preset.toString())}
-                              style={{
-                                paddingHorizontal: 10,
-                                paddingVertical: 5,
-                                borderRadius: 6,
-                                borderWidth: 1.5,
-                                borderColor: isActive ? theme.primary : theme.border,
-                                backgroundColor: isActive ? `${theme.primary}12` : 'transparent',
-                              }}
-                            >
-                              <Text style={{ color: isActive ? theme.primary : theme.textSecondary, fontSize: 12, fontWeight: '600' }}>
-                                ₱{preset}
-                              </Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </XStack>
-                    </YStack>
-
-                    <FormInput
-                      label="Notes (Optional)"
-                      placeholder="e.g. School canteen lunch"
-                      value={expenseNotes}
-                      onChangeText={setExpenseNotes}
-                    />
-
-                    <XStack gap={10} marginTop={6}>
-                      <Button flex={1} backgroundColor={theme.backgroundElement} height={44} borderRadius={10} onPress={() => setShowExpenseForm(false)}>
-                        <Text color={theme.text} fontWeight="600">Cancel</Text>
-                      </Button>
-                      <FormButton flex={1.5} variant="primary" height={44} onPress={handleLogExpense}>
-                        Log Purchase
-                      </FormButton>
-                    </XStack>
-                  </CbudgetCard>
-                </View>
-              )}
-
-
-              {/* Category limits progress */}
-              <YStack gap={16}>
-                <Text color={theme.text} fontSize={16} fontWeight="700" paddingHorizontal={4}>
-                  Category Budget Breakdown
-                </Text>
-
-                <YStack gap={14}>
-                  {/* --- FIXED BILLS SECTION --- */}
-                  {store.selectedCategories.includes('Bills') && (
-                    <YStack gap={10}>
-                      <Text color={theme.primary as any} fontSize={12} fontWeight="800" paddingHorizontal={4} letterSpacing={0.5}>
-                        FIXED MONTHLY BILLS
+                      <Text color="#FFFFFF" fontSize={11} fontFamily={Fonts.bold}>
+                        Set Limit
                       </Text>
-                      {store.selectedCategories.filter(c => c === 'Bills').map((cat) => {
-                        const spentInCat = store.loggedExpenses
-                          .filter((e) => e.category === cat)
-                          .reduce((sum, e) => sum + e.amount, 0);
-                        const limitInCat = store.categoryLimits?.[cat] || (store.totalBudget / (store.selectedCategories.length || 1));
-                        const ratio = spentInCat / limitInCat;
-                        const isOver = spentInCat > limitInCat;
-                        const catColor = CATEGORY_COLORS[cat] || CATEGORY_COLORS['Custom'];
-                        const catIcon = CATEGORY_ICONS[cat] || CATEGORY_ICONS['Custom'];
-
-                        return (
-                          <TouchableOpacity key={cat} activeOpacity={0.85} onPress={() => setSelectedCategoryBreakdown(cat)}>
-                            <CbudgetCard padding={14} gap={10} borderColor={isOver ? `${theme.error}30` as any : theme.border} borderWidth={1}>
-                              <XStack justifyContent="space-between" alignItems="center">
-                                <XStack gap={10} alignItems="center">
-                                  <View width={36} height={36} borderRadius={8} backgroundColor={`${catColor}15` as any} alignItems="center" justifyContent="center">
-                                    <SymbolView name={catIcon} size={15} tintColor={catColor} />
-                                  </View>
-                                  <YStack gap={2}>
-                                    <Text color={theme.text} fontSize={14} fontWeight="700">{cat}</Text>
-                                    <Text color={theme.textSecondary} fontSize={11}>
-                                      Spent ₱{spentInCat.toLocaleString()} of ₱{limitInCat.toLocaleString()}
-                                    </Text>
-                                  </YStack>
-                                </XStack>
-
-                                <XStack
-                                  backgroundColor={(isOver ? `${theme.error}15` : `${theme.success}10`) as any}
-                                  borderRadius={8}
-                                  paddingHorizontal={8}
-                                  paddingVertical={4}
-                                >
-                                  <Text color={isOver ? theme.error : theme.success} fontSize={10} fontWeight="700">
-                                    {isOver ? 'OVER BUDGET' : `${Math.round(ratio * 100)}%`}
-                                  </Text>
-                                </XStack>
-                              </XStack>
-
-                              <Progress value={Math.min(100, ratio * 100)} height={5} backgroundColor={theme.backgroundElement} borderRadius={3}>
-                                <Progress.Indicator backgroundColor={(isOver ? theme.error : catColor) as any} borderRadius={3} />
-                              </Progress>
-                            </CbudgetCard>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </YStack>
-                  )}
-
-                  {/* --- DAILY/VARIABLE SPENDING SECTION --- */}
-                  <YStack gap={10}>
-                    <Text color={theme.primary as any} fontSize={12} fontWeight="800" paddingHorizontal={4} letterSpacing={0.5} marginTop={store.selectedCategories.includes('Bills') ? 4 : 0}>
-                      DAILY & VARIABLE SPENDING
-                    </Text>
-                    {store.selectedCategories.filter(c => c !== 'Bills').length === 0 ? (
-                      <CbudgetCard padding={14}>
-                        <Text color={theme.textSecondary} fontSize={12}>No variable spending categories selected.</Text>
-                      </CbudgetCard>
-                    ) : (
-                      store.selectedCategories.filter(c => c !== 'Bills').map((cat) => {
-                        const spentInCat = store.loggedExpenses
-                          .filter((e) => e.category === cat)
-                          .reduce((sum, e) => sum + e.amount, 0);
-                        const limitInCat = store.categoryLimits?.[cat] || (store.totalBudget / (store.selectedCategories.length || 1));
-                        const ratio = spentInCat / limitInCat;
-                        const isOver = spentInCat > limitInCat;
-                        const catColor = CATEGORY_COLORS[cat] || CATEGORY_COLORS['Custom'];
-                        const catIcon = CATEGORY_ICONS[cat] || CATEGORY_ICONS['Custom'];
-
-                        return (
-                          <TouchableOpacity key={cat} activeOpacity={0.85} onPress={() => setSelectedCategoryBreakdown(cat)}>
-                            <CbudgetCard padding={14} gap={10} borderColor={isOver ? `${theme.error}30` as any : theme.border} borderWidth={1}>
-                              <XStack justifyContent="space-between" alignItems="center">
-                                <XStack gap={10} alignItems="center">
-                                  <View width={36} height={36} borderRadius={8} backgroundColor={`${catColor}15` as any} alignItems="center" justifyContent="center">
-                                    <SymbolView name={catIcon} size={15} tintColor={catColor} />
-                                  </View>
-                                  <YStack gap={2}>
-                                    <Text color={theme.text} fontSize={14} fontWeight="700">{cat}</Text>
-                                    <Text color={theme.textSecondary} fontSize={11}>
-                                      Spent ₱{spentInCat.toLocaleString()} of ₱{limitInCat.toLocaleString()}
-                                    </Text>
-                                  </YStack>
-                                </XStack>
-
-                                <XStack
-                                  backgroundColor={(isOver ? `${theme.error}15` : `${theme.success}10`) as any}
-                                  borderRadius={8}
-                                  paddingHorizontal={8}
-                                  paddingVertical={4}
-                                >
-                                  <Text color={isOver ? theme.error : theme.success} fontSize={10} fontWeight="700">
-                                    {isOver ? 'OVER BUDGET' : `${Math.round(ratio * 100)}%`}
-                                  </Text>
-                                </XStack>
-                              </XStack>
-
-                              <Progress value={Math.min(100, ratio * 100)} height={5} backgroundColor={theme.backgroundElement} borderRadius={3}>
-                                <Progress.Indicator backgroundColor={(isOver ? theme.error : catColor) as any} borderRadius={3} />
-                              </Progress>
-                            </CbudgetCard>
-                          </TouchableOpacity>
-                        );
-                      })
-                    )}
-                  </YStack>
-                </YStack>
-              </YStack>
-            </YStack>
-          )}
-
-          {/* ==================== SAVINGS TAB VIEW ==================== */}
-          {activeTab === 'savings' && (
-            <YStack gap={Spacing.five}>
-
-              {/* Smart Savings Insights Hero */}
-              <View>
-                <CbudgetCard borderLeftWidth={5} borderLeftColor={theme.primary} gap={10} backgroundColor={`${theme.primary}08` as any}>
-                  <XStack gap={6} alignItems="center">
-                    <SymbolView
-                      name={{ ios: 'lightbulb.fill', android: 'lightbulb', web: 'lightbulb' } as const}
-                      size={16}
-                      tintColor={theme.primary as any}
-                    />
-                    <Text color={theme.primary as any} fontSize={13} fontWeight="700" letterSpacing={0.5}>
-                      SMART SAVINGS COACH INSIGHTS
-                    </Text>
+                    </TouchableOpacity>
                   </XStack>
 
-                  {store.savingsGoals.length === 0 ? (
-                    <Text color={theme.textSecondary} fontSize={12} lineHeight={16}>
-                      {isGuest
-                        ? 'Create a savings goal below. Cbudget will calculate educational projections to help you track your progress!'
-                        : 'Create a savings goal below. Cbudget will calculate educational projections and recommend spending optimizations to help you build habits fast!'}
-                    </Text>
-                  ) : (
-                    <YStack gap={8}>
-                      {store.savingsGoals.map((g, idx) => {
-                        const remaining = Math.max(0, g.targetAmount - g.currentSavings);
-                        const days = parseInt(g.targetDate) || 120;
-                        const dailyRate = Math.round(remaining / days);
-                        
-                        // Educational tip
-                        return (
-                          <YStack key={g.id} gap={2} paddingBottom={idx < store.savingsGoals.length - 1 ? 6 : 0} borderBottomWidth={idx < store.savingsGoals.length - 1 ? 1 : 0} borderBottomColor={`${theme.border}40` as any}>
-                            <Text color={theme.text} fontSize={13} fontWeight="600">
-                              For <Text color={theme.primary as any}>{g.name}</Text>:
-                            </Text>
-                            <Text color={theme.textSecondary} fontSize={12} lineHeight={16}>
-                              • Save <Text fontWeight="700" color={theme.text}>₱{dailyRate}/day</Text> to reach your target in <Text fontWeight="700">{days} days</Text>.
-                            </Text>
-                            {!isGuest && (
-                              <Text color={theme.textSecondary} fontSize={12} lineHeight={16}>
-                                • Pro-Tip: Reduce shopping expenses by <Text fontWeight="700" color={theme.warning}>₱300/week</Text> to complete this goal <Text fontWeight="700" color={theme.success}>1.5 months earlier</Text>!
-                              </Text>
-                            )}
-                          </YStack>
-                        );
-                      })}
-                    </YStack>
-                  )}
-                </CbudgetCard>
+                  {/* Horizontal Spend Progress Meter */}
+                  <YStack gap={6}>
+                    <XStack justifyContent="space-between" alignItems="center">
+                      <Text color="rgba(255, 255, 255, 0.85)" fontSize={11} fontFamily={Fonts.medium}>
+                        Spent {currencySymbol}{effectiveSpent.toLocaleString()} of {currencySymbol}{effectiveBudget.toLocaleString()}
+                      </Text>
+                      <Text color={effectiveSpent > effectiveBudget ? '#EF4444' : '#A7F3D0'} fontSize={11} fontFamily={Fonts.bold}>
+                        {effectiveSpent > effectiveBudget ? 'OVER LIMIT' : `${100 - spendPercentage}% remaining`}
+                      </Text>
+                    </XStack>
+                    <View style={styles.budgetHeroProgressTrack}>
+                      <View
+                        style={[
+                          styles.budgetHeroProgressFill,
+                          {
+                            width: `${Math.min(100, spendPercentage)}%`,
+                            backgroundColor: effectiveSpent > effectiveBudget ? '#EF4444' : '#34D399',
+                          },
+                        ]}
+                      />
+                    </View>
+                  </YStack>
+
+                  {/* 3 Balanced Bottom Metric Stats with Native Symbols */}
+                  <XStack justifyContent="space-between" alignItems="center" paddingTop={6} borderTopWidth={1} borderTopColor="rgba(255, 255, 255, 0.1)">
+                    {/* Limit */}
+                    <XStack alignItems="center" gap={8} flex={1}>
+                      <View style={styles.metricCircleBadge}>
+                        <PhosphorIcon
+                          name="Banknote"
+                          size={15}
+                          color="#34D399"
+                        />
+                      </View>
+                      <YStack gap={1}>
+                        <Text color="rgba(255, 255, 255, 0.65)" fontSize={9.5} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                          LIMIT
+                        </Text>
+                        <Text color="#FFFFFF" fontSize={13.5} fontFamily={Fonts.bold}>
+                          {currencySymbol}{effectiveBudget.toLocaleString()}
+                        </Text>
+                      </YStack>
+                    </XStack>
+
+                    {/* Spent */}
+                    <XStack alignItems="center" gap={8} flex={1} justifyContent="center">
+                      <View style={styles.metricCircleBadge}>
+                        <PhosphorIcon
+                          name="CreditCard"
+                          size={15}
+                          color="#FB7185"
+                        />
+                      </View>
+                      <YStack gap={1}>
+                        <Text color="rgba(255, 255, 255, 0.65)" fontSize={9.5} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                          SPENT
+                        </Text>
+                        <Text color="#FB7185" fontSize={13.5} fontFamily={Fonts.bold}>
+                          {currencySymbol}{effectiveSpent.toLocaleString()}
+                        </Text>
+                      </YStack>
+                    </XStack>
+
+                    {/* Buffer / Saved */}
+                    <XStack alignItems="center" gap={8} flex={1} justifyContent="flex-end">
+                      <View style={styles.metricCircleBadge}>
+                        <PhosphorIcon
+                          name="ShieldCheck"
+                          size={15}
+                          color="#FBBF24"
+                        />
+                      </View>
+                      <YStack gap={1}>
+                        <Text color="rgba(255, 255, 255, 0.65)" fontSize={9.5} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                          {currentCycle === 'daily' ? 'BUFFER' : 'LEFT'}
+                        </Text>
+                        <Text color="#FBBF24" fontSize={13.5} fontFamily={Fonts.bold}>
+                          {currencySymbol}{effectiveRemaining.toLocaleString()}
+                        </Text>
+                      </YStack>
+                    </XStack>
+                  </XStack>
+                </YStack>
               </View>
 
-              {/* Create Savings Goal Button */}
-              <View>
-                <FormButton
-                  variant="primary"
-                  onPress={() => setShowAddGoalModal(true)}
-                  leftIcon={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' } as any}
-                >
-                  Create Savings Goal
-                </FormButton>
-              </View>
-
-              {/* Savings Goals List */}
+              {/* 3. Category Budgets Section with Filter Chips */}
               <YStack gap={12}>
-                <Text color={theme.text} fontSize={16} fontWeight="700" paddingHorizontal={4}>
-                  Active Savings Goals
+                <Text color={theme.text} fontSize={18} fontFamily={Fonts.bold} letterSpacing={-0.3}>
+                  Budgets
                 </Text>
 
-                {store.savingsGoals.length === 0 ? (
-                  <CbudgetCard padding={24} alignItems="center" justifyContent="center" gap={10}>
-                    <SymbolView
-                      name={{ ios: 'heart.text.square.fill', android: 'library_add', web: 'library_add' } as const}
-                      size={28}
-                      tintColor={theme.textSecondary}
-                    />
-                    <Text color={theme.textSecondary} fontSize={13} textAlign="center">
-                      No savings goals set. Create a goal like "Emergency Fund" to practice disciplined saving before simulation investing.
-                    </Text>
-                  </CbudgetCard>
-                ) : (
-                  store.savingsGoals.map((g, idx) => {
-                    const ratio = g.currentSavings / g.targetAmount;
-                    const progressVal = Math.min(100, ratio * 100);
-                    const goalIcon = SAVINGS_CATEGORY_ICONS[g.category] || SAVINGS_CATEGORY_ICONS['Custom'];
-
+                {/* Filter Chips: All, Overspent, In budget */}
+                <XStack gap={8}>
+                  {(['all', 'overspent', 'inbudget'] as const).map((mode) => {
+                    const isActive = categoryFilter === mode;
+                    const labels = { all: 'All', overspent: 'Overspent', inbudget: 'In budget' };
                     return (
-                      <View key={g.id}>
-                        <CbudgetCard gap={12}>
+                      <TouchableOpacity
+                        key={mode}
+                        onPress={() => {
+                          safeHaptic('light');
+                          setCategoryFilter(mode);
+                        }}
+                        style={[styles.filterChip, isActive && styles.filterChipActive]}
+                        activeOpacity={0.7}
+                      >
+                        <Text color={isActive ? '#FFFFFF' : theme.textSecondary} fontSize={12} fontFamily={Fonts.bold}>
+                          {labels[mode]}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </XStack>
+
+                {/* Category Item Cards */}
+                <YStack gap={10}>
+                  {filteredCategories.map((cat) => {
+                    const spent = store.loggedExpenses.filter((e) => e.category === cat).reduce((s, e) => s + e.amount, 0);
+                    const limit = store.categoryLimits?.[cat] || store.totalBudget / (store.selectedCategories.length || 1);
+                    const ratio = limit > 0 ? spent / limit : 0;
+                    const isOver = spent > limit;
+                    const catColor = CATEGORY_COLORS[cat] || '#64748B';
+                    
+                    return (
+                      <TouchableOpacity
+                        key={cat}
+                        onPress={() => setSelectedCategoryBreakdown(cat)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={[styles.categoryCard, { backgroundColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#FFFFFF' : '#131D31' }, isOver && styles.categoryCardOver]}>
                           <XStack justifyContent="space-between" alignItems="center">
-                            <XStack gap={10} alignItems="center">
-                              <View width={36} height={36} borderRadius={8} backgroundColor={`${theme.primary}15` as any} alignItems="center" justifyContent="center">
-                                <SymbolView name={goalIcon} size={15} tintColor={theme.primary as any} />
-                              </View>
+                            <XStack alignItems="center" gap={12}>
+                              <PhosphorCategoryIcon
+                                name={cat}
+                                size={26}
+                                primaryColor={theme.mode === 'dark' ? '#1E293B' : '#0F172A'}
+                                accentColor="#10B981"
+                              />
                               <YStack gap={2}>
-                                <Text color={theme.text} fontSize={14} fontWeight="700">{g.name}</Text>
-                                <Text color={theme.textSecondary} fontSize={11}>
-                                  Category: {g.category} • Target Date: {g.targetDate} days
+                                <Text color={theme.text} fontSize={14.5} fontFamily={Fonts.bold}>
+                                  {cat}
+                                </Text>
+                                <Text color={theme.textSecondary} fontSize={11} fontFamily={Fonts.medium}>
+                                  {currencySymbol}{spent.toLocaleString()} / {currencySymbol}{limit.toLocaleString()}
                                 </Text>
                               </YStack>
                             </XStack>
 
-                            <Text color={theme.primary as any} fontSize={14} fontWeight="800">
-                              {progressVal.toFixed(0)}%
-                            </Text>
+                            <View style={[styles.badgePill, isOver ? styles.badgePillOver : styles.badgePillOk]}>
+                              <Text color={isOver ? '#EF4444' : '#10B981'} fontSize={11} fontFamily={Fonts.bold}>
+                                {isOver ? 'OVER' : `${Math.round(ratio * 100)}%`}
+                              </Text>
+                            </View>
                           </XStack>
 
-                          <YStack gap={4}>
-                            <Progress value={progressVal} height={6} backgroundColor={theme.backgroundElement} borderRadius={3}>
-                              <Progress.Indicator backgroundColor={theme.primary} borderRadius={3} />
-                            </Progress>
-                            <XStack justifyContent="space-between">
-                              <Text color={theme.textSecondary} fontSize={11}>
-                                Saved: ₱{g.currentSavings.toLocaleString()}
-                              </Text>
-                              <Text color={theme.textSecondary} fontSize={11}>
-                                Target: ₱{g.targetAmount.toLocaleString()}
-                              </Text>
-                            </XStack>
-                          </YStack>
+                          {/* Progress Meter Bar */}
+                          <View style={[styles.catProgressBg, { backgroundColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#E2E8F0' : '#1E293B' }]}>
+                            <View
+                              style={[
+                                styles.catProgressBar,
+                                {
+                                  width: `${Math.min(100, ratio * 100)}%`,
+                                  backgroundColor: isOver ? '#EF4444' : catColor,
+                                },
+                              ]}
+                            />
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </YStack>
 
-                          {g.currentSavings >= g.targetAmount ? (
-                            <XStack backgroundColor={`${theme.success}10` as any} padding={8} borderRadius={8} justifyContent="center" alignItems="center" gap={6}>
-                              <SymbolView name={{ ios: 'checkmark.seal.fill', android: 'verified', web: 'verified' } as const} size={12} tintColor={theme.success} />
-                              <Text color={theme.success} fontSize={12} fontWeight="700">GOAL FULLY FUNDED</Text>
+                {/* Primary Main Emerald Log Purchase Button */}
+                <TouchableOpacity
+                  onPress={() => {
+                    safeHaptic('medium');
+                    setShowExpenseForm(true);
+                  }}
+                  style={styles.mainLogPurchaseBtn}
+                  activeOpacity={0.85}
+                >
+                  <XStack alignItems="center" justifyContent="center" gap={8}>
+                    <PhosphorIcon
+                      name="Plus"
+                      size={18}
+                      color="#FFFFFF"
+                      weight="bold"
+                    />
+                    <Text color="#FFFFFF" fontSize={15} fontFamily={Fonts.bold}>
+                      Log Purchase
+                    </Text>
+                  </XStack>
+                </TouchableOpacity>
+              </YStack>
+            </YStack>
+          )}
+
+          {/* ========================================================================= */}
+          {/* TAB 2: CALENDAR & ACTIVITY (Matching Right Screen of Reference)           */}
+          {/* ========================================================================= */}
+          {activeTab === 'calendar' && (
+            <YStack gap={16}>
+              {/* 1. Month Selector Bar */}
+              <View style={[styles.monthSelectorBar, { backgroundColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#FFFFFF' : '#131D31' }]}>
+                <TouchableOpacity onPress={handlePrevMonth} style={[styles.monthArrowBtn, { backgroundColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#F1F5F9' : '#1E293B' }]} activeOpacity={0.7}>
+                  <PhosphorIcon name="CaretLeft" size={16} color={theme.text} />
+                </TouchableOpacity>
+
+                <YStack alignItems="center" gap={2}>
+                  <Text color={theme.text} fontSize={17} fontFamily={Fonts.bold}>
+                    {currentMonthName}
+                  </Text>
+                  <Text color={theme.textSecondary} fontSize={11} fontFamily={Fonts.medium}>
+                    {currentYear}
+                  </Text>
+                </YStack>
+
+                <TouchableOpacity onPress={handleNextMonth} style={[styles.monthArrowBtn, { backgroundColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#F1F5F9' : '#1E293B' }]} activeOpacity={0.7}>
+                  <PhosphorIcon name="CaretRight" size={16} color={theme.text} />
+                </TouchableOpacity>
+              </View>
+
+              {/* 2. Interactive Horizontal Calendar Day Strip */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.calendarStrip}>
+                {/* "All Days" pill button */}
+                <TouchableOpacity
+                  onPress={() => {
+                    safeHaptic('light');
+                    setActiveSelectedDay(null);
+                  }}
+                  style={[styles.dayStripItem, { backgroundColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#FFFFFF' : '#131D31' }, activeSelectedDay === null && styles.dayStripItemActive]}
+                  activeOpacity={0.75}
+                >
+                  <Text color={activeSelectedDay === null ? '#FFFFFF' : theme.textSecondary} fontSize={10} fontFamily={Fonts.bold}>
+                    ALL
+                  </Text>
+                  <Text color={activeSelectedDay === null ? '#FFFFFF' : theme.text} fontSize={14} fontFamily={Fonts.bold}>
+                    Mo
+                  </Text>
+                </TouchableOpacity>
+
+                {daysInCurrentMonth.map((d) => {
+                  const isSelected = activeSelectedDay === d.dateStr;
+                  return (
+                    <TouchableOpacity
+                      key={d.dateStr}
+                      onPress={() => {
+                        safeHaptic('light');
+                        setActiveSelectedDay(isSelected ? null : d.dateStr);
+                      }}
+                      style={[styles.dayStripItem, { backgroundColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#FFFFFF' : '#131D31' }, isSelected && styles.dayStripItemActive]}
+                      activeOpacity={0.75}
+                    >
+                      <Text color={isSelected ? '#FFFFFF' : theme.textSecondary} fontSize={10} fontFamily={Fonts.medium}>
+                        {d.dayName}
+                      </Text>
+                      <Text color={isSelected ? '#FFFFFF' : theme.text} fontSize={14} fontFamily={Fonts.bold}>
+                        {d.dayNum}
+                      </Text>
+                      {d.hasPurchases && (
+                        <View style={[styles.dayDot, isSelected && { backgroundColor: '#FFFFFF' }]} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              {/* 3. Transaction Filter Chips */}
+              <XStack gap={8}>
+                {(['all', 'expenses', 'income'] as const).map((filter) => {
+                  const isActive = activityFilter === filter;
+                  const labels = { all: 'All', expenses: 'Expenses', income: 'Income' };
+                  return (
+                    <TouchableOpacity
+                      key={filter}
+                      onPress={() => {
+                        safeHaptic('light');
+                        setActivityFilter(filter);
+                      }}
+                      style={[styles.filterChip, isActive && styles.filterChipActive]}
+                      activeOpacity={0.7}
+                    >
+                      <Text color={isActive ? '#FFFFFF' : theme.textSecondary} fontSize={12} fontFamily={Fonts.bold}>
+                        {labels[filter]}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </XStack>
+
+              {/* 4. Grouped Daily Purchase History Cards */}
+              <YStack gap={14}>
+                {groupedTransactions.length === 0 ? (
+                  <View style={[styles.emptyStateBox, { backgroundColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#FFFFFF' : '#131D31' }]}>
+                    <PhosphorIcon
+                      name="CalendarX"
+                      size={32}
+                      color={theme.textSecondary}
+                    />
+                    <Text color={theme.text} fontSize={15} fontFamily={Fonts.bold} marginTop={6}>
+                      No purchases on this date
+                    </Text>
+                    <Text color={theme.textSecondary} fontSize={12} fontFamily={Fonts.medium} textAlign="center">
+                      Tap "+ Log Expense" to record a simulated purchase
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setShowExpenseForm(true)}
+                      style={styles.emptyActionBtn}
+                      activeOpacity={0.8}
+                    >
+                      <Text color="#FFFFFF" fontSize={12.5} fontFamily={Fonts.bold}>
+                        + Log Purchase
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  groupedTransactions.map((group, gIdx) => (
+                    <View key={gIdx} style={[styles.dailyGroupCard, { backgroundColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#FFFFFF' : '#131D31' }]}>
+                      {/* Daily Group Header */}
+                      <XStack justifyContent="space-between" alignItems="center" paddingHorizontal={16} paddingVertical={12} borderBottomWidth={1} borderBottomColor={theme.mode === 'hybrid' || theme.mode === 'light' ? '#F1F5F9' : '#1E293B'}>
+                        <Text color={theme.text} fontSize={14.5} fontFamily={Fonts.bold}>
+                          {group.dateLabel}
+                        </Text>
+                        <Text color={theme.textSecondary} fontSize={12} fontFamily={Fonts.medium}>
+                          {group.dateSub}
+                        </Text>
+                      </XStack>
+
+                      {/* List of items on this day */}
+                      <YStack>
+                        {group.expenses.map((exp, eIdx) => {
+                          const catColor = CATEGORY_COLORS[exp.category] || '#64748B';
+                          const isLast = eIdx === group.expenses.length - 1;
+
+                          return (
+                            <XStack
+                              key={exp.id}
+                              justifyContent="space-between"
+                              alignItems="center"
+                              paddingHorizontal={16}
+                              paddingVertical={12}
+                              borderBottomWidth={isLast ? 0 : 1}
+                              borderBottomColor={theme.mode === 'hybrid' || theme.mode === 'light' ? theme.border : 'rgba(255, 255, 255, 0.04)'}
+                            >
+                              <XStack alignItems="center" gap={12} flex={1}>
+                                <PhosphorCategoryIcon
+                                  name={exp.category}
+                                  size={22}
+                                  primaryColor={theme.mode === 'dark' ? '#1E293B' : '#0F172A'}
+                                  accentColor="#10B981"
+                                />
+                                <YStack gap={2} flex={1}>
+                                  <Text color={theme.text} fontSize={14} fontFamily={Fonts.bold} numberOfLines={1}>
+                                    {exp.name}
+                                  </Text>
+                                  <Text color={theme.textSecondary} fontSize={11} fontFamily={Fonts.medium}>
+                                    {exp.category}
+                                    {exp.notes ? ` • ${exp.notes}` : ''}
+                                  </Text>
+                                </YStack>
+                              </XStack>
+
+                              <XStack alignItems="center" gap={10}>
+                                <Text
+                                  color={exp.type === 'income' ? '#10B981' : '#EF4444'}
+                                  fontSize={14.5}
+                                  fontFamily={Fonts.bold}
+                                >
+                                  {exp.type === 'income' ? '+' : '-'}{currencySymbol}{exp.amount.toLocaleString()}
+                                </Text>
+                                <TouchableOpacity
+                                  onPress={() => handleOpenEditExpense(exp)}
+                                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                >
+                                  <PhosphorIcon name="Pencil" size={15} color={theme.textSecondary} />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  onPress={() => {
+                                    Alert.alert(
+                                      exp.type === 'income' ? 'Delete Income' : 'Delete Expense',
+                                      `Delete "${exp.name}"?`,
+                                      [
+                                        { text: 'Cancel', style: 'cancel' },
+                                        { text: 'Delete', style: 'destructive', onPress: () => store.deleteExpense(exp.id) },
+                                      ]
+                                    );
+                                  }}
+                                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                >
+                                  <PhosphorIcon name="Trash" size={14} color={theme.textSecondary} />
+                                </TouchableOpacity>
+                              </XStack>
                             </XStack>
-                          ) : (
-                            <Button
-                              height={34}
-                              backgroundColor={theme.backgroundElement}
-                              borderColor={theme.border}
-                              borderWidth={1}
-                              borderRadius={8}
+                          );
+                        })}
+                      </YStack>
+                    </View>
+                  ))
+                )}
+              </YStack>
+            </YStack>
+          )}
+
+          {/* ========================================================================= */}
+          {/* TAB 3: SAVINGS GOALS                                                      */}
+          {/* ========================================================================= */}
+          {activeTab === 'savings' && (
+            <YStack gap={16}>
+              {/* Smart Savings Coach Insights */}
+              <View style={[styles.darkMetricCard, { backgroundColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#FFFFFF' : '#131D31' }]}>
+                <YStack padding={16} gap={10}>
+                  <XStack alignItems="center" gap={8}>
+                    <PhosphorIcon name="Lightbulb" size={16} color="#FBBF24" weight="fill" />
+                    <Text color="#D97706" fontSize={12} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                      SAVINGS COACH INSIGHTS
+                    </Text>
+                  </XStack>
+                  <Text color={theme.textSecondary} fontSize={12} fontFamily={Fonts.medium} lineHeight={17}>
+                    Allocate surplus budget into goals like Emergency Funds or Business Capital to simulate wealth compounding.
+                  </Text>
+                </YStack>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => setShowAddGoalModal(true)}
+                style={styles.primaryActionButton}
+                activeOpacity={0.85}
+              >
+                <Text color="#FFFFFF" fontSize={14} fontFamily={Fonts.bold}>
+                  + Create Savings Goal
+                </Text>
+              </TouchableOpacity>
+
+              {/* Goals list */}
+              <YStack gap={10}>
+                {store.savingsGoals.length === 0 ? (
+                  <View style={[styles.emptyStateBox, { backgroundColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#FFFFFF' : '#131D31' }]}>
+                    <Text color={theme.textSecondary} fontSize={12} fontFamily={Fonts.medium} textAlign="center">
+                      No savings goals set yet. Tap above to create your first goal.
+                    </Text>
+                  </View>
+                ) : (
+                  store.savingsGoals.map((g) => {
+                    const ratio = g.targetAmount > 0 ? g.currentSavings / g.targetAmount : 0;
+                    const progress = Math.min(100, Math.round(ratio * 100));
+
+                    return (
+                      <View key={g.id} style={[styles.categoryCard, { backgroundColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#FFFFFF' : '#131D31' }]}>
+                        <XStack justifyContent="space-between" alignItems="center">
+                          <XStack alignItems="center" gap={12}>
+                            <PhosphorCategoryIcon
+                              name={g.category || g.name}
+                              size={24}
+                              primaryColor={theme.mode === 'dark' ? '#1E293B' : '#0F172A'}
+                              accentColor="#10B981"
+                            />
+                            <YStack gap={2}>
+                              <Text color={theme.text} fontSize={15} fontFamily={Fonts.bold}>
+                                {g.name}
+                              </Text>
+                              <Text color={theme.textSecondary} fontSize={11} fontFamily={Fonts.medium}>
+                                {currencySymbol}{g.currentSavings.toLocaleString()} of {currencySymbol}{g.targetAmount.toLocaleString()}
+                              </Text>
+                            </YStack>
+                          </XStack>
+                          <XStack alignItems="center" gap={10}>
+                            <Text color="#10B981" fontSize={14} fontFamily={Fonts.bold}>
+                              {progress}%
+                            </Text>
+                            <TouchableOpacity
+                              onPress={() => {
+                                Alert.alert(
+                                  'Delete Savings Goal',
+                                  `Delete "${g.name}"? Saved funds will return to your budget.`,
+                                  [
+                                    { text: 'Cancel', style: 'cancel' },
+                                    { text: 'Delete', style: 'destructive', onPress: () => store.deleteSavingsGoal(g.id) },
+                                  ]
+                                );
+                              }}
+                              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            >
+                              <PhosphorIcon name="Trash" size={14} color={theme.textSecondary} />
+                            </TouchableOpacity>
+                          </XStack>
+                        </XStack>
+
+                        <View style={[styles.catProgressBg, { backgroundColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#E2E8F0' : '#1E293B' }]}>
+                          <View style={[styles.catProgressBar, { width: `${progress}%`, backgroundColor: '#10B981' }]} />
+                        </View>
+
+                        <XStack gap={8} marginTop={4}>
+                          {g.currentSavings < g.targetAmount && (
+                            <TouchableOpacity
                               onPress={() => {
                                 setContributeGoalId(g.id);
                                 setContributeAmount('');
                               }}
+                              style={[styles.contributeBtn, { flex: 1 }]}
+                              activeOpacity={0.8}
                             >
-                              <Text color={theme.text} fontSize={12} fontWeight="700">Contribute Cash</Text>
-                            </Button>
-                          )}
-                        </CbudgetCard>
-                      </View>
-                    );
-                  })
-                )}
-              </YStack>
-            </YStack>
-          )}
-
-          {/* ==================== TRANSACTION HISTORY TAB VIEW ==================== */}
-          {activeTab === 'history' && (
-            <YStack gap={Spacing.five}>
-              {/* Summary Metrics Card */}
-              <View>
-                <CbudgetCard padding={16} gap={10}>
-                  <Text color={theme.text} fontSize={14} fontWeight="800">
-                    Transaction Summary
-                  </Text>
-                  <View height={1} backgroundColor={theme.border} marginTop={4} marginBottom={2} />
-                  <XStack justifyContent="space-between" paddingTop={4}>
-                    <YStack gap={2}>
-                      <Text color={theme.textSecondary} fontSize={10} fontWeight="600">Total Transactions</Text>
-                      <Text color={theme.text} fontSize={16} fontWeight="700">{store.loggedExpenses.length}</Text>
-                    </YStack>
-                    <YStack gap={2} alignItems="flex-end">
-                      <Text color={theme.textSecondary} fontSize={10} fontWeight="600">Total Simulated Spent</Text>
-                      <Text color={theme.primary as any} fontSize={16} fontWeight="700">
-                        ₱{store.loggedExpenses.reduce((sum, e) => sum + e.amount, 0).toLocaleString()}
-                      </Text>
-                    </YStack>
-                  </XStack>
-                </CbudgetCard>
-              </View>
-
-              {/* Transactions List */}
-              <YStack gap={10}>
-                <Text color={theme.text} fontSize={16} fontWeight="700" paddingHorizontal={4}>
-                  Logged Purchases
-                </Text>
-
-                {store.loggedExpenses.length === 0 ? (
-                  <CbudgetCard padding={24} alignItems="center" justifyContent="center" gap={10}>
-                    <SymbolView
-                      name={{ ios: 'doc.plaintext.fill', android: 'receipt', web: 'receipt' } as const}
-                      size={28}
-                      tintColor={theme.textSecondary}
-                    />
-                    <Text color={theme.textSecondary} fontSize={13} textAlign="center">
-                      No purchases logged. Set up your budget and record simulated purchases to track where your money goes.
-                    </Text>
-                  </CbudgetCard>
-                ) : (
-                  store.loggedExpenses.map((exp) => {
-                    const catColor = CATEGORY_COLORS[exp.category] || CATEGORY_COLORS['Custom'];
-                    const catIcon = CATEGORY_ICONS[exp.category] || CATEGORY_ICONS['Custom'];
-                    return (
-                      <View key={exp.id}>
-                        <CbudgetCard padding={14} gap={10}>
-                          <XStack justifyContent="space-between" alignItems="center">
-                            <XStack gap={10} alignItems="center" flex={1}>
-                              <View width={36} height={36} borderRadius={8} backgroundColor={`${catColor}15` as any} alignItems="center" justifyContent="center">
-                                <SymbolView name={catIcon} size={15} tintColor={catColor} />
-                              </View>
-                              <YStack gap={2} flex={1}>
-                                <Text color={theme.text} fontSize={14} fontWeight="700" numberOfLines={1}>{exp.name}</Text>
-                                <Text color={theme.textSecondary} fontSize={11}>
-                                  Category: {exp.category} • {exp.date}
-                                </Text>
-                                {exp.notes ? (
-                                  <Text color={`${theme.textSecondary}bb` as any} fontSize={10} fontStyle="italic" numberOfLines={1}>
-                                    Notes: {exp.notes}
-                                  </Text>
-                                ) : null}
-                              </YStack>
-                            </XStack>
-
-                            <XStack gap={10} alignItems="center">
-                              <Text color={theme.text} fontSize={14} fontWeight="800">
-                                ₱{exp.amount.toLocaleString()}
+                              <Text color="#10B981" fontSize={12} fontFamily={Fonts.bold}>
+                                Contribute
                               </Text>
-                              <TouchableOpacity
-                                activeOpacity={0.7}
-                                onPress={() => {
-                                  Alert.alert(
-                                    'Delete Transaction?',
-                                    `Are you sure you want to delete "${exp.name}"? This will return the ₱${exp.amount.toLocaleString()} limit to your budget.`,
-                                    [
-                                      { text: 'Cancel', style: 'cancel' },
-                                      { text: 'Delete', style: 'destructive', onPress: () => store.deleteExpense(exp.id) }
-                                    ]
-                                  );
-                                }}
-                              >
-                                <View width={28} height={28} borderRadius={6} backgroundColor={`${theme.error}10` as any} alignItems="center" justifyContent="center">
-                                  <SymbolView name={{ ios: 'trash.fill', android: 'delete', web: 'delete' } as const} size={13} tintColor={theme.error} />
-                                </View>
-                              </TouchableOpacity>
-                            </XStack>
-                          </XStack>
-                        </CbudgetCard>
+                            </TouchableOpacity>
+                          )}
+                          {g.currentSavings > 0 && (
+                            <TouchableOpacity
+                              onPress={() => {
+                                setWithdrawGoalId(g.id);
+                                setWithdrawAmount('');
+                              }}
+                              style={[styles.contributeBtn, { flex: 1, backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}
+                              activeOpacity={0.8}
+                            >
+                              <Text color="#EF4444" fontSize={12} fontFamily={Fonts.bold}>
+                                Withdraw
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </XStack>
                       </View>
                     );
                   })
@@ -1540,304 +1048,953 @@ export default function BudgetScreen() {
               </YStack>
             </YStack>
           )}
-
         </ScrollView>
       </SafeAreaView>
 
-      {/* MODAL: Create Savings Goal */}
-      <Modal visible={showAddGoalModal} transparent animationType="slide" onRequestClose={() => setShowAddGoalModal(false)}>
+      {/* ==================== MODAL: LOG EXPENSE / INCOME ==================== */}
+      <Modal visible={showExpenseForm} transparent animationType="slide" onRequestClose={() => setShowExpenseForm(false)}>
         <View style={styles.modalOverlay}>
-          <CbudgetCard style={[styles.modalContent, { backgroundColor: theme.surface }]}>
-            <XStack justifyContent="space-between" alignItems="center" borderBottomWidth={1} borderBottomColor={theme.border} paddingBottom={10}>
-              <Text color={theme.text} fontSize={16} fontWeight="700">Create Savings Goal</Text>
-              <TouchableOpacity onPress={() => setShowAddGoalModal(false)}>
-                <SymbolView name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' } as const} size={20} tintColor={theme.textSecondary} />
+          <View style={styles.modalCard}>
+            <XStack justifyContent="space-between" alignItems="center" borderBottomWidth={1} borderBottomColor="#334155" paddingBottom={12}>
+              <XStack alignItems="center" gap={8}>
+                <PhosphorCategoryIcon name={transactionType === 'income' ? 'Bills' : 'Shopping'} size={22} primaryColor="#0F172A" accentColor="#10B981" style={{ width: 32, height: 32, borderRadius: 8 }} />
+                <Text color="#FFFFFF" fontSize={16} fontFamily={Fonts.bold}>
+                  {transactionType === 'income' ? 'Log Income' : 'Log Expense'}
+                </Text>
+              </XStack>
+              <TouchableOpacity onPress={() => setShowExpenseForm(false)}>
+                <PhosphorIcon name="XCircle" size={20} color="#94A3B8" weight="fill" />
               </TouchableOpacity>
             </XStack>
 
-            <ScrollView contentContainerStyle={{ gap: 14, paddingTop: 10 }}>
-              <FormInput
-                label="Goal Name"
-                placeholder="e.g. Emergency Fund, Tuition Fee"
-                value={goalName}
-                onChangeText={setGoalName}
-              />
+            <ScrollView contentContainerStyle={{ gap: 14, paddingTop: 12 }}>
+              {/* Type Switcher */}
+              <View style={{ flexDirection: 'row', backgroundColor: '#0F172A', borderRadius: 8, padding: 3 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    safeHaptic('light');
+                    setTransactionType('expense');
+                  }}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 6,
+                    borderRadius: 6,
+                    alignItems: 'center',
+                    backgroundColor: transactionType === 'expense' ? '#EF4444' : 'transparent',
+                  }}
+                >
+                  <Text color={transactionType === 'expense' ? '#FFFFFF' : '#94A3B8'} fontSize={12} fontFamily={Fonts.bold}>
+                    Expense
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    safeHaptic('light');
+                    setTransactionType('income');
+                  }}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 6,
+                    borderRadius: 6,
+                    alignItems: 'center',
+                    backgroundColor: transactionType === 'income' ? '#10B981' : 'transparent',
+                  }}
+                >
+                  <Text color={transactionType === 'income' ? '#FFFFFF' : '#94A3B8'} fontSize={12} fontFamily={Fonts.bold}>
+                    Income
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
-              <FormInput
-                label="Target Amount (₱)"
-                placeholder="e.g. 5000"
-                keyboardType="numeric"
-                value={goalTargetAmount}
-                onChangeText={setGoalTargetAmount}
-                leftIcon={{ ios: 'banknote', android: 'payments', web: 'payments' } as any}
-              />
-
-              <YStack gap={4}>
-                <Text color={theme.textSecondary} fontSize={11} fontWeight="600" textTransform="uppercase">Goal Category</Text>
-                <XStack gap={6} flexWrap="wrap">
-                  {Object.keys(SAVINGS_CATEGORY_ICONS).map((cat) => {
-                    const isSelected = goalCategory === cat;
+              {/* Category selector */}
+              <YStack gap={6}>
+                <Text color="#94A3B8" fontSize={11} fontFamily={Fonts.bold}>SELECT CATEGORY</Text>
+                <XStack flexWrap="wrap" gap={8}>
+                  {Object.keys(CATEGORY_ICONS).filter(c => c !== 'Custom').map((cat) => {
+                    const isSel = expenseCategory === cat;
                     return (
-                      <Button
+                      <TouchableOpacity
                         key={cat}
-                        backgroundColor={isSelected ? theme.primary as any : theme.backgroundElement}
-                        borderRadius={8}
-                        height={34}
-                        paddingHorizontal={10}
-                        onPress={() => setGoalCategory(cat)}
-                        borderWidth={0}
+                        onPress={() => {
+                          safeHaptic('light');
+                          setExpenseCategory(cat);
+                        }}
+                        style={[styles.catSelectPill, isSel && styles.catSelectPillActive]}
+                        activeOpacity={0.8}
                       >
-                        <Text color={isSelected ? '#FFFFFF' : theme.text} fontSize={11} fontWeight="600">
-                          {cat}
-                        </Text>
-                      </Button>
+                        <XStack alignItems="center" gap={6}>
+                          <PhosphorCategoryIcon
+                            name={cat}
+                            size={16}
+                            primaryColor={isSel ? '#FFFFFF' : '#0F172A'}
+                            accentColor={isSel ? '#FFFFFF' : '#10B981'}
+                            backgroundColor="transparent"
+                            style={{ width: 18, height: 18 }}
+                          />
+                          <Text color={isSel ? '#FFFFFF' : '#94A3B8'} fontSize={12} fontFamily={Fonts.bold}>
+                            {cat}
+                          </Text>
+                        </XStack>
+                      </TouchableOpacity>
                     );
                   })}
                 </XStack>
               </YStack>
 
-              <YStack gap={4}>
-                <Text color={theme.textSecondary} fontSize={11} fontWeight="600" textTransform="uppercase">Target Timeline</Text>
-                <XStack gap={6}>
-                  {[
-                    { label: '30 Days', val: '30' },
-                    { label: '90 Days', val: '90' },
-                    { label: '180 Days', val: '180' },
-                    { label: '1 Year', val: '365' },
-                  ].map((item) => {
-                    const isSelected = goalTargetDate === item.val;
-                    return (
-                      <Button
-                        key={item.val}
-                        backgroundColor={isSelected ? theme.primary as any : theme.backgroundElement}
-                        borderRadius={8}
-                        flex={1}
-                        height={34}
-                        onPress={() => setGoalTargetDate(item.val)}
-                        borderWidth={0}
-                      >
-                        <Text color={isSelected ? '#FFFFFF' : theme.text} fontSize={11} fontWeight="600">
-                          {item.label}
-                        </Text>
-                      </Button>
-                    );
-                  })}
-                </XStack>
-              </YStack>
+              <FormInput
+                label={transactionType === 'income' ? 'Income Source' : 'Item Name / Merchant'}
+                placeholder={transactionType === 'income' ? 'e.g. Allowance, Freelance, Gift' : 'e.g. Jollibee, Jeepney'}
+                value={expenseName}
+                onChangeText={setExpenseName}
+              />
+              <FormInput
+                label={`Amount (${currencySymbol})`}
+                placeholder="e.g. 150"
+                keyboardType="numeric"
+                value={expenseAmount}
+                onChangeText={setExpenseAmount}
+              />
+              <FormInput
+                label="Notes (Optional)"
+                placeholder="e.g. Lunch with friends"
+                value={expenseNotes}
+                onChangeText={setExpenseNotes}
+              />
 
-              <XStack gap={10} marginTop={10}>
-                <Button flex={1} backgroundColor={theme.backgroundElement} height={44} borderRadius={10} onPress={() => setShowAddGoalModal(false)}>
-                  <Text color={theme.text} fontWeight="600">Cancel</Text>
-                </Button>
-                <FormButton flex={1.5} variant="primary" height={44} onPress={handleAddGoal}>
-                  Set Savings Goal
-                </FormButton>
+              <XStack gap={10} marginTop={8}>
+                <TouchableOpacity onPress={() => setShowExpenseForm(false)} style={styles.modalCancelBtn}>
+                  <Text color="#94A3B8" fontSize={13} fontFamily={Fonts.bold}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleLogExpense} style={styles.modalSubmitBtn}>
+                  <Text color="#FFFFFF" fontSize={13} fontFamily={Fonts.bold}>
+                    {transactionType === 'income' ? 'Log Income' : 'Log Purchase'}
+                  </Text>
+                </TouchableOpacity>
               </XStack>
             </ScrollView>
-          </CbudgetCard>
+          </View>
         </View>
       </Modal>
 
-      {/* MODAL: Contribute Savings */}
-      <Modal visible={contributeGoalId !== null} transparent animationType="slide" onRequestClose={() => setContributeGoalId(null)}>
+      {/* ==================== MODAL: EDIT TRANSACTION ==================== */}
+      <Modal visible={showEditExpenseModal} transparent animationType="slide" onRequestClose={() => setShowEditExpenseModal(false)}>
         <View style={styles.modalOverlay}>
-          <CbudgetCard style={[styles.modalContent, { backgroundColor: theme.surface }]} gap={14}>
-            <XStack justifyContent="space-between" alignItems="center" borderBottomWidth={1} borderBottomColor={theme.border} paddingBottom={10}>
-              <Text color={theme.text} fontSize={16} fontWeight="700">Contribute Cash to Goal</Text>
-              <TouchableOpacity onPress={() => setContributeGoalId(null)}>
-                <SymbolView name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' } as const} size={20} tintColor={theme.textSecondary} />
+          <View style={styles.modalCard}>
+            <XStack justifyContent="space-between" alignItems="center" borderBottomWidth={1} borderBottomColor="#334155" paddingBottom={12}>
+              <XStack alignItems="center" gap={8}>
+                <PhosphorCategoryIcon name={editExpenseCategory} size={20} primaryColor="#0F172A" accentColor="#10B981" style={{ width: 28, height: 28, borderRadius: 6 }} />
+                <Text color="#FFFFFF" fontSize={16} fontFamily={Fonts.bold}>
+                  Edit Transaction
+                </Text>
+              </XStack>
+              <TouchableOpacity onPress={() => setShowEditExpenseModal(false)}>
+                <PhosphorIcon name="XCircle" size={20} color="#94A3B8" weight="fill" />
               </TouchableOpacity>
             </XStack>
 
-            <Text color={theme.textSecondary} fontSize={12} lineHeight={16}>
-              Contribute cash from your unallocated budget buffer: <Text color={theme.text} fontWeight="700">₱{budgetLeftover.toLocaleString()}</Text> available.
-            </Text>
+            <ScrollView contentContainerStyle={{ gap: 14, paddingTop: 12 }}>
+              <YStack gap={6}>
+                <Text color="#94A3B8" fontSize={11} fontFamily={Fonts.bold}>CATEGORY</Text>
+                <XStack flexWrap="wrap" gap={8}>
+                  {Object.keys(CATEGORY_ICONS).filter(c => c !== 'Custom').map((cat) => {
+                    const isSel = editExpenseCategory === cat;
+                    return (
+                      <TouchableOpacity
+                        key={cat}
+                        onPress={() => {
+                          safeHaptic('light');
+                          setEditExpenseCategory(cat);
+                        }}
+                        style={[styles.catSelectPill, isSel && styles.catSelectPillActive]}
+                        activeOpacity={0.8}
+                      >
+                        <Text color={isSel ? '#FFFFFF' : '#94A3B8'} fontSize={12} fontFamily={Fonts.bold}>
+                          {cat}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </XStack>
+              </YStack>
 
-            <FormInput
-              label="Contribution (₱)"
-              placeholder="e.g. 500"
-              keyboardType="numeric"
-              value={contributeAmount}
-              onChangeText={setContributeAmount}
-              leftIcon={{ ios: 'banknote', android: 'payments', web: 'payments' } as any}
-            />
+              <FormInput label="Name" placeholder="e.g. Jollibee" value={editExpenseName} onChangeText={setEditExpenseName} />
+              <FormInput label={`Amount (${currencySymbol})`} placeholder="e.g. 150" keyboardType="numeric" value={editExpenseAmount} onChangeText={setEditExpenseAmount} />
+              <FormInput label="Notes" placeholder="e.g. With friends" value={editExpenseNotes} onChangeText={setEditExpenseNotes} />
 
-            <XStack gap={10} marginTop={6}>
-              <Button flex={1} backgroundColor={theme.backgroundElement} height={44} borderRadius={10} onPress={() => setContributeGoalId(null)}>
-                <Text color={theme.text} fontWeight="600">Cancel</Text>
-              </Button>
-              <FormButton flex={1.5} variant="primary" height={44} onPress={handleContributeSavings}>
-                Contribute Savings
-              </FormButton>
-            </XStack>
-          </CbudgetCard>
+              <XStack gap={10} marginTop={8}>
+                <TouchableOpacity onPress={() => setShowEditExpenseModal(false)} style={styles.modalCancelBtn}>
+                  <Text color="#94A3B8" fontSize={13} fontFamily={Fonts.bold}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleSaveEditExpense} style={styles.modalSubmitBtn}>
+                  <Text color="#FFFFFF" fontSize={13} fontFamily={Fonts.bold}>Save Changes</Text>
+                </TouchableOpacity>
+              </XStack>
+            </ScrollView>
+          </View>
         </View>
       </Modal>
 
-      {/* MODAL: Category Transactions Breakdown */}
-      <Modal
-        visible={!!selectedCategoryBreakdown}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setSelectedCategoryBreakdown(null)}
-      >
+      {/* ==================== MODAL: WITHDRAW SAVINGS ==================== */}
+      <Modal visible={withdrawGoalId !== null} transparent animationType="slide" onRequestClose={() => setWithdrawGoalId(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <XStack justifyContent="space-between" alignItems="center" borderBottomWidth={1} borderBottomColor="#334155" paddingBottom={12}>
+              <XStack alignItems="center" gap={8}>
+                <PhosphorCategoryIcon name="emergency" size={20} primaryColor="#0F172A" accentColor="#EF4444" style={{ width: 28, height: 28, borderRadius: 6 }} />
+                <Text color="#FFFFFF" fontSize={16} fontFamily={Fonts.bold}>
+                  Withdraw from Goal
+                </Text>
+              </XStack>
+              <TouchableOpacity onPress={() => setWithdrawGoalId(null)}>
+                <PhosphorIcon name="XCircle" size={20} color="#94A3B8" weight="fill" />
+              </TouchableOpacity>
+            </XStack>
+
+            <YStack gap={14} paddingTop={12}>
+              {(() => {
+                const goal = store.savingsGoals.find((g) => g.id === withdrawGoalId);
+                return (
+                  <Text color="#94A3B8" fontSize={12} fontFamily={Fonts.medium}>
+                    Currently saved: <Text color="#10B981" fontFamily={Fonts.bold}>{currencySymbol}{(goal?.currentSavings || 0).toLocaleString()}</Text>
+                  </Text>
+                );
+              })()}
+              <FormInput
+                label={`Withdraw Amount (${currencySymbol})`}
+                placeholder="e.g. 500"
+                keyboardType="numeric"
+                value={withdrawAmount}
+                onChangeText={setWithdrawAmount}
+              />
+              <XStack gap={10} marginTop={8}>
+                <TouchableOpacity onPress={() => setWithdrawGoalId(null)} style={styles.modalCancelBtn}>
+                  <Text color="#94A3B8" fontSize={13} fontFamily={Fonts.bold}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleWithdrawSavings} style={[styles.modalSubmitBtn, { backgroundColor: '#EF4444' }]}>
+                  <Text color="#FFFFFF" fontSize={13} fontFamily={Fonts.bold}>Withdraw</Text>
+                </TouchableOpacity>
+              </XStack>
+            </YStack>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ==================== MODAL: ADD SAVINGS GOAL ==================== */}
+      <Modal visible={showAddGoalModal} transparent animationType="slide" onRequestClose={() => setShowAddGoalModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <XStack justifyContent="space-between" alignItems="center" borderBottomWidth={1} borderBottomColor="#334155" paddingBottom={12}>
+              <XStack alignItems="center" gap={8}>
+                <PhosphorCategoryIcon name="emergency" size={20} primaryColor="#0F172A" accentColor="#10B981" style={{ width: 28, height: 28, borderRadius: 6 }} />
+                <Text color="#FFFFFF" fontSize={16} fontFamily={Fonts.bold}>
+                  Create Savings Goal
+                </Text>
+              </XStack>
+              <TouchableOpacity onPress={() => setShowAddGoalModal(false)}>
+                <PhosphorIcon name="XCircle" size={20} color="#94A3B8" weight="fill" />
+              </TouchableOpacity>
+            </XStack>
+
+            <ScrollView contentContainerStyle={{ gap: 14, paddingTop: 12 }}>
+              <FormInput label="Goal Name" placeholder="e.g. Emergency Fund" value={goalName} onChangeText={setGoalName} />
+              <FormInput label={`Target Amount (${currencySymbol})`} placeholder="e.g. 5000" keyboardType="numeric" value={goalTargetAmount} onChangeText={setGoalTargetAmount} />
+
+              <XStack gap={10} marginTop={8}>
+                <TouchableOpacity onPress={() => setShowAddGoalModal(false)} style={styles.modalCancelBtn}>
+                  <Text color="#94A3B8" fontSize={13} fontFamily={Fonts.bold}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleAddGoal} style={styles.modalSubmitBtn}>
+                  <Text color="#FFFFFF" fontSize={13} fontFamily={Fonts.bold}>Save Goal</Text>
+                </TouchableOpacity>
+              </XStack>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ==================== MODAL: CONTRIBUTE SAVINGS ==================== */}
+      <Modal visible={contributeGoalId !== null} transparent animationType="slide" onRequestClose={() => setContributeGoalId(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <XStack justifyContent="space-between" alignItems="center" borderBottomWidth={1} borderBottomColor="#334155" paddingBottom={12}>
+              <XStack alignItems="center" gap={8}>
+                <PhosphorCategoryIcon name="savings" size={20} primaryColor="#0F172A" accentColor="#10B981" style={{ width: 28, height: 28, borderRadius: 6 }} />
+                <Text color="#FFFFFF" fontSize={16} fontFamily={Fonts.bold}>
+                  Contribute Savings
+                </Text>
+              </XStack>
+              <TouchableOpacity onPress={() => setContributeGoalId(null)}>
+                <PhosphorIcon name="XCircle" size={20} color="#94A3B8" weight="fill" />
+              </TouchableOpacity>
+            </XStack>
+
+            <YStack gap={14} paddingTop={12}>
+              <Text color="#94A3B8" fontSize={12} fontFamily={Fonts.medium}>
+                Available budget buffer: <Text color="#10B981" fontFamily={Fonts.bold}>{currencySymbol}{budgetLeftover.toLocaleString()}</Text>
+              </Text>
+              <FormInput label={`Contribution Amount (${currencySymbol})`} placeholder="e.g. 500" keyboardType="numeric" value={contributeAmount} onChangeText={setContributeAmount} />
+
+              <XStack gap={10} marginTop={8}>
+                <TouchableOpacity onPress={() => setContributeGoalId(null)} style={styles.modalCancelBtn}>
+                  <Text color="#94A3B8" fontSize={13} fontFamily={Fonts.bold}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleContributeSavings} style={styles.modalSubmitBtn}>
+                  <Text color="#FFFFFF" fontSize={13} fontFamily={Fonts.bold}>Contribute</Text>
+                </TouchableOpacity>
+              </XStack>
+            </YStack>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ==================== MODAL: CATEGORY BREAKDOWN ==================== */}
+      <Modal visible={!!selectedCategoryBreakdown} transparent animationType="slide" onRequestClose={() => setSelectedCategoryBreakdown(null)}>
         <View style={styles.modalOverlay}>
           {(() => {
             if (!selectedCategoryBreakdown) return null;
             const cat = selectedCategoryBreakdown;
-            const catColor = CATEGORY_COLORS[cat] || CATEGORY_COLORS['Custom'];
-            const catIcon = CATEGORY_ICONS[cat] || CATEGORY_ICONS['Custom'];
-            const spentInCat = store.loggedExpenses
-              .filter((e) => e.category === cat)
-              .reduce((sum, e) => sum + e.amount, 0);
-            const limitInCat = store.categoryLimits?.[cat] || (store.totalBudget / (store.selectedCategories.length || 1));
-            const ratio = spentInCat / limitInCat;
-            const isOver = spentInCat > limitInCat;
+            const catColor = CATEGORY_COLORS[cat] || '#64748B';
+            const spentInCat = store.loggedExpenses.filter((e) => e.category === cat).reduce((sum, e) => sum + e.amount, 0);
+            const limitInCat = store.categoryLimits?.[cat] || store.totalBudget / (store.selectedCategories.length || 1);
             const catExpenses = store.loggedExpenses.filter((e) => e.category === cat);
 
             return (
-              <CbudgetCard style={[styles.modalContent, { backgroundColor: theme.surface }]}>
-                {/* Header */}
-                <XStack justifyContent="space-between" alignItems="center" borderBottomWidth={1} borderBottomColor={theme.border} paddingBottom={10}>
-                  <XStack gap={8} alignItems="center">
-                    <View width={28} height={28} borderRadius={6} backgroundColor={`${catColor}15` as any} alignItems="center" justifyContent="center">
-                      <SymbolView name={catIcon} size={14} tintColor={catColor} />
-                    </View>
-                    <Text color={theme.text} fontSize={15} fontWeight="700">
-                      {cat} Breakdown
+              <View style={styles.modalCard}>
+                <XStack justifyContent="space-between" alignItems="center" borderBottomWidth={1} borderBottomColor="#334155" paddingBottom={12}>
+                  <XStack alignItems="center" gap={8}>
+                    <PhosphorCategoryIcon name={cat} size={20} primaryColor="#0F172A" accentColor={catColor} style={{ width: 28, height: 28, borderRadius: 6 }} />
+                    <Text color="#FFFFFF" fontSize={16} fontFamily={Fonts.bold}>
+                      {cat} Logs
                     </Text>
                   </XStack>
                   <TouchableOpacity onPress={() => setSelectedCategoryBreakdown(null)}>
-                    <SymbolView name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' } as const} size={20} tintColor={theme.textSecondary} />
+                    <PhosphorIcon name="XCircle" size={20} color="#94A3B8" weight="fill" />
                   </TouchableOpacity>
                 </XStack>
 
-                {/* Mini analytics */}
-                <YStack gap={8} marginVertical={10}>
-                  <XStack justifyContent="space-between" alignItems="baseline">
-                    <Text color={theme.textSecondary} fontSize={12}>Total Limit Allocated</Text>
-                    <Text color={theme.text} fontSize={16} fontWeight="800">₱{limitInCat.toLocaleString()}</Text>
+                <YStack gap={10} marginVertical={12}>
+                  <XStack justifyContent="space-between">
+                    <Text color="#94A3B8" fontSize={12} fontFamily={Fonts.medium}>Total Limit</Text>
+                    <Text color="#FFFFFF" fontSize={14} fontFamily={Fonts.bold}>{currencySymbol}{limitInCat.toLocaleString()}</Text>
                   </XStack>
-                  <XStack justifyContent="space-between" alignItems="baseline">
-                    <Text color={theme.textSecondary} fontSize={12}>Total Spent</Text>
-                    <Text color={isOver ? theme.error : theme.success} fontSize={16} fontWeight="800">₱{spentInCat.toLocaleString()}</Text>
+                  <XStack justifyContent="space-between">
+                    <Text color="#94A3B8" fontSize={12} fontFamily={Fonts.medium}>Total Spent</Text>
+                    <Text color={spentInCat > limitInCat ? '#EF4444' : '#10B981'} fontSize={14} fontFamily={Fonts.bold}>
+                      {currencySymbol}{spentInCat.toLocaleString()}
+                    </Text>
                   </XStack>
-                  
-                  {/* Progress bar */}
-                  <View height={6} backgroundColor={theme.backgroundElement} borderRadius={3} overflow="hidden" marginTop={4}>
-                    <View
-                      height="100%"
-                      width={`${Math.min(100, ratio * 100)}%`}
-                      backgroundColor={isOver ? theme.error : catColor}
-                      borderRadius={3}
-                    />
-                  </View>
                 </YStack>
 
-                {/* Transactions list */}
-                <Text color={theme.text} fontSize={13} fontWeight="700" marginTop={6} marginBottom={8}>
-                  Expense Logs
-                </Text>
-                
                 <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator={false}>
                   {catExpenses.length === 0 ? (
-                    <YStack padding={20} alignItems="center" justifyContent="center" gap={6}>
-                      <SymbolView name={{ ios: 'doc.plaintext.fill', android: 'receipt', web: 'receipt' } as const} size={20} tintColor={theme.textSecondary} />
-                      <Text color={theme.textSecondary} fontSize={11} textAlign="center">
-                        No purchases logged under {cat} yet.
-                      </Text>
-                    </YStack>
+                    <Text color="#94A3B8" fontSize={12} textAlign="center" padding={16}>
+                      No purchases logged under {cat} yet.
+                    </Text>
                   ) : (
-                    <YStack gap={8}>
-                      {catExpenses.map((exp) => (
-                        <XStack key={exp.id} justifyContent="space-between" alignItems="center" padding={10} backgroundColor={theme.backgroundElement} borderRadius={6} borderWidth={1} borderColor={theme.border}>
-                          <YStack gap={2} flex={1}>
-                            <Text color={theme.text} fontSize={12} fontWeight="700" numberOfLines={1}>{exp.name}</Text>
-                            <Text color={theme.textSecondary} fontSize={10}>{exp.date}</Text>
-                            {exp.notes ? (
-                              <Text color={`${theme.textSecondary}bb` as any} fontSize={9} fontStyle="italic" numberOfLines={1}>
-                                {exp.notes}
-                              </Text>
-                            ) : null}
-                          </YStack>
-                          <XStack gap={8} alignItems="center">
-                            <Text color={theme.text} fontSize={12} fontWeight="800">₱{exp.amount.toLocaleString()}</Text>
-                            <TouchableOpacity
-                              onPress={() => {
-                                Alert.alert(
-                                  'Delete Transaction?',
-                                  `Are you sure you want to delete "${exp.name}"?`,
-                                  [
-                                    { text: 'Cancel', style: 'cancel' },
-                                    {
-                                      text: 'Delete',
-                                      style: 'destructive',
-                                      onPress: () => {
-                                        store.deleteExpense(exp.id);
-                                      }
-                                    }
-                                  ]
-                                );
-                              }}
-                            >
-                              <SymbolView name={{ ios: 'trash.fill', android: 'delete', web: 'delete' } as const} size={12} tintColor={theme.error} />
-                            </TouchableOpacity>
-                          </XStack>
-                        </XStack>
-                      ))}
-                    </YStack>
+                    catExpenses.map((exp) => (
+                      <XStack key={exp.id} justifyContent="space-between" alignItems="center" padding={10} backgroundColor="#0F172A" borderRadius={8} marginBottom={6}>
+                        <YStack gap={2}>
+                          <Text color="#FFFFFF" fontSize={13} fontFamily={Fonts.bold}>{exp.name}</Text>
+                          <Text color="#94A3B8" fontSize={10}>{exp.date}</Text>
+                        </YStack>
+                        <Text color="#FFFFFF" fontSize={13} fontFamily={Fonts.bold}>{currencySymbol}{exp.amount.toLocaleString()}</Text>
+                      </XStack>
+                    ))
                   )}
                 </ScrollView>
-
-                <Button
-                  marginTop={14}
-                  height={38}
-                  backgroundColor={theme.backgroundElement}
-                  borderRadius={6}
-                  borderWidth={1}
-                  borderColor={theme.border}
-                  onPress={() => setSelectedCategoryBreakdown(null)}
-                >
-                  <Text color={theme.text} fontSize={12} fontWeight="700">Close</Text>
-                </Button>
-              </CbudgetCard>
+              </View>
             );
           })()}
         </View>
       </Modal>
 
-    </YStack>
+      {/* ==================== MODAL: SET ALLOWANCE AMOUNT ==================== */}
+      <Modal visible={showEditAllowanceModal} transparent animationType="slide" onRequestClose={() => setShowEditAllowanceModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <XStack justifyContent="space-between" alignItems="center" borderBottomWidth={1} borderBottomColor="#334155" paddingBottom={12}>
+              <Text color="#FFFFFF" fontSize={16} fontFamily={Fonts.bold}>
+                Set {currentCycle === 'daily' ? 'Daily Baon' : currentCycle === 'weekly' ? 'Weekly Allowance' : 'Monthly Budget'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowEditAllowanceModal(false)}>
+                <PhosphorIcon name="XCircle" size={20} color="#94A3B8" weight="fill" />
+              </TouchableOpacity>
+            </XStack>
+
+            <YStack gap={14} paddingTop={12}>
+              <Text color="#94A3B8" fontSize={12} fontFamily={Fonts.medium}>
+                {currentCycle === 'daily'
+                  ? 'How much baon do you receive per day?'
+                  : currentCycle === 'weekly'
+                  ? 'How much allowance do you receive per week?'
+                  : 'What is your total target budget for the month?'}
+              </Text>
+
+              <FormInput
+                label={`Allowance Amount (${currencySymbol})`}
+                placeholder={currentCycle === 'daily' ? 'e.g. 150' : currentCycle === 'weekly' ? 'e.g. 1000' : 'e.g. 4000'}
+                keyboardType="numeric"
+                value={allowanceAmountInput}
+                onChangeText={setAllowanceAmountInput}
+              />
+
+              <XStack gap={10} marginTop={8}>
+                <TouchableOpacity onPress={() => setShowEditAllowanceModal(false)} style={styles.modalCancelBtn}>
+                  <Text color="#94A3B8" fontSize={13} fontFamily={Fonts.bold}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    const amt = parseFloat(allowanceAmountInput);
+                    if (isNaN(amt) || amt <= 0) {
+                      Alert.alert('Invalid Amount', 'Please enter a valid amount.');
+                      return;
+                    }
+                    if (!store.isBudgetSetupComplete) {
+                      store.setupBudget(
+                        currentCycle as any,
+                        amt,
+                        ['Food', 'Transportation', 'School', 'Bills', 'Shopping', 'Entertainment'],
+                        {
+                          Food: Math.round(amt * 0.35),
+                          Transportation: Math.round(amt * 0.20),
+                          School: Math.round(amt * 0.15),
+                          Bills: Math.round(amt * 0.15),
+                          Shopping: Math.round(amt * 0.08),
+                          Entertainment: Math.round(amt * 0.07),
+                        }
+                      );
+                    } else {
+                      store.setBudgetType(currentCycle as any, amt);
+                    }
+                    setShowEditAllowanceModal(false);
+                    Alert.alert('Allowance Updated!', `${currentCycle === 'daily' ? 'Daily baon' : currentCycle === 'weekly' ? 'Weekly allowance' : 'Monthly budget'} set to ${currencySymbol}${amt.toLocaleString()}.`);
+                  }}
+                  style={styles.modalSubmitBtn}
+                >
+                  <Text color="#FFFFFF" fontSize={13} fontFamily={Fonts.bold}>Save Allowance</Text>
+                </TouchableOpacity>
+              </XStack>
+            </YStack>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
   safeArea: {
     flex: 1,
   },
-  scrollContent: {
-    paddingHorizontal: 6,
-    paddingTop: 20,
-    paddingBottom: 32,
+  scrollContainer: {
+    flex: 1,
   },
-  customInput: {
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  topHeaderBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 6,
+    paddingBottom: 4,
+  },
+  topStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 0,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 2px 8px rgba(15, 23, 42, 0.05)',
+      } as any,
+    }),
+  },
+  capsuleTrackWrapper: {
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 6,
+  },
+  capsuleTrack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 3,
+    borderWidth: 0,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 2px 8px rgba(15, 23, 42, 0.05)',
+      } as any,
+    }),
+  },
+  capsuleTab: {
     flex: 1,
     height: 38,
-    borderRadius: 8,
-    borderWidth: 1,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  capsuleTabActive: {
+    backgroundColor: '#10B981',
+  },
+  allowanceTrackWrapper: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 12,
+  },
+  allowanceTrack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 3,
+    borderWidth: 0,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 2px 8px rgba(15, 23, 42, 0.05)',
+      } as any,
+    }),
+  },
+  allowanceItem: {
+    flex: 1,
+    height: 36,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  allowanceItemActive: {
+    backgroundColor: '#10B981',
+  },
+  allowanceEditBtn: {
+    height: 36,
     paddingHorizontal: 12,
-    fontSize: 13,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+  },
+  currentBalanceCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    position: 'relative',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#059669',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.35,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  addAccountPill: {
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  accountDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  premiumHeroCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#064E3B',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#064E3B',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.28,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 6,
+      },
+      web: {
+        boxShadow: '0 8px 24px rgba(6, 78, 59, 0.28)',
+      } as any,
+    }),
+  },
+  heroEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  budgetHeroProgressTrack: {
+    height: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    borderRadius: 3,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  budgetHeroProgressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  metricCircleBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  premiumMetricIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  darkMetricCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 0,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 3,
+      },
+      web: {
+        boxShadow: '0 4px 14px rgba(15, 23, 42, 0.06)',
+      } as any,
+    }),
+  },
+  gaugeContainer: {
+    width: 130,
+    height: 130,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  gaugeCenterLabel: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metricIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#E2E8F0',
+  },
+  filterChipActive: {
+    backgroundColor: '#10B981',
+  },
+  categoryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 0,
+    gap: 10,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 3px 10px rgba(15, 23, 42, 0.05)',
+      } as any,
+    }),
+  },
+  categoryCardOver: {
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+  },
+  catIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  badgePillOk: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+  },
+  badgePillOver: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+  },
+  catProgressBg: {
+    height: 6,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  catProgressBar: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  monthSelectorBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 0,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 2px 8px rgba(15, 23, 42, 0.05)',
+      } as any,
+    }),
+  },
+  monthArrowBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarStrip: {
+    gap: 8,
+    paddingVertical: 4,
+  },
+  dayStripItem: {
+    width: 48,
+    height: 58,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 2px 8px rgba(15, 23, 42, 0.05)',
+      } as any,
+    }),
+  },
+  dayStripItemActive: {
+    backgroundColor: '#10B981',
+    borderColor: '#34D399',
+  },
+  dayDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#34D399',
+    marginTop: 2,
+  },
+  dailyGroupCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 0,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 3px 10px rgba(15, 23, 42, 0.05)',
+      } as any,
+    }),
+  },
+  itemIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyStateBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 0,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 3px 10px rgba(15, 23, 42, 0.05)',
+      } as any,
+    }),
+  },
+  mainLogPurchaseBtn: {
+    backgroundColor: '#10B981',
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#10B981',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.35,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  emptyActionBtn: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 12,
+  },
+  primaryActionButton: {
+    backgroundColor: '#10B981',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  contributeBtn: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 18,
   },
-  modalContent: {
+  modalCard: {
     width: '100%',
-    maxWidth: 360,
-    padding: 16,
-    borderRadius: 16,
+    maxWidth: 340,
+    backgroundColor: '#1E293B',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  catSelectPill: {
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  catSelectPillActive: {
+    backgroundColor: '#10B981',
+    borderColor: '#34D399',
+  },
+  modalCancelBtn: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalSubmitBtn: {
+    flex: 1.5,
+    backgroundColor: '#10B981',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
   },
 });

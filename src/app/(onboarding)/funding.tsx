@@ -1,20 +1,25 @@
 import React from 'react';
-import { SafeAreaView, StyleSheet, Platform } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { YStack, Text, Button } from 'tamagui';
 import { useRouter, Href } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
+import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
 import Animated, { FadeInDown, BounceIn } from 'react-native-reanimated';
 import { useTheme } from '@/hooks/use-theme';
 import { Spacing, Typography } from '@/constants/theme';
 import { BackgroundSystem } from '@/components/ui/BackgroundSystem';
 import { FormButton } from '@/components/ui/FormButton';
+import { useGamificationStore } from '@/store/gamificationStore';
+import { useCurrency } from '@/utils/currency';
 
 export default function OnboardingFundingScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const store = useGamificationStore();
+  const { symbol: currencySymbol } = useCurrency();
 
   const handleFinish = () => {
-    // Usually we would update an 'isFirstTime' flag here
+    store.grantOnboardingCash(10000);
     router.replace('/(tabs)' as Href);
   };
 
@@ -34,21 +39,22 @@ export default function OnboardingFundingScreen() {
                 alignItems="center"
                 justifyContent="center"
               >
-                <SymbolView
-                  name={{ ios: 'banknote.fill', android: 'payments', web: 'payments' } as const}
+                <PhosphorIcon
+                  name="Banknote"
                   size={56}
-                  tintColor={theme.primary as any}
+                  color={theme.primary as any}
+                  weight="duotone"
                 />
               </YStack>
             </Animated.View>
 
             <Animated.View entering={FadeInDown.delay(400).duration(600)}>
               <YStack alignItems="center" gap={Spacing[16]}>
-                <Text color={theme.text} fontSize={Typography.h1.fontSize} fontWeight={Typography.h1.fontWeight} textAlign="center">
-                  $10,000 Granted!
+                <Text color={theme.text} fontSize={Typography.h1.fontSize} fontFamily={Typography.h1.fontFamily as any} textAlign="center">
+                  {currencySymbol}10,000 Granted!
                 </Text>
-                <Text color={theme.textSecondary} fontSize={Typography.body.fontSize} fontWeight={Typography.body.fontWeight} textAlign="center" lineHeight={24}>
-                  We've deposited $10,000 in your virtual portfolio. Use this to practice investing in real stocks, risk-free.
+                <Text color={theme.textSecondary} fontSize={Typography.body.fontSize} fontFamily={Typography.body.fontFamily as any} textAlign="center" lineHeight={24}>
+                  We've deposited {currencySymbol}10,000 in your virtual portfolio. Use this to practice investing in real stocks, risk-free.
                 </Text>
               </YStack>
             </Animated.View>

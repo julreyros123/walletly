@@ -8,23 +8,40 @@ import '@/global.css';
 import { Platform } from 'react-native';
 
 export const Colors = {
+  hybrid: {
+    primary: '#10B981',     // Vibrant Brand Emerald — used for interactive/accent only
+    teal: '#14B8A6',
+    mint: '#5EEAD4',
+    success: '#16A34A',     // Green for positive amounts
+    warning: '#D97706',     // Amber
+    error: '#DC2626',       // Red
+    background: '#F1F5F9',  // Soft slate background — eliminates glare and elevates white cards
+    surface: '#FFFFFF',     // Clean elevated white cards
+    surfaceDark: '#0F172A', // Midnight card surface for hero balance card
+    text: '#0F172A',        // Near-black — max readability
+    textSecondary: '#64748B', // Slate-500 — readable secondary text
+    border: '#E2E8F0',      // Soft, clean border
+    backgroundElement: '#F1F5F9', // Elevated surface background
+    backgroundSelected: '#E2E8F0',
+  },
   light: {
-    primary: '#3EB47D',     // Brand Logo Green — used for interactive/accent only
+    primary: '#10B981',     // Vibrant Brand Emerald — used for interactive/accent only
     teal: '#14B8A6',
     mint: '#5EEAD4',
     success: '#16A34A',     // Darker green — clearly distinct from brand primary
     warning: '#D97706',     // Amber — darkened for contrast on white backgrounds
     error: '#DC2626',       // Red — high contrast on light
-    background: '#F8FAFC',
+    background: '#F1F5F9',  // Soft slate background — eliminates glare
     surface: '#FFFFFF',
+    surfaceDark: '#0F172A',
     text: '#0F172A',        // Near-black — max readability
     textSecondary: '#475569', // Slate-600 — darker than before for better contrast
-    border: '#CBD5E1',      // Slightly darker border for definition
-    backgroundElement: '#F8FAFC', // Near-white — clean on white surfaces
+    border: '#E2E8F0',      // Soft, clean border
+    backgroundElement: '#F1F5F9', // Near-white — clean on white surfaces
     backgroundSelected: '#E2E8F0',
   },
   dark: {
-    primary: '#3EB47D',     // Brand Logo Green
+    primary: '#10B981',     // Vibrant Brand Emerald
     teal: '#14B8A6',
     mint: '#5EEAD4',
     success: '#4ADE80',     // Brighter green on dark bg — distinct from brand primary
@@ -32,6 +49,7 @@ export const Colors = {
     error: '#F87171',       // Red — softer on dark
     background: '#0F172A',  // Deep navy
     surface: '#1E293B',     // Card surfaces
+    surfaceDark: '#0F172A',
     text: '#F1F5F9',        // Near-white — high contrast on dark
     textSecondary: '#94A3B8', // Slate-400 — clear secondary on dark bg
     border: '#334155',
@@ -40,15 +58,16 @@ export const Colors = {
   },
 } as const;
 
-export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
+export type ThemeMode = 'hybrid' | 'dark' | 'light';
+export type ThemeColor = keyof typeof Colors.hybrid;
 
-// Inter font family — loaded via @expo-google-fonts/inter in _layout.tsx
+// Plus Jakarta Sans font family — loaded via @expo-google-fonts/plus-jakarta-sans in _layout.tsx
 export const Fonts = {
-  regular: 'Inter_400Regular',
-  medium: 'Inter_500Medium',
-  semiBold: 'Inter_600SemiBold',
-  bold: 'Inter_700Bold',
-  extraBold: 'Inter_800ExtraBold',
+  regular: 'PlusJakartaSans_400Regular',
+  medium: 'PlusJakartaSans_500Medium',
+  semiBold: 'PlusJakartaSans_600SemiBold',
+  bold: 'PlusJakartaSans_700Bold',
+  extraBold: 'PlusJakartaSans_800ExtraBold',
   // Fallback for system mono (code blocks only)
   mono: Platform.select({ ios: 'ui-monospace', default: 'monospace' }),
 } as const;
@@ -70,24 +89,29 @@ export const Spacing = {
   eight: 32,
 } as const;
 
-// Premium typography scale — mirrors Revolut / Wise hierarchy
+// Premium typography scale — modern fintech hierarchy (Apple / Revolut / Linear)
 export const Typography = {
-  // Display — hero numbers (budget remaining, big stats)
-  display: { fontSize: 34, fontFamily: 'Inter_800ExtraBold', letterSpacing: -1 },
+  // Display — hero numbers (budget remaining, large balance stats)
+  display: { fontSize: 36, fontFamily: Fonts.extraBold, letterSpacing: -1.2, lineHeight: 42 },
+  displaySm: { fontSize: 28, fontFamily: Fonts.bold, letterSpacing: -0.8, lineHeight: 34 },
   // Headings
-  h1:      { fontSize: 24, fontFamily: 'Inter_700Bold',      letterSpacing: -0.5 },
-  h2:      { fontSize: 20, fontFamily: 'Inter_700Bold',      letterSpacing: -0.3 },
-  h3:      { fontSize: 17, fontFamily: 'Inter_600SemiBold',  letterSpacing: -0.2 },
+  h1:      { fontSize: 24, fontFamily: Fonts.bold,      letterSpacing: -0.6, lineHeight: 30 },
+  h2:      { fontSize: 20, fontFamily: Fonts.bold,      letterSpacing: -0.4, lineHeight: 26 },
+  h3:      { fontSize: 17, fontFamily: Fonts.semiBold,  letterSpacing: -0.3, lineHeight: 22 },
+  h4:      { fontSize: 15, fontFamily: Fonts.semiBold,  letterSpacing: -0.2, lineHeight: 20 },
   // Body
-  body:    { fontSize: 15, fontFamily: 'Inter_400Regular',   lineHeight: 22 },
-  bodyMed: { fontSize: 15, fontFamily: 'Inter_500Medium',    lineHeight: 22 },
+  body:    { fontSize: 15, fontFamily: Fonts.regular,   lineHeight: 22, letterSpacing: -0.1 },
+  bodyMed: { fontSize: 15, fontFamily: Fonts.medium,    lineHeight: 22, letterSpacing: -0.1 },
+  bodySm:  { fontSize: 13, fontFamily: Fonts.regular,   lineHeight: 18, letterSpacing: -0.05 },
   // Labels & captions
-  label:   { fontSize: 13, fontFamily: 'Inter_600SemiBold',  letterSpacing: 0.1 },
-  caption: { fontSize: 12, fontFamily: 'Inter_400Regular',   lineHeight: 17 },
-  // Overline — ALL CAPS section headers
-  overline: { fontSize: 11, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.8 },
-  // Numbers — monospaced-feel for financial values
-  number:  { fontSize: 15, fontFamily: 'Inter_700Bold',      letterSpacing: -0.3 },
+  label:   { fontSize: 13, fontFamily: Fonts.semiBold,  letterSpacing: 0, lineHeight: 18 },
+  caption: { fontSize: 12, fontFamily: Fonts.medium,    lineHeight: 16, letterSpacing: 0.1 },
+  // Overline — uppercase section headers
+  overline: { fontSize: 11, fontFamily: Fonts.bold,     letterSpacing: 0.8, textTransform: 'uppercase' as const },
+  // Financial numbers — clean tabular tracking
+  numberLg: { fontSize: 24, fontFamily: Fonts.bold,     letterSpacing: -0.5 },
+  number:   { fontSize: 16, fontFamily: Fonts.bold,     letterSpacing: -0.3 },
+  numberSm: { fontSize: 13, fontFamily: Fonts.semiBold, letterSpacing: -0.2 },
 } as const;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;

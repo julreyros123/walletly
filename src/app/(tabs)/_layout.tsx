@@ -1,20 +1,29 @@
 import React, { useState } from 'react';
-import { Tabs, useRouter, Href } from 'expo-router';
+import { Tabs, useRouter, usePathname, Href } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/hooks/use-theme';
-import { SymbolView } from 'expo-symbols';
+import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
 import { Platform, Modal, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/authStore';
+import { Fonts } from '@/constants/theme';
 import { YStack, Text, Button, View } from 'tamagui';
+import { DisclaimerInterstitial } from '@/components/DisclaimerInterstitial';
 
 export default function TabsLayout() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const pathname = usePathname();
   const { user, logout } = useAuthStore();
   const isGuest = user?.id === 'guest';
   const router = useRouter();
   const [registerModalVisible, setRegisterModalVisible] = useState(false);
   const [actionModalVisible, setActionModalVisible] = useState(false);
+
+  // Home (index / (tabs) / root) and Invest tabs have dark backgrounds/headers even in light mode
+  const isDarkHeaderTab = pathname === '/' || pathname === '/(tabs)' || pathname.endsWith('/index') || pathname.includes('invest');
+  const isDark = theme.mode === 'dark';
+  const tabStatusBarStyle = isDark || isDarkHeaderTab ? 'light' : 'dark';
 
   const guestTabPressListener = {
     tabPress: (e: any) => {
@@ -27,21 +36,28 @@ export default function TabsLayout() {
 
   return (
     <>
+      <StatusBar style={tabStatusBarStyle} />
       <Tabs
         screenOptions={{
+          sceneStyle: { backgroundColor: theme.background },
           tabBarActiveTintColor: theme.primary as any,
           tabBarInactiveTintColor: theme.textSecondary as any,
+          tabBarLabelStyle: {
+            fontFamily: Fonts.bold,
+            fontSize: 11.5,
+            marginTop: 4,
+          },
           tabBarStyle: {
             backgroundColor: theme.surface as any,
             borderTopWidth: 0,
-            height: Platform.OS === 'web' ? 64 : 60 + insets.bottom,
-            paddingBottom: Platform.OS === 'web' ? 10 : (insets.bottom > 0 ? insets.bottom : 8),
-            paddingTop: 10,
+            height: Platform.OS === 'web' ? 76 : 70 + insets.bottom,
+            paddingBottom: Platform.OS === 'web' ? 14 : (insets.bottom > 0 ? insets.bottom + 4 : 12),
+            paddingTop: 12,
             shadowColor: '#000000',
             shadowOffset: { width: 0, height: -4 },
-            shadowOpacity: 0.04,
-            shadowRadius: 8,
-            elevation: 8,
+            shadowOpacity: 0.06,
+            shadowRadius: 10,
+            elevation: 10,
           },
           headerShown: false,
         }}
@@ -49,12 +65,13 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="index"
           options={{
-            title: 'Dashboard',
-            tabBarIcon: ({ color, size, focused }) => (
-              <SymbolView
-                name={{ ios: focused ? 'house.fill' : 'house', android: 'home', web: 'home' } as any}
-                size={size}
-                tintColor={color}
+            title: 'Home',
+            tabBarIcon: ({ color, focused }) => (
+              <PhosphorIcon
+                name="House"
+                size={focused ? 26 : 24}
+                color={color}
+                weight={focused ? 'fill' : 'regular'}
               />
             ),
           }}
@@ -63,11 +80,12 @@ export default function TabsLayout() {
           name="budget"
           options={{
             title: 'Budget',
-            tabBarIcon: ({ color, size, focused }) => (
-              <SymbolView
-                name={{ ios: focused ? 'wallet.pass.fill' : 'wallet.pass', android: 'account_balance_wallet', web: 'account_balance_wallet' } as any}
-                size={size}
-                tintColor={color}
+            tabBarIcon: ({ color, focused }) => (
+              <PhosphorIcon
+                name="Wallet"
+                size={focused ? 26 : 24}
+                color={color}
+                weight={focused ? 'fill' : 'regular'}
               />
             ),
           }}
@@ -76,31 +94,30 @@ export default function TabsLayout() {
           name="action"
           options={{
             tabBarButton: () => (
-              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: 48 }}>
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: 52 }}>
                 <TouchableOpacity
                   onPress={() => {
                     setActionModalVisible(true);
                   }}
                   activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="Quick Actions menu"
+                  accessibilityHint="Opens quick actions like log expense or add savings"
                   style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 22,
-                    backgroundColor: '#3EB47D',
+                    width: 52,
+                    height: 52,
+                    borderRadius: 26,
+                    backgroundColor: theme.primary,
                     justifyContent: 'center',
                     alignItems: 'center',
-                    shadowColor: '#3EB47D',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.15,
-                    shadowRadius: 4,
-                    elevation: 3,
+                    shadowColor: theme.primary,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.35,
+                    shadowRadius: 8,
+                    elevation: 6,
                   }}
                 >
-                  <SymbolView
-                    name={{ ios: 'plus', android: 'add', web: 'add' } as any}
-                    size={22}
-                    tintColor="#FFFFFF"
-                  />
+                  <PhosphorIcon name="Plus" size={26} color="#FFFFFF" weight="bold" />
                 </TouchableOpacity>
               </View>
             ),
@@ -118,11 +135,12 @@ export default function TabsLayout() {
           listeners={guestTabPressListener}
           options={{
             title: 'Invest Lab',
-            tabBarIcon: ({ color, size, focused }) => (
-              <SymbolView
-                name={{ ios: focused ? 'chart.bar.fill' : 'chart.bar', android: 'trending_up', web: 'trending_up' } as any}
-                size={size}
-                tintColor={color}
+            tabBarIcon: ({ color, focused }) => (
+              <PhosphorIcon
+                name="ChartLineUp"
+                size={focused ? 26 : 24}
+                color={color}
+                weight={focused ? 'fill' : 'regular'}
               />
             ),
           }}
@@ -132,16 +150,20 @@ export default function TabsLayout() {
           listeners={guestTabPressListener}
           options={{
             title: 'Profile',
-            tabBarIcon: ({ color, size, focused }) => (
-              <SymbolView
-                name={{ ios: focused ? 'person.fill' : 'person', android: 'person', web: 'person' } as any}
-                size={size}
-                tintColor={color}
+            tabBarIcon: ({ color, focused }) => (
+              <PhosphorIcon
+                name="User"
+                size={focused ? 26 : 24}
+                color={color}
+                weight={focused ? 'fill' : 'regular'}
               />
             ),
           }}
         />
       </Tabs>
+
+      {/* Mandatory Financial Disclaimer — blocks access until accepted */}
+      <DisclaimerInterstitial theme={theme} />
 
       <Modal
         visible={registerModalVisible}
@@ -176,11 +198,7 @@ export default function TabsLayout() {
               alignItems="center"
               justifyContent="center"
             >
-              <SymbolView
-                name={{ ios: 'lock.fill', android: 'lock', web: 'lock' } as const}
-                size={26}
-                tintColor={theme.primary as any}
-              />
+              <PhosphorIcon name="Lock" size={26} color={theme.primary} weight="fill" />
             </View>
 
             {/* Information Text */}
@@ -200,6 +218,8 @@ export default function TabsLayout() {
                 borderRadius={14}
                 height={48}
                 pressStyle={{ opacity: 0.85, scale: 0.98 }}
+                accessibilityRole="button"
+                accessibilityLabel="Create Account"
                 onPress={async () => {
                   setRegisterModalVisible(false);
                   await logout();
@@ -214,6 +234,8 @@ export default function TabsLayout() {
               <TouchableOpacity
                 onPress={() => setRegisterModalVisible(false)}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Continue as Guest"
                 style={{ height: 40, alignItems: 'center', justifyContent: 'center' }}
               >
                 <Text color={theme.textSecondary} fontSize={13} fontWeight="600">
@@ -269,38 +291,44 @@ export default function TabsLayout() {
             <TouchableOpacity
               onPress={() => {
                 setActionModalVisible(false);
-                router.push('/(tabs)/budget' as Href);
+                router.push('/(tabs)/budget?action=log' as Href);
               }}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Log Expense"
+              accessibilityHint="Record cash flow transaction"
               style={[styles.modalActionRow, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
             >
-              <View style={[styles.modalActionIconCircle, { backgroundColor: '#3EB47D' }]}>
-                <SymbolView name={{ ios: 'plus', android: 'add', web: 'add' } as any} size={16} tintColor="#FFFFFF" />
+              <View style={[styles.modalActionIconCircle, { backgroundColor: theme.primary }]}>
+                <PhosphorIcon name="Plus" size={16} color="#FFFFFF" weight="bold" />
               </View>
               <YStack flex={1} gap={2}>
                 <Text color={theme.text} fontSize={13} style={{ fontFamily: "Inter_700Bold" }}>Log Expense</Text>
                 <Text color={theme.textSecondary} fontSize={10} style={{ fontFamily: "Inter_400Regular" }}>Record cash flow transaction</Text>
               </YStack>
-              <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' } as any} size={10} tintColor={theme.textSecondary} />
+              <PhosphorIcon name="CaretRight" size={10} color={theme.textSecondary} weight="bold" />
             </TouchableOpacity>
 
             {/* Action 2: Add Savings */}
             <TouchableOpacity
               onPress={() => {
                 setActionModalVisible(false);
-                router.push('/(tabs)/budget' as Href);
+                router.push('/(tabs)/budget?action=savings' as Href);
               }}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Add Savings"
+              accessibilityHint="Contribute to savings goal progress"
               style={[styles.modalActionRow, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
             >
               <View style={[styles.modalActionIconCircle, { backgroundColor: '#10B981' }]}>
-                <SymbolView name={{ ios: 'banknote.fill', android: 'savings', web: 'savings' } as any} size={15} tintColor="#FFFFFF" />
+                <PhosphorIcon name="Money" size={15} color="#FFFFFF" weight="fill" />
               </View>
               <YStack flex={1} gap={2}>
                 <Text color={theme.text} fontSize={13} style={{ fontFamily: "Inter_700Bold" }}>Add Savings</Text>
                 <Text color={theme.textSecondary} fontSize={10} style={{ fontFamily: "Inter_400Regular" }}>Contribute to savings goal progress</Text>
               </YStack>
-              <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' } as any} size={10} tintColor={theme.textSecondary} />
+              <PhosphorIcon name="CaretRight" size={10} color={theme.textSecondary} weight="bold" />
             </TouchableOpacity>
 
             {/* Action 3: Go to Learn */}
@@ -310,22 +338,27 @@ export default function TabsLayout() {
                 router.push('/(tabs)/learn' as Href);
               }}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Go to Learn Academy"
+              accessibilityHint="Continue academy lesson track"
               style={[styles.modalActionRow, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
             >
               <View style={[styles.modalActionIconCircle, { backgroundColor: '#8B5CF6' }]}>
-                <SymbolView name={{ ios: 'book.closed.fill', android: 'menu_book', web: 'menu_book' } as any} size={14} tintColor="#FFFFFF" />
+                <PhosphorIcon name="GraduationCap" size={14} color="#FFFFFF" weight="fill" />
               </View>
               <YStack flex={1} gap={2}>
                 <Text color={theme.text} fontSize={13} style={{ fontFamily: "Inter_700Bold" }}>Go to Learn (Academy)</Text>
                 <Text color={theme.textSecondary} fontSize={10} style={{ fontFamily: "Inter_400Regular" }}>Continue academy lesson track</Text>
               </YStack>
-              <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' } as any} size={10} tintColor={theme.textSecondary} />
+              <PhosphorIcon name="CaretRight" size={10} color={theme.textSecondary} weight="bold" />
             </TouchableOpacity>
 
             {/* Close Trigger Button */}
             <TouchableOpacity
               onPress={() => setActionModalVisible(false)}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Close quick actions"
               style={{
                 alignSelf: 'center',
                 marginTop: 6,
@@ -341,7 +374,7 @@ export default function TabsLayout() {
                 minHeight: 34,
               }}
             >
-              <SymbolView name={{ ios: 'xmark', android: 'close', web: 'close' } as any} size={10} tintColor={theme.text} />
+              <PhosphorIcon name="X" size={10} color={theme.text} weight="bold" />
               <Text color={theme.text} fontSize={11} style={{ fontFamily: "Inter_700Bold" }}>Close</Text>
             </TouchableOpacity>
           </YStack>

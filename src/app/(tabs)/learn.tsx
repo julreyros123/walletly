@@ -3,14 +3,16 @@ import { ScrollView, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { YStack, XStack, Text, Button, Progress, View } from 'tamagui';
 import { useTheme } from '@/hooks/use-theme';
-import { SymbolView } from 'expo-symbols';
+import { PhosphorIcon, PhosphorIconName } from '@/components/ui/PhosphorIcon';
 import { useGamificationStore } from '@/store/gamificationStore';
 import { CbudgetCard } from '@/components/ui/CbudgetCard';
 import { FormButton } from '@/components/ui/FormButton';
 import { AppHeader } from '@/components/ui/AppHeader';
-import { Spacing } from '@/constants/theme';
+import { Spacing, Fonts } from '@/constants/theme';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { BackgroundSystem } from '@/components/ui/BackgroundSystem';
+import { useFocusEffect } from 'expo-router';
+import { setStatusBarStyle } from 'expo-status-bar';
 
 interface Question {
   id: number;
@@ -41,6 +43,12 @@ export default function LearnScreen() {
   const store = useGamificationStore();
   const completeLesson = store.completeLesson;
   const streakDays = store.streakDays;
+
+  useFocusEffect(
+    React.useCallback(() => {
+      setStatusBarStyle(theme.mode === 'dark' ? 'light' : 'dark');
+    }, [theme.mode])
+  );
 
   // 9-Level Academy Pathway Curriculum
   const levels: Level[] = [
@@ -398,8 +406,9 @@ export default function LearnScreen() {
   const handleNextQuestion = () => {
     if (selectedOption === null) return;
 
+    const isCorrect = selectedOption === questions[currentQuestionIdx].correctAnswer;
     let newScore = score;
-    if (selectedOption === questions[currentQuestionIdx].correctAnswer) {
+    if (isCorrect) {
       newScore = score + 1;
       setScore(newScore);
     }
@@ -408,10 +417,27 @@ export default function LearnScreen() {
       setCurrentQuestionIdx((c) => c + 1);
       setSelectedOption(null);
     } else {
-      // Complete lesson & award XP in store
-      completeLesson(activeLevel.title);
-      setEarnedXP(activeLesson.xpReward);
-      setQuizState('completed');
+      if (newScore === questions.length) {
+        // Complete lesson & award XP in store with unique lesson ID
+        completeLesson(activeLevel.title, activeLesson.id);
+        setEarnedXP(activeLesson.xpReward);
+        setQuizState('completed');
+      } else {
+        Alert.alert(
+          'Quiz Incomplete',
+          'You missed a question. Review the key concept in the lesson and try the quiz again!',
+          [
+            {
+              text: 'Review Lesson',
+              onPress: () => {
+                setQuizState('reading');
+                setSelectedOption(null);
+                setScore(0);
+              },
+            },
+          ]
+        );
+      }
     }
   };
 
@@ -423,10 +449,10 @@ export default function LearnScreen() {
           
           {/* Header */}
           <YStack gap={4} marginBottom={20}>
-            <Text color="#FFFFFF" fontSize={22} fontWeight="700" letterSpacing={-0.5}>
+            <Text color={theme.text} fontSize={22} fontWeight="700" letterSpacing={-0.5}>
               Academy Roadmap
             </Text>
-            <Text color="rgba(255,255,255,0.7)" fontSize={14}>
+            <Text color={theme.textSecondary} fontSize={14}>
               Master the financial journey in order: Budget → Save → Invest.
             </Text>
           </YStack>
@@ -543,11 +569,11 @@ export default function LearnScreen() {
                           : unlocked
                           ? theme.primary
                           : theme.border;
-                        const nodeIcon = completed
-                          ? ({ ios: 'checkmark', android: 'check', web: 'check' } as const)
+                        const nodeIcon: PhosphorIconName = completed
+                          ? 'Check'
                           : unlocked
-                          ? ({ ios: 'book.fill', android: 'menu_book', web: 'menu_book' } as const)
-                          : ({ ios: 'lock.fill', android: 'lock', web: 'lock' } as const);
+                          ? 'GraduationCap'
+                          : 'Lock';
                         const nodeIconColor = completed
                           ? '#FFFFFF'
                           : unlocked
@@ -585,7 +611,7 @@ export default function LearnScreen() {
                                 zIndex={1}
                                 style={{ elevation: 1 } as any}
                               >
-                                <SymbolView name={nodeIcon} size={13} tintColor={nodeIconColor} />
+                                <PhosphorIcon name={nodeIcon} size={13} color={nodeIconColor} weight={completed ? 'bold' : 'regular'} />
                               </View>
                             </YStack>
 
@@ -617,14 +643,15 @@ export default function LearnScreen() {
                                         Level {lvl.levelNumber}
                                       </Text>
                                       {completed && (
-                                        <View backgroundColor={(`${theme.success}15`) as any} paddingHorizontal={6} paddingVertical={1.5} borderRadius={4}>
-                                          <Text color={theme.success} fontSize={8} fontWeight="800">DONE</Text>
-                                        </View>
+                                        <XStack alignItems="center" gap={4} backgroundColor="rgba(16, 185, 129, 0.12)" paddingHorizontal={7} paddingVertical={2} borderRadius={6}>
+                                          <Text color="#059669" fontSize={8.5} style={{ fontFamily: Fonts.bold, letterSpacing: 0.4 }}>DONE</Text>
+                                        </XStack>
                                       )}
                                       {!completed && unlocked && (
-                                        <View backgroundColor={(`${theme.primary}15`) as any} paddingHorizontal={6} paddingVertical={1.5} borderRadius={4}>
-                                          <Text color={theme.primary} fontSize={8} fontWeight="800">ACTIVE</Text>
-                                        </View>
+                                        <XStack alignItems="center" gap={4} backgroundColor="rgba(16, 185, 129, 0.1)" paddingHorizontal={7} paddingVertical={2} borderRadius={6}>
+                                          <View width={4.5} height={4.5} borderRadius={2.5} backgroundColor="#10B981" />
+                                          <Text color="#059669" fontSize={8.5} style={{ fontFamily: Fonts.bold, letterSpacing: 0.4 }}>ACTIVE</Text>
+                                        </XStack>
                                       )}
                                     </XStack>
                                     <Text color={titleColor} fontSize={14} fontWeight="700">
@@ -649,17 +676,17 @@ export default function LearnScreen() {
                                       alignItems="center"
                                       justifyContent="center"
                                     >
-                                      <SymbolView
-                                        name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' } as const}
+                                      <PhosphorIcon
+                                        name="CaretRight"
                                         size={10}
-                                        tintColor={completed ? theme.success : theme.primary}
+                                        color={completed ? theme.success : theme.primary}
                                       />
                                     </View>
                                   ) : (
-                                    <SymbolView
-                                      name={{ ios: 'lock.fill', android: 'lock', web: 'lock' } as const}
+                                    <PhosphorIcon
+                                      name="Lock"
                                       size={12}
-                                      tintColor={theme.textSecondary}
+                                      color={theme.textSecondary}
                                     />
                                   )}
                                 </CbudgetCard>
@@ -720,10 +747,11 @@ export default function LearnScreen() {
                       marginVertical={4}
                     >
                       <XStack gap={6} alignItems="center">
-                        <SymbolView
-                          name={{ ios: 'lightbulb.fill', android: 'lightbulb', web: 'lightbulb' } as const}
+                        <PhosphorIcon
+                          name="Lightbulb"
                           size={14}
-                          tintColor={theme.warning}
+                          color={theme.warning}
+                          weight="fill"
                         />
                         <Text color={theme.text} fontSize={13} fontWeight="700">
                           {activeLesson.example.title}:
@@ -855,10 +883,11 @@ export default function LearnScreen() {
                     borderWidth={2}
                     borderColor={`${theme.warning}40` as any}
                   >
-                    <SymbolView
-                      name={{ ios: 'checkmark.seal.fill', android: 'verified', web: 'verified' } as const}
+                    <PhosphorIcon
+                      name="CheckCircle"
                       size={36}
-                      tintColor={theme.warning}
+                      color={theme.warning}
+                      weight="fill"
                     />
                   </YStack>
                 </YStack>

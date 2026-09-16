@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { SafeAreaView, StyleSheet, Platform, View, Alert } from 'react-native';
+import { StyleSheet, Platform, View, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { YStack, Text, XStack } from 'tamagui';
 import { useRouter, Href } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -8,7 +9,7 @@ import { Spacing } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
 import { FormInput } from '@/components/ui/FormInput';
 import { FormButton } from '@/components/ui/FormButton';
-import { SymbolView } from 'expo-symbols';
+import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
 
 export default function NicknameScreen() {
   const theme = useTheme();
@@ -63,10 +64,11 @@ export default function NicknameScreen() {
           <Animated.View entering={FadeInDown.delay(100).duration(600)}>
             <YStack gap={10} alignItems="center" marginBottom={32}>
               <View style={styles.iconWrap}>
-                <SymbolView
-                  name={{ ios: 'person.crop.circle.badge.plus', android: 'person_add', web: 'person_add' } as any}
+                <PhosphorIcon
+                  name="UserCirclePlus"
                   size={32}
-                  tintColor={theme.primary}
+                  color={theme.primary}
+                  weight="duotone"
                 />
               </View>
               <Text color="#FFFFFF" fontSize={26} fontWeight="700" letterSpacing={-0.5} textAlign="center">
@@ -93,7 +95,7 @@ export default function NicknameScreen() {
                   error={error}
                   autoFocus
                   maxLength={20}
-                  leftIcon={{ ios: 'person', android: 'person', web: 'person' } as any}
+                  leftIcon="User"
                 />
 
                 <FormButton

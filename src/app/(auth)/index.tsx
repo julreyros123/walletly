@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { StyleSheet, SafeAreaView, Platform, Modal, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { StyleSheet, Platform, Modal, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { YStack, XStack, Text, Button, View, Theme } from 'tamagui';
 import { Link, Href, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -9,7 +10,7 @@ import { Spacing, Typography } from '@/constants/theme';
 import { BackgroundSystem } from '@/components/ui/BackgroundSystem';
 import { FormButton } from '@/components/ui/FormButton';
 import { useAuthStore } from '@/store/authStore';
-import { SymbolView } from 'expo-symbols';
+import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
 
 export default function WelcomeScreen() {
   const theme = useTheme();
@@ -52,22 +53,32 @@ export default function WelcomeScreen() {
 
           {/* Bottom Actions */}
           <YStack gap={Spacing[12]} width="100%">
-            <FormButton variant="primary" height={52} onPress={() => router.push('/(auth)/register' as Href)}>
+            <FormButton
+              variant="primary"
+              height={52}
+              borderRadius={999}
+              onPress={() => router.push('/(auth)/register' as Href)}
+            >
               Create Account
             </FormButton>
 
-            <FormButton variant="outline" height={52} onPress={() => router.push('/(auth)/login' as Href)}>
+            <FormButton
+              variant="outline"
+              height={52}
+              borderRadius={999}
+              onPress={() => router.push('/(auth)/login' as Href)}
+            >
               Sign In
             </FormButton>
 
             <FormButton
               variant="ghost"
               height={52}
+              borderRadius={999}
               loading={guestLoading}
-              leftIcon={{ ios: 'person.crop.circle', android: 'account_circle', web: 'account_circle' } as any}
               onPress={handleGuestLogin}
             >
-              Explore as Guest
+              Quick Access as Guest
             </FormButton>
             
             {/* Help & FAQ Access Link */}
@@ -78,10 +89,10 @@ export default function WelcomeScreen() {
                 style={{ paddingVertical: 8, paddingHorizontal: 12 }}
               >
                 <XStack alignItems="center" gap={6}>
-                  <SymbolView
-                    name={{ ios: 'questionmark.circle', android: 'help_outline', web: 'help_outline' } as any}
+                  <PhosphorIcon
+                    name="Question"
                     size={15}
-                    tintColor="rgba(255, 255, 255, 0.75)"
+                    color="rgba(255, 255, 255, 0.75)"
                   />
                   <Text color="rgba(255, 255, 255, 0.85)" fontSize={13} fontWeight="500">
                     Need help?

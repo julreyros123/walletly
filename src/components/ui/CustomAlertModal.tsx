@@ -1,7 +1,8 @@
 import React from 'react';
 import { Modal, TouchableOpacity, StyleSheet } from 'react-native';
 import { View, Text, XStack, YStack, Button } from 'tamagui';
-import { SymbolView } from 'expo-symbols';
+import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
+import type { PhosphorIconName } from '@/components/ui/PhosphorIcon';
 import { useTheme } from '@/hooks/use-theme';
 
 export interface AlertButton {
@@ -30,30 +31,30 @@ export function CustomAlertModal({
   const theme = useTheme();
 
   // Get color and icon based on type
-  const getTypeDetails = () => {
+  const getTypeDetails = (): { icon: PhosphorIconName; color: any; bg: string } => {
     switch (type) {
       case 'success':
         return {
-          icon: { ios: 'checkmark.seal.fill', android: 'verified', web: 'verified' } as const,
+          icon: 'CheckCircle',
           color: theme.success,
           bg: `${theme.success}15`,
         };
       case 'error':
         return {
-          icon: { ios: 'xmark.octagon.fill', android: 'report', web: 'report' } as const,
+          icon: 'XCircle',
           color: theme.error,
           bg: `${theme.error}15`,
         };
       case 'warning':
         return {
-          icon: { ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning' } as const,
+          icon: 'Warning',
           color: theme.warning,
           bg: `${theme.warning}15`,
         };
       case 'info':
       default:
         return {
-          icon: { ios: 'info.circle.fill', android: 'info', web: 'info' } as const,
+          icon: 'Info',
           color: theme.primary,
           bg: `${theme.primary}15`,
         };
@@ -97,10 +98,11 @@ export function CustomAlertModal({
             alignItems="center"
             justifyContent="center"
           >
-            <SymbolView
+            <PhosphorIcon
               name={details.icon}
               size={24}
-              tintColor={details.color}
+              color={details.color}
+              weight="fill"
             />
           </View>
 
@@ -120,10 +122,10 @@ export function CustomAlertModal({
               const isPrimary = btn.variant === 'primary' || !btn.variant;
               const isDestructive = btn.variant === 'destructive';
               
-              let bg = theme.backgroundElement;
-              let borderCol = theme.border;
+              let bg: any = theme.backgroundElement;
+              let borderCol: any = theme.border;
               let borderW = 1;
-              let txtColor = theme.text;
+              let txtColor: any = theme.text;
 
               if (isPrimary) {
                 bg = theme.primary;

@@ -4,7 +4,7 @@ import { YStack, XStack, Text, Button, View } from 'tamagui';
 import { useAuthStore } from '@/store/authStore';
 import { useGamificationStore } from '@/store/gamificationStore';
 import { useTheme } from '@/hooks/use-theme';
-import { SymbolView } from 'expo-symbols';
+import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
 import { useRouter, Href } from 'expo-router';
 import { Image } from 'expo-image';
 
@@ -116,11 +116,7 @@ export function AppHeader() {
             }
           >
             <View style={{ position: 'relative' }}>
-              <SymbolView
-                name={{ ios: 'bell', android: 'notifications', web: 'notifications' } as const}
-                size={22}
-                tintColor={theme.text}
-              />
+              <PhosphorIcon name="Bell" size={22} color={theme.text} weight="regular" />
               <View
                 style={{
                   position: 'absolute',
@@ -146,11 +142,7 @@ export function AppHeader() {
             pressStyle={{ opacity: 0.7 }}
             onPress={() => setShowDrawer(true)}
           >
-            <SymbolView
-              name={{ ios: 'line.3.horizontal', android: 'menu', web: 'menu' } as const}
-              size={22}
-              tintColor={theme.text}
-            />
+            <PhosphorIcon name="List" size={22} color={theme.text} weight="bold" />
           </Button>
         </XStack>
       </XStack>
@@ -180,11 +172,7 @@ export function AppHeader() {
                   justifyContent="center"
                   onPress={() => setShowDrawer(false)}
                 >
-                  <SymbolView
-                    name={{ ios: 'xmark', android: 'close', web: 'close' } as const}
-                    size={16}
-                    tintColor={theme.textSecondary}
-                  />
+                  <PhosphorIcon name="X" size={16} color={theme.textSecondary} weight="bold" />
                 </Button>
               </XStack>
 
@@ -253,11 +241,7 @@ export function AppHeader() {
                   onPress={handleResetData}
                 >
                   <XStack gap={8} alignItems="center" justifyContent="center">
-                    <SymbolView
-                      name={{ ios: 'arrow.clockwise', android: 'refresh', web: 'refresh' } as const}
-                      size={14}
-                      tintColor={theme.text}
-                    />
+                    <PhosphorIcon name="ArrowClockwise" size={14} color={theme.text} weight="bold" />
                     <Text color={theme.text} fontSize={13} fontWeight="600">
                       Reset Simulated Data
                     </Text>
@@ -275,11 +259,7 @@ export function AppHeader() {
                   onPress={handleLogout}
                 >
                   <XStack gap={8} alignItems="center" justifyContent="center">
-                    <SymbolView
-                      name={{ ios: 'power', android: 'power_settings_new', web: 'power_settings_new' } as const}
-                      size={14}
-                      tintColor={theme.error}
-                    />
+                    <PhosphorIcon name="Power" size={14} color={theme.error} weight="bold" />
                     <Text color={theme.error} fontSize={13} fontWeight="600">
                       {user?.id === 'guest' ? 'Exit Guest Mode' : 'Sign Out'}
                     </Text>

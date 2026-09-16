@@ -1,3 +1,5 @@
-// This file is intentionally empty — the explore screen has been removed.
-// Delete this file manually if desired.
-export {};
+import { Redirect } from 'expo-router';
+
+export default function ExploreScreen() {
+  return <Redirect href="/(tabs)" />;
+}

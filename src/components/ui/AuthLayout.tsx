@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 're
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { YStack, XStack, Button, Text, Theme } from 'tamagui';
 import { useTheme } from '@/hooks/use-theme';
-import { SymbolView } from 'expo-symbols';
+import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
 import { useRouter } from 'expo-router';
 import { HeroGraphic } from '@/components/ui/HeroGraphic';
 import { Spacing } from '@/constants/theme';
@@ -66,21 +66,21 @@ export function AuthLayout({
                   {showBackButton && (
                     <Button
                       chromeless
-                      circular
                       width={36}
                       height={36}
+                      borderRadius={6}
                       pressStyle={{ opacity: 0.7 }}
                       onPress={handleBack}
                       alignItems="center"
                       justifyContent="center"
                       marginLeft={-8}
                       backgroundColor="rgba(255,255,255,0.06)"
+                      borderWidth={1}
+                      borderColor="rgba(255,255,255,0.1)"
+                      accessibilityRole="button"
+                      accessibilityLabel="Go back"
                     >
-                      <SymbolView
-                        name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' } as const}
-                        size={18}
-                        tintColor="#FFFFFF"
-                      />
+                      <PhosphorIcon name="CaretLeft" size={18} color="#FFFFFF" weight="bold" />
                     </Button>
                   )}
                 </XStack>
@@ -88,7 +88,7 @@ export function AuthLayout({
                 {/* Hero: Logo + Title + Subtitle */}
                 <HeroGraphic title={title} subtitle={subtitle} />
 
-                {/* Card container for form */}
+                {/* Flat Floating card container for form */}
                 <View style={styles.formCard}>
                   <YStack width="100%" gap={14}>
                     {children}
@@ -106,7 +106,7 @@ export function AuthLayout({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#020F1E',
+    backgroundColor: '#020C18',
     minHeight: Platform.OS === 'web' ? ('100vh' as any) : '100%',
   },
   safeArea: {
@@ -128,12 +128,12 @@ const styles = StyleSheet.create({
     height: 360,
     borderRadius: 180,
     backgroundColor: '#0052FF',
-    opacity: 0.08,
+    opacity: 0.05,
     ...Platform.select({
       ios: {
         shadowColor: '#0052FF',
         shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
+        shadowOpacity: 0.4,
         shadowRadius: 80,
       },
     }),
@@ -146,15 +146,20 @@ const styles = StyleSheet.create({
     height: 260,
     borderRadius: 130,
     backgroundColor: '#0052FF',
-    opacity: 0.05,
+    opacity: 0.03,
   },
   formCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.035)',
-    borderRadius: 20,
+    backgroundColor: '#091525',
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: '#16273C',
     paddingHorizontal: 20,
     paddingVertical: 24,
     marginBottom: 4,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 16,
+    elevation: 8,
   },
 });

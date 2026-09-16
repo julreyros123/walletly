@@ -4,29 +4,34 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { YStack, XStack, Text, Button, View } from 'tamagui';
 import { useAuthStore } from '@/store/authStore';
 import { useTheme } from '@/hooks/use-theme';
-import { useThemeStore } from '@/store/themeStore';
-import { SymbolView } from 'expo-symbols';
-import { useRouter, Href } from 'expo-router';
+import { useThemeStore, AccentColor } from '@/store/themeStore';
+import { PhosphorIcon, PhosphorIconName } from '@/components/ui/PhosphorIcon';
+import { useRouter, Href, useFocusEffect } from 'expo-router';
+import { setStatusBarStyle } from 'expo-status-bar';
 import { CbudgetCard } from '@/components/ui/CbudgetCard';
-import { Spacing } from '@/constants/theme';
+import { Spacing, Fonts } from '@/constants/theme';
 import Animated, { FadeInDown, FadeIn, ZoomIn } from 'react-native-reanimated';
 import { useGamificationStore, ALL_ACHIEVEMENTS } from '@/store/gamificationStore';
 import { BackgroundSystem } from '@/components/ui/BackgroundSystem';
+import { AppSettingsSection } from '@/features/profile/components/AppSettingsSection';
+import { InterfaceModeSwitch } from '@/features/profile/components/InterfaceModeSwitch';
+import { LegalPolicyModal } from '@/features/profile/components/LegalPolicyModal';
+import { safeHaptic } from '@/utils/haptics';
 const getMasteryAvatarDetails = (title: string) => {
   switch (title) {
     case 'Smart Saver':
       return {
         initials: 'SS',
         color: '#10B981', // emerald
-        borderColor: '#10B981',
-        borderStyle: 'dashed' as const,
+        borderColor: 'rgba(16, 185, 129, 0.25)',
+        borderStyle: 'solid' as const,
         bg: 'rgba(16, 185, 129, 0.1)',
       };
     case 'Investment Explorer':
       return {
         initials: 'IE',
         color: '#3B82F6', // royal blue
-        borderColor: '#3B82F6',
+        borderColor: 'rgba(59, 130, 246, 0.25)',
         borderStyle: 'solid' as const,
         bg: 'rgba(59, 130, 246, 0.1)',
       };
@@ -34,7 +39,7 @@ const getMasteryAvatarDetails = (title: string) => {
       return {
         initials: 'FS',
         color: '#F59E0B', // amber
-        borderColor: '#F59E0B',
+        borderColor: 'rgba(245, 158, 11, 0.25)',
         borderStyle: 'solid' as const,
         bg: 'rgba(245, 158, 11, 0.1)',
       };
@@ -43,7 +48,7 @@ const getMasteryAvatarDetails = (title: string) => {
       return {
         initials: 'BB',
         color: '#64748B', // slate
-        borderColor: '#64748B',
+        borderColor: 'rgba(100, 116, 139, 0.25)',
         borderStyle: 'solid' as const,
         bg: 'rgba(100, 116, 139, 0.1)',
       };
@@ -53,9 +58,15 @@ const getMasteryAvatarDetails = (title: string) => {
 export default function ProfileScreen() {
   const router = useRouter();
   const theme = useTheme();
-  const { mode, primaryColor, setMode, setPrimaryColor } = useThemeStore();
+  const { mode, setMode, primaryColor, setPrimaryColor } = useThemeStore();
   const { user, logout, isPremium, setPremium, updateProfile, deleteAccount } = useAuthStore();
-  const { achievements: unlockedAchievements, customAvatar, getFinancialHealthScore, streakDays } = useGamificationStore();
+  const { achievements: unlockedAchievements, customAvatar, getFinancialHealthScore, streakDays, resetAllData } = useGamificationStore();
+
+  useFocusEffect(
+    React.useCallback(() => {
+      setStatusBarStyle(theme.mode === 'dark' ? 'light' : 'dark');
+    }, [theme.mode])
+  );
 
   // Checkout flow states
   const [checkoutVisible, setCheckoutVisible] = useState(false);
@@ -102,21 +113,7 @@ export default function ProfileScreen() {
           text: 'Reset Data',
           style: 'destructive',
           onPress: () => {
-            useGamificationStore.setState({
-              xp: 45,
-              level: 1,
-              streakDays: 3,
-              budgetingScore: 75,
-              learningScore: 60,
-              savingScore: 80,
-              investingScore: 65,
-              achievements: [],
-              customAvatar: 'Budget Beginner',
-              loggedExpenses: [],
-              savingsGoals: [],
-              isBudgetSetupComplete: false,
-              virtualBalance: 10000,
-            });
+            resetAllData(10000);
             Alert.alert('Sandbox Reset', 'Your simulated learning metrics have been reset.');
           },
         },
@@ -134,21 +131,7 @@ export default function ProfileScreen() {
           text: 'Delete Account',
           style: 'destructive',
           onPress: async () => {
-            useGamificationStore.setState({
-              xp: 45,
-              level: 1,
-              streakDays: 3,
-              budgetingScore: 0,
-              learningScore: 0,
-              savingScore: 0,
-              investingScore: 0,
-              achievements: [],
-              customAvatar: 'Budget Beginner',
-              loggedExpenses: [],
-              savingsGoals: [],
-              isBudgetSetupComplete: false,
-              virtualBalance: 0,
-            });
+            resetAllData(0);
             await deleteAccount();
             Alert.alert('Account Deleted', 'Your profile and data have been wiped.');
             router.replace('/(auth)' as Href);
@@ -274,61 +257,79 @@ export default function ProfileScreen() {
 
   return (
     <YStack flex={1} backgroundColor={theme.background}>
-      <BackgroundSystem mode="tabs" height={380} />
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+        {/* ==================== EXECUTIVE TOP SCREEN HEADER ==================== */}
+        <View style={styles.topHeaderBar}>
+          <YStack gap={2}>
+            <Text color={theme.text} fontSize={22} style={{ fontFamily: Fonts.bold }} letterSpacing={-0.4}>
+              Profile & Account
+            </Text>
+            <Text color={theme.textSecondary} fontSize={11.5} style={{ fontFamily: Fonts.medium }}>
+              Walletly Sandbox • Identity & Preferences
+            </Text>
+          </YStack>
+
+          <View style={[styles.topStatusPill, { backgroundColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#FFFFFF' : '#131D31', borderWidth: 1, borderColor: theme.border }]}>
+            <View width={6} height={6} borderRadius={3} backgroundColor="#10B981" />
+            <Text color={theme.text} fontSize={11} style={{ fontFamily: Fonts.bold, letterSpacing: 0.4 }}>
+              Active
+            </Text>
+          </View>
+        </View>
+
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           
           {/* User Profile Card */}
-          <View>
-            <YStack
-              marginBottom={Spacing[16]}
-              alignItems="center"
-              gap={Spacing[16]}
-              paddingVertical={12}
-            >
-              <YStack alignItems="center" gap={12}>
-                
-                {/* Mastery Rank Avatar Ring */}
-                <View
-                  style={{
-                    width: 90,
-                    height: 90,
-                    borderRadius: 45,
-                    backgroundColor: user?.avatarColor || avatarDetails.bg,
-                    borderWidth: 3,
-                    borderColor: user?.avatarColor || avatarDetails.borderColor,
-                    borderStyle: avatarDetails.borderStyle,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginBottom: 4,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.15,
-                    shadowRadius: 8,
-                    elevation: 5
-                  } as any}
-                >
-                  {user?.avatarEmoji ? (
-                    <Text fontSize={40}>{user.avatarEmoji}</Text>
-                  ) : (
-                    <Text color="#FFFFFF" fontSize={28} fontWeight="800">
-                      {getInitials(user?.name || '')}
-                    </Text>
-                  )}
-                </View>
-
-                <YStack alignItems="center" gap={4}>
-                  <XStack alignItems="center" gap={6}>
-                    <Text color="#FFFFFF" fontSize={22} fontWeight="700">
-                      {user?.name || 'User'}
-                    </Text>
-                  </XStack>
-                  <Text color="rgba(255,255,255,0.7)" fontSize={13}>
-                    {user?.email || 'user@example.com'}
+          <CbudgetCard
+            padding={20}
+            marginBottom={Spacing[16]}
+            alignItems="center"
+            gap={16}
+            backgroundColor={theme.mode === 'dark' ? '#1C2541' : '#FFFFFF'}
+            borderWidth={theme.mode === 'dark' ? 1 : 0}
+            borderColor={theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'transparent'}
+            borderRadius={18}
+          >
+            <YStack alignItems="center" gap={12}>
+              {/* Mastery Rank Avatar Ring */}
+              <View
+                style={{
+                  width: 86,
+                  height: 86,
+                  borderRadius: 43,
+                  backgroundColor: user?.avatarColor || avatarDetails.bg,
+                  borderWidth: 2,
+                  borderColor: user?.avatarColor ? `${user.avatarColor}40` : avatarDetails.borderColor,
+                  borderStyle: 'solid',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 8,
+                  elevation: 3,
+                }}
+              >
+                {user?.avatarEmoji ? (
+                  <Text fontSize={38}>{user.avatarEmoji}</Text>
+                ) : (
+                  <Text color="#FFFFFF" fontSize={26} style={{ fontFamily: Fonts.bold }}>
+                    {getInitials(user?.name || '')}
                   </Text>
-                  
-                  {/* Edit Profile Button Link */}
-                  <TouchableOpacity 
+                )}
+              </View>
+
+              <YStack alignItems="center" gap={4}>
+                <Text color={theme.text} fontSize={22} style={{ fontFamily: Fonts.bold }} letterSpacing={-0.3}>
+                  {user?.name || 'User'}
+                </Text>
+                <Text color={theme.textSecondary} fontSize={13} style={{ fontFamily: Fonts.medium }}>
+                  {user?.email || 'user@example.com'}
+                </Text>
+
+                <XStack gap={8} alignItems="center" marginTop={8}>
+                  {/* Edit Profile Action Button */}
+                  <TouchableOpacity
                     onPress={() => {
                       setEditName(user?.name || '');
                       setEditEmail(user?.email || '');
@@ -336,194 +337,183 @@ export default function ProfileScreen() {
                       setEditAvatarEmoji(user?.avatarEmoji || '💼');
                       setEditProfileVisible(true);
                     }}
-                    style={{ marginTop: 4 }}
-                    activeOpacity={0.7}
+                    activeOpacity={0.75}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                      backgroundColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : theme.backgroundElement,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      paddingHorizontal: 11,
+                      paddingVertical: 5,
+                      borderRadius: 8,
+                    }}
                   >
-                    <XStack gap={4} alignItems="center" backgroundColor={`${theme.primary}15` as any} paddingHorizontal={12} paddingVertical={4} borderRadius={100}>
-                      <SymbolView name={{ ios: 'pencil', android: 'edit', web: 'edit' } as any} size={11} tintColor={theme.primary as any} />
-                      <Text color={theme.primary as any} fontSize={11} fontWeight="700">Edit Profile</Text>
-                    </XStack>
+                    <PhosphorIcon name="Pencil" size={12} color={theme.textSecondary} weight="bold" />
+                    <Text color={theme.text} fontSize={11.5} style={{ fontFamily: Fonts.semiBold }}>
+                      Edit Profile
+                    </Text>
                   </TouchableOpacity>
 
                   {/* Mastery Rank Badge */}
                   <XStack
                     backgroundColor={`${avatarDetails.color}15` as any}
-                    borderColor={`${avatarDetails.color}30` as any}
-                    borderWidth={1}
-                    borderRadius={100}
-                    paddingHorizontal={12}
-                    paddingVertical={3}
-                    marginTop={8}
+                    borderRadius={8}
+                    paddingHorizontal={9}
+                    paddingVertical={5}
                     alignItems="center"
-                    gap={4}
+                    gap={5}
                   >
-                    <SymbolView
-                      name={{ ios: 'crown.fill', android: 'emoji_events', web: 'emoji_events' } as any}
-                      size={11}
-                      tintColor={avatarDetails.color as any}
+                    <PhosphorIcon
+                      name="Crown"
+                      size={12}
+                      color={avatarDetails.color as any}
+                      weight="fill"
                     />
-                    <Text color={avatarDetails.color as any} fontSize={10} fontWeight="600" letterSpacing={0.5}>
+                    <Text color={avatarDetails.color as any} fontSize={10.5} style={{ fontFamily: Fonts.bold }} letterSpacing={0.4}>
                       {customAvatar.toUpperCase()}
                     </Text>
                   </XStack>
-                </YStack>
+                </XStack>
+              </YStack>
+            </YStack>
+
+            {/* Quick Metrics Container */}
+            <XStack
+              width="100%"
+              justifyContent="space-between"
+              paddingVertical={12}
+              paddingHorizontal={8}
+              backgroundColor={theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : theme.backgroundElement}
+              borderRadius={12}
+              borderWidth={0}
+            >
+              <YStack flex={1} alignItems="center" gap={3}>
+                <Text color={theme.textSecondary} fontSize={10} style={{ fontFamily: Fonts.bold }} letterSpacing={0.6} textTransform="uppercase">
+                  Academy Score
+                </Text>
+                <Text color={theme.text} fontSize={16} style={{ fontFamily: Fonts.bold }}>
+                  {getFinancialHealthScore()} <Text color={theme.textSecondary} fontSize={12} style={{ fontFamily: Fonts.regular }}>/ 100</Text>
+                </Text>
               </YStack>
 
-              {/* Quick Metrics Grid */}
-              <XStack
-                width="100%"
-                justifyContent="space-between"
-                paddingTop={16}
-                gap={12}
-              >
-                <YStack flex={1} alignItems="center" gap={2}>
-                  <Text color="rgba(255,255,255,0.7)" fontSize={11} fontWeight="500" letterSpacing={0.5} textTransform="uppercase">
-                    Academy Score
-                  </Text>
-                  <Text color="#FFFFFF" fontSize={16} fontWeight="700">
-                    {getFinancialHealthScore()} / 100
-                  </Text>
-                </YStack>
-                
-                <YStack
-                  flex={1}
-                  alignItems="center"
-                  borderLeftWidth={1}
-                  borderRightWidth={1}
-                  borderColor="rgba(255,255,255,0.15)"
-                  gap={2}
-                >
-                  <Text color="rgba(255,255,255,0.7)" fontSize={11} fontWeight="500" letterSpacing={0.5} textTransform="uppercase">
-                    Badges
-                  </Text>
-                  <Text color="#FFFFFF" fontSize={16} fontWeight="700">
-                    {unlockedAchievements.length} / {ALL_ACHIEVEMENTS.length}
-                  </Text>
-                </YStack>
+              <View width={1} backgroundColor={theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'} marginVertical={4} />
 
-                <YStack flex={1} alignItems="center" gap={2}>
-                  <Text color="rgba(255,255,255,0.7)" fontSize={11} fontWeight="500" letterSpacing={0.5} textTransform="uppercase">
-                    Streak
+              <YStack flex={1} alignItems="center" gap={3}>
+                <Text color={theme.textSecondary} fontSize={10} style={{ fontFamily: Fonts.bold }} letterSpacing={0.6} textTransform="uppercase">
+                  Badges
+                </Text>
+                <Text color={theme.text} fontSize={16} style={{ fontFamily: Fonts.bold }}>
+                  {unlockedAchievements.length} <Text color={theme.textSecondary} fontSize={12} style={{ fontFamily: Fonts.regular }}>/ {ALL_ACHIEVEMENTS.length}</Text>
+                </Text>
+              </YStack>
+
+              <View width={1} backgroundColor={theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'} marginVertical={4} />
+
+              <YStack flex={1} alignItems="center" gap={3}>
+                <Text color={theme.textSecondary} fontSize={10} style={{ fontFamily: Fonts.bold }} letterSpacing={0.6} textTransform="uppercase">
+                  Streak
+                </Text>
+                <Text color="#F59E0B" fontSize={16} style={{ fontFamily: Fonts.bold }}>
+                  🔥 {streakDays}d
+                </Text>
+              </YStack>
+            </XStack>
+          </CbudgetCard>
+
+          {/* App Appearance & Customization Panel */}
+          <YStack gap={10} marginBottom={Spacing[24]}>
+            <Text color={theme.text} fontSize={16} style={{ fontFamily: Fonts.bold }} paddingHorizontal={2}>
+              Appearance & Theme
+            </Text>
+
+            <CbudgetCard padding={16} gap={16}>
+              {/* Theme Mode Selector (Hybrid / Dark / Light) - Smooth Animated Switch */}
+              <YStack gap={8}>
+                <Text color={theme.textSecondary} fontSize={11.5} style={{ fontFamily: Fonts.bold }} letterSpacing={0.5} textTransform="uppercase">
+                  Interface Mode
+                </Text>
+                <InterfaceModeSwitch
+                  currentMode={mode}
+                  onSelectMode={(newMode) => {
+                    setMode(newMode);
+                  }}
+                />
+              </YStack>
+
+              {/* Accent Color Palette */}
+              <YStack gap={8} style={{ borderTopWidth: 1, borderTopColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)', paddingTop: 12 }}>
+                <XStack justifyContent="space-between" alignItems="center">
+                  <Text color={theme.textSecondary} fontSize={12} style={{ fontFamily: Fonts.bold }} letterSpacing={0.4} textTransform="uppercase">
+                    Accent Color
                   </Text>
-                  <Text color={theme.warning} fontSize={16} fontWeight="700">
-                    🔥 {streakDays}d
+                  <Text color={theme.textSecondary} fontSize={11} style={{ fontFamily: Fonts.medium }}>
+                    {primaryColor.charAt(0).toUpperCase() + primaryColor.slice(1)}
                   </Text>
-                </YStack>
-              </XStack>
-            </YStack>
-          </View>
+                </XStack>
 
+                <XStack gap={12} alignItems="center" paddingVertical={4}>
+                  {[
+                    { name: 'green' as const, hex: '#10B981', label: 'Emerald' },
+                    { name: 'sky' as const, hex: '#0EA5E9', label: 'Sky' },
+                    { name: 'teal' as const, hex: '#14B8A6', label: 'Teal' },
+                    { name: 'purple' as const, hex: '#8B5CF6', label: 'Purple' },
+                    { name: 'rose' as const, hex: '#F43F5E', label: 'Rose' },
+                    { name: 'orange' as const, hex: '#F97316', label: 'Orange' },
+                  ].map((col) => {
+                    const isSelected = primaryColor === col.name;
+                    return (
+                      <TouchableOpacity
+                        key={col.name}
+                        onPress={() => {
+                          safeHaptic('light');
+                          setPrimaryColor(col.name);
+                        }}
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
+                          backgroundColor: col.hex,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderWidth: isSelected ? 2.5 : 0,
+                          borderColor: isSelected ? (theme.mode === 'dark' ? '#FFFFFF' : '#0F172A') : 'transparent',
+                          shadowColor: col.hex,
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: isSelected ? 0.35 : 0.1,
+                          shadowRadius: 4,
+                          elevation: 2,
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        {isSelected && (
+                          <PhosphorIcon name="Check" size={14} color="#FFFFFF" weight="bold" />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </XStack>
+              </YStack>
+            </CbudgetCard>
+          </YStack>
 
-
-          {/* App Customization Panel */}
-          <View>
-            <YStack gap={10} marginBottom={Spacing[24]}>
-              <Text color={theme.text} fontSize={16} fontWeight="900" paddingHorizontal={2}>
-                App Customization
-              </Text>
-              
-              <CbudgetCard padding={16} gap={14}>
-                {/* Theme Mode Toggles */}
-                <YStack gap={6}>
-                  <Text color={theme.text} fontSize={13} fontWeight="700">Theme Mode</Text>
-                  <XStack gap={8} width="100%">
-                    <TouchableOpacity
-                      onPress={() => setMode('light')}
-                      style={[
-                        styles.toggleButton,
-                        {
-                          flex: 1,
-                          backgroundColor: mode === 'light' ? theme.backgroundSelected : theme.backgroundElement,
-                          borderColor: mode === 'light' ? theme.primary : 'transparent',
-                          borderWidth: 1.5,
-                        }
-                      ]}
-                      activeOpacity={0.8}
-                    >
-                      <XStack gap={8} alignItems="center" justifyContent="center">
-                        <SymbolView name={{ ios: 'sun.max.fill', android: 'light_mode', web: 'light_mode' } as any} size={15} tintColor={mode === 'light' ? theme.primary : theme.textSecondary} />
-                        <Text color={mode === 'light' ? theme.text : theme.textSecondary} fontSize={13} fontWeight="700">Light</Text>
-                      </XStack>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      onPress={() => setMode('dark')}
-                      style={[
-                        styles.toggleButton,
-                        {
-                          flex: 1,
-                          backgroundColor: mode === 'dark' ? theme.backgroundSelected : theme.backgroundElement,
-                          borderColor: mode === 'dark' ? theme.primary : 'transparent',
-                          borderWidth: 1.5,
-                        }
-                      ]}
-                      activeOpacity={0.8}
-                    >
-                      <XStack gap={8} alignItems="center" justifyContent="center">
-                        <SymbolView name={{ ios: 'moon.fill', android: 'dark_mode', web: 'dark_mode' } as any} size={15} tintColor={mode === 'dark' ? theme.primary : theme.textSecondary} />
-                        <Text color={mode === 'dark' ? theme.text : theme.textSecondary} fontSize={13} fontWeight="700">Dark</Text>
-                      </XStack>
-                    </TouchableOpacity>
-                  </XStack>
-                </YStack>
-
-                {/* Accent Color Circles */}
-                <YStack gap={6}>
-                  <Text color={theme.text} fontSize={13} fontWeight="700">Primary Color Theme</Text>
-                  <XStack gap={12} alignItems="center" paddingVertical={4}>
-                    {[
-                      { name: 'green', hex: '#3EB47D' },
-                      { name: 'sky', hex: '#0EA5E9' },
-                      { name: 'teal', hex: '#14B8A6' },
-                      { name: 'purple', hex: '#8B5CF6' },
-                      { name: 'rose', hex: '#F43F5E' },
-                      { name: 'orange', hex: '#F97316' },
-                    ].map((col) => {
-                      const isSelected = primaryColor === col.name;
-                      return (
-                        <TouchableOpacity
-                          key={col.name}
-                          onPress={() => setPrimaryColor(col.name as any)}
-                          style={{
-                            width: 34,
-                            height: 34,
-                            borderRadius: 17,
-                            backgroundColor: col.hex,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            borderWidth: 3,
-                            borderColor: isSelected ? (mode === 'dark' ? '#F8FAFC' : '#0F172A') : 'transparent',
-                            shadowColor: col.hex,
-                            shadowOffset: { width: 0, height: 2 },
-                            shadowOpacity: 0.3,
-                            shadowRadius: 4,
-                            elevation: 3
-                          }}
-                          activeOpacity={0.7}
-                        >
-                          {isSelected && (
-                            <SymbolView name={{ ios: 'checkmark', android: 'check', web: 'check' } as any} size={14} tintColor="#FFFFFF" />
-                          )}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </XStack>
-                </YStack>
-              </CbudgetCard>
-            </YStack>
+          {/* Preferences & System Settings */}
+          <View marginBottom={Spacing[24]}>
+            <AppSettingsSection theme={theme} />
           </View>
 
           {/* Achievement Showcase */}
           <YStack gap={12} marginBottom={Spacing[24]}>
-            <Text color={theme.text} fontSize={18} fontWeight="900" paddingHorizontal={2}>
+            <Text color={theme.text} fontSize={16} style={{ fontFamily: Fonts.bold }} paddingHorizontal={2}>
               Academy Achievements
             </Text>
 
             <XStack flexWrap="wrap" justifyContent="space-between" gap={8}>
               {achievements.map((ach, index) => {
-                const cardBg = ach.unlocked ? theme.surface : theme.backgroundElement;
+                const cardBg = ach.unlocked ? (theme.mode === 'dark' ? '#1C2541' : theme.surface) : theme.backgroundElement;
                 const borderCol = ach.unlocked ? `${ach.color}40` as any : theme.border;
-                const iconBg = ach.unlocked ? `${ach.color}12` as any : theme.border;
+                const iconBg = ach.unlocked ? `${ach.color}18` as any : (theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : theme.border);
                 const iconColor = ach.unlocked ? ach.color : theme.textSecondary;
                 const textColor = ach.unlocked ? theme.text : theme.textSecondary;
 
@@ -543,8 +533,8 @@ export default function ProfileScreen() {
                         padding={16}
                         alignItems="center"
                         backgroundColor={cardBg}
-                        borderColor={borderCol}
-                        borderWidth={1}
+                        borderWidth={ach.unlocked ? 1 : 0}
+                        borderColor={ach.unlocked ? `${ach.color}25` as any : 'transparent'}
                         gap={8}
                       >
                         <YStack
@@ -555,10 +545,11 @@ export default function ProfileScreen() {
                           alignItems="center"
                           justifyContent="center"
                         >
-                          <SymbolView
-                            name={ach.icon as any}
+                          <PhosphorIcon
+                            name={ach.icon as PhosphorIconName}
                             size={22}
-                            tintColor={iconColor}
+                            color={iconColor}
+                            weight="fill"
                           />
                         </YStack>
                         <YStack gap={2} alignItems="center">
@@ -566,23 +557,24 @@ export default function ProfileScreen() {
                             <Text
                               color={textColor}
                               fontSize={12}
-                              fontWeight="900"
+                              style={{ fontFamily: Fonts.bold }}
                               textAlign="center"
                               numberOfLines={1}
                             >
                               {ach.title}
                             </Text>
                             {!ach.unlocked && (
-                              <SymbolView
-                                name={{ ios: 'lock.fill', android: 'lock', web: 'lock' } as const}
+                              <PhosphorIcon
+                                name="Lock"
                                 size={11}
-                                tintColor={theme.textSecondary}
+                                color={theme.textSecondary}
                               />
                             )}
                           </XStack>
                           <Text
                             color={theme.textSecondary}
                             fontSize={10}
+                            style={{ fontFamily: Fonts.regular }}
                             textAlign="center"
                             numberOfLines={2}
                             lineHeight={14}
@@ -613,18 +605,18 @@ export default function ProfileScreen() {
                   paddingHorizontal={16}
                 >
                   <XStack alignItems="center" gap={12} width="100%">
-                    <SymbolView
-                      name={{ ios: 'questionmark.circle', android: 'help_outline', web: 'help_outline' } as const}
+                    <PhosphorIcon
+                      name="Question"
                       size={20}
-                      tintColor={theme.textSecondary}
+                      color={theme.textSecondary}
                     />
-                    <Text color={theme.text} fontSize={15} fontWeight="700" flex={1} textAlign="left">
+                    <Text color={theme.text} fontSize={14.5} style={{ fontFamily: Fonts.bold }} flex={1} textAlign="left">
                       Help & Academy Support
                     </Text>
-                    <SymbolView
-                      name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' } as const}
+                    <PhosphorIcon
+                      name="CaretRight"
                       size={14}
-                      tintColor={theme.textSecondary}
+                      color={theme.textSecondary}
                     />
                   </XStack>
                 </Button>
@@ -642,18 +634,47 @@ export default function ProfileScreen() {
                   borderTopColor={theme.border}
                 >
                   <XStack alignItems="center" gap={12} width="100%">
-                    <SymbolView
-                      name={{ ios: 'doc.plaintext', android: 'description', web: 'description' } as const}
+                    <PhosphorIcon
+                      name="FileText"
                       size={20}
-                      tintColor={theme.textSecondary}
+                      color={theme.textSecondary}
                     />
-                    <Text color={theme.text} fontSize={15} fontWeight="700" flex={1} textAlign="left">
+                    <Text color={theme.text} fontSize={14.5} style={{ fontFamily: Fonts.bold }} flex={1} textAlign="left">
                       Terms & Privacy Policy
                     </Text>
-                    <SymbolView
-                      name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' } as const}
+                    <PhosphorIcon
+                      name="CaretRight"
                       size={14}
-                      tintColor={theme.textSecondary}
+                      color={theme.textSecondary}
+                    />
+                  </XStack>
+                </Button>
+
+                {/* Open Source Licenses */}
+                <Button
+                  backgroundColor="transparent"
+                  pressStyle={{ backgroundColor: `${theme.text}06` as any }}
+                  onPress={() => router.push('/licenses' as Href)}
+                  borderWidth={0}
+                  borderRadius={0}
+                  height={54}
+                  paddingHorizontal={16}
+                  borderTopWidth={1}
+                  borderTopColor={theme.border}
+                >
+                  <XStack alignItems="center" gap={12} width="100%">
+                    <PhosphorIcon
+                      name="Code"
+                      size={20}
+                      color={theme.textSecondary}
+                    />
+                    <Text color={theme.text} fontSize={14.5} style={{ fontFamily: Fonts.bold }} flex={1} textAlign="left">
+                      Open Source Licenses
+                    </Text>
+                    <PhosphorIcon
+                      name="CaretRight"
+                      size={14}
+                      color={theme.textSecondary}
                     />
                   </XStack>
                 </Button>
@@ -664,7 +685,7 @@ export default function ProfileScreen() {
           {/* Simulated Account Settings */}
           <View>
             <CbudgetCard marginBottom={Spacing[24]} gap={12} padding={16}>
-              <Text color={theme.text} fontSize={15} fontWeight="700" paddingHorizontal={4} marginBottom={4}>
+              <Text color={theme.text} fontSize={15} style={{ fontFamily: Fonts.bold }} paddingHorizontal={4} marginBottom={4}>
                 Simulated Sandbox Account
               </Text>
               
@@ -672,19 +693,19 @@ export default function ProfileScreen() {
                 {/* Reset Data */}
                 <Button
                   backgroundColor={theme.backgroundElement}
-                  pressStyle={{ opacity: 0.8 }}
                   borderWidth={0}
-                  borderRadius={8}
+                  pressStyle={{ opacity: 0.8 }}
+                  borderRadius={10}
                   height={44}
                   onPress={handleResetData}
                 >
                   <XStack gap={8} alignItems="center" justifyContent="center">
-                    <SymbolView
-                      name={{ ios: 'arrow.clockwise', android: 'refresh', web: 'refresh' } as const}
+                    <PhosphorIcon
+                      name="ArrowClockwise"
                       size={14}
-                      tintColor={theme.text}
+                      color={theme.text}
                     />
-                    <Text color={theme.text} fontSize={14} fontWeight="700">
+                    <Text color={theme.text} fontSize={14} style={{ fontFamily: Fonts.semiBold }}>
                       Reset Sandbox Data
                     </Text>
                   </XStack>
@@ -692,21 +713,20 @@ export default function ProfileScreen() {
 
                 {/* Sign Out */}
                 <Button
-                  backgroundColor={`${theme.error}10` as any}
-                  borderColor={`${theme.error}20` as any}
-                  borderWidth={1}
+                  backgroundColor={theme.backgroundElement}
+                  borderWidth={0}
                   pressStyle={{ opacity: 0.8 }}
-                  borderRadius={8}
+                  borderRadius={10}
                   height={44}
                   onPress={handleLogout}
                 >
                   <XStack gap={8} alignItems="center" justifyContent="center">
-                    <SymbolView
-                      name={{ ios: 'power', android: 'power_settings_new', web: 'power_settings_new' } as const}
+                    <PhosphorIcon
+                      name="Power"
                       size={14}
-                      tintColor={theme.error}
+                      color={theme.text}
                     />
-                    <Text color={theme.error} fontSize={14} fontWeight="700">
+                    <Text color={theme.text} fontSize={14} style={{ fontFamily: Fonts.semiBold }}>
                       Sign Out
                     </Text>
                   </XStack>
@@ -714,21 +734,21 @@ export default function ProfileScreen() {
 
                 {/* Delete Account */}
                 <Button
-                  backgroundColor={`${theme.error}1A` as any}
-                  borderColor={`${theme.error}4D` as any}
-                  borderWidth={1.5}
-                  pressStyle={{ opacity: 0.8, scale: 0.98, backgroundColor: `${theme.error}26` as any }}
-                  borderRadius={8}
+                  backgroundColor="rgba(239, 68, 68, 0.06)"
+                  borderColor="rgba(239, 68, 68, 0.2)"
+                  borderWidth={1}
+                  pressStyle={{ opacity: 0.8 }}
+                  borderRadius={10}
                   height={44}
                   onPress={handleDeleteAccount}
                 >
                   <XStack gap={8} alignItems="center" justifyContent="center">
-                    <SymbolView
-                      name={{ ios: 'trash.fill', android: 'delete', web: 'delete' } as const}
+                    <PhosphorIcon
+                      name="Trash"
                       size={14}
-                      tintColor={theme.error}
+                      color="#EF4444"
                     />
-                    <Text color={theme.error} fontSize={14} fontWeight="700">
+                    <Text color="#EF4444" fontSize={14} style={{ fontFamily: Fonts.bold }}>
                       Delete Sandbox Account
                     </Text>
                   </XStack>
@@ -765,9 +785,9 @@ export default function ProfileScreen() {
             shadowRadius={24}
           >
             <XStack justifyContent="space-between" alignItems="center">
-              <Text fontSize={18} fontWeight="800" color={theme.text}>Edit Sandbox Profile</Text>
+              <Text fontSize={18} style={{ fontFamily: Fonts.bold }} color={theme.text}>Edit Sandbox Profile</Text>
               <TouchableOpacity onPress={() => setEditProfileVisible(false)} style={{ padding: 4 }}>
-                <Text fontSize={22} fontWeight="600" color={theme.textSecondary}>×</Text>
+                <PhosphorIcon name="X" size={18} color={theme.textSecondary} weight="bold" />
               </TouchableOpacity>
             </XStack>
 
@@ -866,7 +886,7 @@ export default function ProfileScreen() {
                               alignItems: 'center',
                               justifyContent: 'center',
                               borderWidth: 3,
-                              borderColor: isSelected ? (mode === 'dark' ? '#F8FAFC' : '#0F172A') : 'transparent'
+                              borderColor: isSelected ? '#FFFFFF' : 'transparent',
                             }}
                           />
                         );
@@ -998,15 +1018,17 @@ export default function ProfileScreen() {
                       <XStack key={i} justifyContent="space-between" alignItems="center" paddingVertical={4}>
                         <Text fontSize={13} color={theme.text} flex={1}>{feature.name}</Text>
                         <XStack gap={16} alignItems="center">
-                          <SymbolView
-                            name={feature.free ? { ios: 'checkmark.circle.fill', android: 'check', web: 'check' } as any : { ios: 'xmark.circle.fill', android: 'close', web: 'close' } as any}
+                          <PhosphorIcon
+                            name={feature.free ? 'CheckCircle' : 'XCircle'}
                             size={14}
-                            tintColor={feature.free ? theme.textSecondary : theme.error}
+                            color={feature.free ? theme.textSecondary : theme.error}
+                            weight="fill"
                           />
-                          <SymbolView
-                            name={{ ios: 'checkmark.circle.fill', android: 'check', web: 'check' } as any}
+                          <PhosphorIcon
+                            name="CheckCircle"
                             size={14}
-                            tintColor="#F59E0B"
+                            color="#F59E0B"
+                            weight="fill"
                           />
                         </XStack>
                       </XStack>
@@ -1098,7 +1120,7 @@ export default function ProfileScreen() {
                         {cardNetwork === 'visa' && <Text color="#FFFFFF" fontSize={18} fontWeight="900" fontStyle="italic">VISA</Text>}
                         {cardNetwork === 'mastercard' && <Text color="#FFFFFF" fontSize={18} fontWeight="900" fontStyle="italic">MC</Text>}
                         {cardNetwork === 'amex' && <Text color="#FFFFFF" fontSize={18} fontWeight="900" fontStyle="italic">AMEX</Text>}
-                        {cardNetwork === 'generic' && <SymbolView name={{ ios: 'creditcard.fill', android: 'credit_card', web: 'credit_card' } as any} size={20} tintColor="#FFFFFF" />}
+                        {cardNetwork === 'generic' && <PhosphorIcon name="CreditCard" size={20} color="#FFFFFF" />}
                       </XStack>
                     </XStack>
                     
@@ -1225,10 +1247,11 @@ export default function ProfileScreen() {
                 <Animated.View entering={ZoomIn.duration(400)} style={{ gap: 20, alignItems: 'center', paddingVertical: 16 }}>
                   {/* Glowing unlock graphic */}
                   <View style={styles.successGlow}>
-                    <SymbolView
-                      name={{ ios: 'crown.fill', android: 'star', web: 'star' } as any}
+                    <PhosphorIcon
+                      name="Crown"
                       size={44}
-                      tintColor="#F59E0B"
+                      color="#F59E0B"
+                      weight="fill"
                     />
                   </View>
 
@@ -1296,10 +1319,10 @@ export default function ProfileScreen() {
               <YStack gap={16} paddingBottom={20}>
                 {/* Contact Banner */}
                 <YStack gap={8} backgroundColor={theme.backgroundElement} padding={16} borderRadius={16} borderWidth={1} borderColor={theme.border} alignItems="center">
-                  <SymbolView
-                    name={{ ios: 'envelope.fill', android: 'mail', web: 'mail' } as any}
+                  <PhosphorIcon
+                    name="Envelope"
                     size={28}
-                    tintColor={theme.primary as any}
+                    color={theme.primary as any}
                   />
                   <Text color={theme.text} fontSize={14} fontWeight="700">Email simulated support desk</Text>
                   <Text color={theme.primary as any} fontSize={15} fontWeight="800">support@cbudget.education</Text>
@@ -1376,87 +1399,12 @@ export default function ProfileScreen() {
         </YStack>
       </Modal>
 
-      {/* TERMS & PRIVACY POLICY MODAL */}
-      <Modal
+      {/* TERMS & PRIVACY POLICY MODAL — Full tabbed legal document */}
+      <LegalPolicyModal
         visible={termsVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setTermsVisible(false)}
-      >
-        <YStack flex={1} backgroundColor="rgba(15, 23, 42, 0.7)" justifyContent="flex-end">
-          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setTermsVisible(false)} />
-          <YStack
-            backgroundColor={theme.surface}
-            borderTopLeftRadius={24}
-            borderTopRightRadius={24}
-            maxHeight="85%"
-            paddingHorizontal={Spacing[24]}
-            paddingTop={Spacing[24]}
-            paddingBottom={Platform.OS === 'ios' ? 44 : 24}
-            gap={16}
-            elevation={10}
-            shadowColor="#000"
-            shadowOffset={{ width: 0, height: -8 }}
-            shadowOpacity={0.15}
-            shadowRadius={24}
-          >
-            <XStack justifyContent="space-between" alignItems="center">
-              <Text fontSize={18} fontWeight="800" color={theme.text}>Terms & Privacy Policy</Text>
-              <TouchableOpacity onPress={() => setTermsVisible(false)} style={{ padding: 4 }}>
-                <Text fontSize={22} fontWeight="600" color={theme.textSecondary}>×</Text>
-              </TouchableOpacity>
-            </XStack>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <YStack gap={16} paddingBottom={20}>
-                
-                {/* Simulated Agreement Section */}
-                <YStack gap={6}>
-                  <Text color={theme.text} fontSize={14} fontWeight="700">1. Simulated Sandbox Agreement</Text>
-                  <Text color={theme.textSecondary} fontSize={12} lineHeight={18}>
-                    Cbudget is an educational simulator for personal finance, budgeting, and stock trading. All assets, balances, margins, stock holdings, cash balances, and transactions are 100% virtual and simulated. No real currency is ever traded, transacted, or transferred within this application.
-                  </Text>
-                </YStack>
-
-                {/* Privacy Policy Section */}
-                <YStack gap={6}>
-                  <Text color={theme.text} fontSize={14} fontWeight="700">2. Privacy & On-Device Data</Text>
-                  <Text color={theme.textSecondary} fontSize={12} lineHeight={18}>
-                    We respect your learning journey privacy. All local budgeting logs, mock purchase records, simulated trading portfolios, achievements, and custom avatar profiles are stored locally on your device via secure key-value encryption. We do not transmit or sell your financial habits data to any third-party networks.
-                  </Text>
-                </YStack>
-
-                {/* Gamified Leaderboard Rules Section */}
-                <YStack gap={6}>
-                  <Text color={theme.text} fontSize={14} fontWeight="700">3. Gamified Content & Titles</Text>
-                  <Text color={theme.textSecondary} fontSize={12} lineHeight={18}>
-                    XP points, levels, daily login streaks, financial health grades, and sandbox titles (e.g. Smart Saver, Investment Explorer) are game elements created solely to incentivize positive financial habit-building and educational course engagement. They do not constitute any professional banking score or credit rating.
-                  </Text>
-                </YStack>
-
-                {/* Disclaimer Section */}
-                <YStack gap={6} padding={12} backgroundColor={`${theme.warning}10` as any} borderRadius={12} borderWidth={1} borderColor={`${theme.warning}30` as any}>
-                  <Text color={theme.warning as any} fontSize={12} fontWeight="700">⚠️ Educational Disclaimer</Text>
-                  <Text color={theme.textSecondary} fontSize={11} lineHeight={16}>
-                    The content inside the learning modules is for educational guidance only and should not be considered professional financial advice. Always consult a certified financial planner for real-life investing.
-                  </Text>
-                </YStack>
-              </YStack>
-            </ScrollView>
-
-            <Button
-              height={48}
-              backgroundColor={theme.primary as any}
-              borderRadius={12}
-              color="#FFFFFF"
-              fontWeight="700"
-              onPress={() => setTermsVisible(false)}
-            >
-              I Accept & Understand
-            </Button>
-          </YStack>
-        </YStack>
-      </Modal>
+        onClose={() => setTermsVisible(false)}
+        theme={theme}
+      />
 
       {/* CUSTOM LOGOUT CONFIRMATION MODAL */}
       <Modal
@@ -1489,10 +1437,11 @@ export default function ProfileScreen() {
               alignItems="center"
               justifyContent="center"
             >
-              <SymbolView
-                name={{ ios: 'exclamationmark.triangle.fill', android: 'warning', web: 'warning' } as const}
+              <PhosphorIcon
+                name="Warning"
                 size={32}
-                tintColor={theme.warning}
+                color={theme.warning}
+                weight="fill"
               />
             </YStack>
 
@@ -1548,9 +1497,25 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
+  topHeaderBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
+  },
+  topStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
   scrollContent: {
-    paddingHorizontal: 6,
-    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingTop: 4,
     paddingBottom: 32,
   },
   planCard: {
