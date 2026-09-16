@@ -3,5 +3,42 @@
     "source.fixAll": "explicit",
     "source.organizeImports": "explicit",
     "source.sortMembers": "explicit"
+  },
+  "java.jdt.ls.vmargs": "-XX:+UseParallelGC -XX:GCTimeRatio=4 -XX:AdaptiveSizePolicyWeight=90 -Dsun.zip.disableMemoryMapping=true -Xmx4G -Xms100m -Xlog:disable",
+  "java.import.exclusions": [
+    "**/node_modules/**",
+    "**/.expo/**",
+    "**/assets/**",
+    "**/.git/**"
+  ],
+  "java.project.resourceFilters": [
+    "node_modules",
+    ".expo",
+    ".git"
+  ],
+  "java.import.generatesMetadataFilesAtProjectRoot": false,
+  "java.autobuild.enabled": false,
+  "gradle.nestedProjects": false,
+  "gradle.autoDetect": "off",
+  "files.exclude": {
+    "**/.git": true,
+    "**/.svn": true,
+    "**/.hg": true,
+    "**/CVS": true,
+    "**/.DS_Store": true,
+    "**/Thumbs.db": true,
+    "**/node_modules/**/.project": true,
+    "**/node_modules/**/.classpath": true,
+    "**/node_modules/**/.settings": true,
+    "**/node_modules/**/bin": true
+  },
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/**": true,
+    "**/.expo/**": true,
+    "**/android/.gradle/**": true,
+    "**/android/app/build/**": true,
+    "**/android/build/**": true
   }
 }
