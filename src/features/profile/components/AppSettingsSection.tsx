@@ -6,12 +6,15 @@ import {
   Modal,
   TextInput,
   Alert,
+  Linking,
 } from 'react-native';
 import { YStack, XStack, Text as TamaguiText, View } from 'tamagui';
 import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
 import { CbudgetCard } from '@/components/ui/CbudgetCard';
 import { AnimatedSegmentSwitch } from '@/components/ui/AnimatedSegmentSwitch';
 import { usePreferencesStore, SupportedCurrency } from '@/store/preferencesStore';
+import { useAuthStore } from '@/store/authStore';
+import { useGamificationStore } from '@/store/gamificationStore';
 import { safeHaptic } from '@/utils/haptics';
 import { Fonts, Spacing } from '@/constants/theme';
 
@@ -33,6 +36,8 @@ interface AppSettingsSectionProps {
 }
 
 export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
+  const { user } = useAuthStore();
+  const { getFinancialHealthScore, streakDays, achievements } = useGamificationStore();
   const {
     soundEffectsEnabled,
     hapticsEnabled,
@@ -61,17 +66,66 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
     { code: 'GBP', label: 'GBP', symbol: '£' },
   ];
 
+  const handleSendGuardianReport = async (emailOverride?: string) => {
+    const targetEmail = (emailOverride || guardianEmail).trim();
+    if (!targetEmail) {
+      Alert.alert('No Email', 'Please enter a valid parent or guardian email address.');
+      return;
+    }
+    safeHaptic('light');
+
+    const score = getFinancialHealthScore();
+    const studentName = user?.name || user?.email?.split('@')[0] || 'Your Student';
+    const unlockedCount = achievements.filter((a: any) => a.unlocked).length || achievements.length;
+    const dateStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+    const subject = encodeURIComponent(`[CBudget] Financial Literacy Progress Report — ${studentName}`);
+    const body = encodeURIComponent(
+      `Hello Parent / Guardian,\n\nHere is the latest financial literacy progress update from CBudget for ${studentName} as of ${dateStr}:\n\n` +
+      `📊 Financial Literacy Score: ${score}/100\n` +
+      `🔥 Active Learning Streak: ${streakDays} day(s)\n` +
+      `🏆 Achievements & Milestones Unlocked: ${unlockedCount}\n\n` +
+      `About CBudget:\n` +
+      `CBudget is an educational sandbox designed to teach students budgeting, savings discipline, and financial literacy safely in a risk-free simulated environment.\n\n` +
+      `Thank you for encouraging financial responsibility!\n\n` +
+      `Best regards,\nThe CBudget Team`
+    );
+
+    const mailUrl = `mailto:${targetEmail}?subject=${subject}&body=${body}`;
+    try {
+      const canOpen = await Linking.canOpenURL(mailUrl);
+      if (canOpen) {
+        await Linking.openURL(mailUrl);
+      } else {
+        Alert.alert(
+          'Email App Not Found',
+          `Could not open default mail app. You can manually email this progress report to ${targetEmail}.`
+        );
+      }
+    } catch {
+      Alert.alert('Error', 'Unable to launch default email app.');
+    }
+  };
+
   const handleGuardianSave = async () => {
-    if (!inputEmail.trim() || !inputEmail.includes('@')) {
+    const cleanEmail = inputEmail.trim();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
       Alert.alert('Invalid Email', 'Please enter a valid parent or guardian email address.');
       return;
     }
     safeHaptic('success');
-    await setGuardianInfo(inputEmail.trim(), true);
+    await setGuardianInfo(cleanEmail, true);
     setGuardianModalVisible(false);
     Alert.alert(
-      'Guardian Linked',
-      `Monthly financial progress reports and milestone alerts will be sent to ${inputEmail.trim()}.`
+      'Guardian Linked! 🎉',
+      `Parental reports and milestone summaries are now connected to ${cleanEmail}.\n\nWould you like to send an introductory progress report now?`,
+      [
+        { text: 'Later', style: 'cancel' },
+        {
+          text: 'Send Report Now',
+          onPress: () => handleSendGuardianReport(cleanEmail),
+        },
+      ]
     );
   };
 
@@ -190,9 +244,23 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
                 />
               </View>
               <YStack flex={1} gap={2}>
-                <Text color={theme.text} fontSize={14.5} fontFamily={Fonts.bold}>
-                  Push Notifications
-                </Text>
+                <XStack alignItems="center" gap={8}>
+                  <Text color={theme.text} fontSize={14.5} fontFamily={Fonts.bold}>
+                    Push Notifications
+                  </Text>
+                  <View
+                    style={{
+                      backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                      borderRadius: 6,
+                    }}
+                  >
+                    <Text color="#3B82F6" fontSize={9} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                      BETA PREVIEW
+                    </Text>
+                  </View>
+                </XStack>
                 <Text color={theme.textSecondary} fontSize={11.5} fontFamily={Fonts.medium}>
                   Allow Walletly to send learning alerts
                 </Text>
@@ -372,19 +440,56 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
             </YStack>
           </XStack>
 
-          <TouchableOpacity
-            onPress={() => {
-              safeHaptic('light');
-              setInputEmail(guardianEmail);
-              setGuardianModalVisible(true);
-            }}
-            style={[styles.guardianBtn, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}
-            activeOpacity={0.7}
-          >
-            <Text color={theme.primary} fontSize={13} fontFamily={Fonts.bold}>
-              {guardianLinked ? 'Manage Guardian Email ➔' : '+ Connect Parent Email'}
-            </Text>
-          </TouchableOpacity>
+          {guardianLinked ? (
+            <XStack gap={10}>
+              <TouchableOpacity
+                onPress={() => {
+                  safeHaptic('light');
+                  setInputEmail(guardianEmail);
+                  setGuardianModalVisible(true);
+                }}
+                style={[
+                  styles.guardianBtn,
+                  { flex: 1, borderColor: theme.border, backgroundColor: theme.backgroundElement },
+                ]}
+                activeOpacity={0.7}
+              >
+                <Text color={theme.text} fontSize={12.5} fontFamily={Fonts.bold} textAlign="center">
+                  Manage Email ➔
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => handleSendGuardianReport()}
+                style={[
+                  styles.guardianBtn,
+                  { flex: 1.2, borderColor: '#10B981', backgroundColor: 'rgba(16, 185, 129, 0.12)' },
+                ]}
+                activeOpacity={0.7}
+              >
+                <XStack alignItems="center" justifyContent="center" gap={6}>
+                  <PhosphorIcon name="PaperPlaneTilt" size={15} color="#10B981" weight="fill" />
+                  <Text color="#10B981" fontSize={12.5} fontFamily={Fonts.bold}>
+                    Send Report
+                  </Text>
+                </XStack>
+              </TouchableOpacity>
+            </XStack>
+          ) : (
+            <TouchableOpacity
+              onPress={() => {
+                safeHaptic('light');
+                setInputEmail(guardianEmail);
+                setGuardianModalVisible(true);
+              }}
+              style={[styles.guardianBtn, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}
+              activeOpacity={0.7}
+            >
+              <Text color={theme.primary} fontSize={13} fontFamily={Fonts.bold}>
+                + Connect Parent Email
+              </Text>
+            </TouchableOpacity>
+          )}
 
           {/* Parental Consent Compliance Notice */}
           {!guardianLinked && (
@@ -477,15 +582,36 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
               </TouchableOpacity>
 
               {guardianLinked && (
-                <TouchableOpacity
-                  onPress={handleGuardianUnlink}
-                  style={[styles.modalActionBtn, { backgroundColor: 'transparent' }]}
-                  activeOpacity={0.8}
-                >
-                  <Text color={theme.error} fontSize={13} fontFamily={Fonts.bold}>
-                    Remove Guardian Link
-                  </Text>
-                </TouchableOpacity>
+                <>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setGuardianModalVisible(false);
+                      handleSendGuardianReport();
+                    }}
+                    style={[
+                      styles.modalActionBtn,
+                      { backgroundColor: 'rgba(16, 185, 129, 0.12)', borderWidth: 1, borderColor: '#10B981' },
+                    ]}
+                    activeOpacity={0.8}
+                  >
+                    <XStack alignItems="center" justifyContent="center" gap={6}>
+                      <PhosphorIcon name="PaperPlaneTilt" size={15} color="#10B981" weight="fill" />
+                      <Text color="#10B981" fontSize={13.5} fontFamily={Fonts.bold}>
+                        Send Progress Report Now
+                      </Text>
+                    </XStack>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={handleGuardianUnlink}
+                    style={[styles.modalActionBtn, { backgroundColor: 'transparent' }]}
+                    activeOpacity={0.8}
+                  >
+                    <Text color={theme.error} fontSize={13} fontFamily={Fonts.bold}>
+                      Remove Guardian Link
+                    </Text>
+                  </TouchableOpacity>
+                </>
               )}
             </YStack>
           </View>

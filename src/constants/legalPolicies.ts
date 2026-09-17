@@ -216,9 +216,9 @@ export const SIMULATOR_RULES: PolicySection[] = [
       'XP points, levels, daily login streaks, financial health grades, and sandbox titles (e.g., Smart Saver, Investment Explorer) are game elements created solely to incentivize positive financial habit-building and educational course engagement. They do not constitute any professional banking score, credit rating, or real-world financial qualification.',
   },
   {
-    title: '5. Premium Features',
+    title: '5. 100% Free Educational Access',
     content:
-      'Premium tier features (expanded simulator tools, advanced Investment Lab, etc.) are educational enhancements within the sandbox environment. Premium status does not grant access to real financial services, real investment accounts, or real monetary transactions.',
+      'All learning modules, budget monitoring tools, stock market simulators, arcade minigames, and financial literacy tracks in Cbudget are 100% free for educational use. There are no paid subscriptions, paywalls, in-app purchases, or premium tiers.',
   },
   {
     title: '6. Data Reset',

@@ -1,10 +1,9 @@
 import React, { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View, Text } from 'react-native';
 import { useRouter, useLocalSearchParams, Href } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { supabase } from '@/utils/supabase';
 import { useAuthStore } from '@/store/authStore';
-import { ThemedText } from '@/components/themed-text';
 
 export default function AuthCallbackScreen() {
   const router = useRouter();
@@ -81,9 +80,9 @@ export default function AuthCallbackScreen() {
   return (
     <View style={styles.container}>
       <ActivityIndicator size="large" color="#3EB47D" />
-      <ThemedText type="bodyMed" style={styles.text}>
+      <Text style={styles.text}>
         Completing sign in...
-      </ThemedText>
+      </Text>
     </View>
   );
 }

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { storage } from '@/utils/storage';
+import { supabase } from '@/utils/supabase';
 
 export const PREFERENCE_STORAGE_KEYS = {
   PREFERENCES: 'cbudget_user_preferences',
@@ -80,6 +81,23 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   setGuardianInfo: async (email: string, linked: boolean) => {
     set({ guardianEmail: email, guardianLinked: linked });
     await savePreferences(get());
+
+    // Best-effort cloud sync to user's Supabase profile
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) {
+        await supabase
+          .from('profiles')
+          .update({
+            guardian_email: email ? email.trim() : null,
+            guardian_linked: linked,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', session.user.id);
+      }
+    } catch {
+      // Local storage remains persistent fallback if offline or table schema differs
+    }
   },
 
   setDisclaimerAccepted: async () => {
