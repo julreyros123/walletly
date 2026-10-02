@@ -4,18 +4,16 @@
     "slug": "cbudget",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/walletly-logo.png",
     "scheme": "cbudget",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/images/walletly-logo.png"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#0A2540",
+        "foregroundImage": "./assets/images/walletly-logo.png"
       },
       "predictiveBackGestureEnabled": true,
       "package": "com.julreyros123.cbudget",
@@ -38,8 +36,8 @@
         {
           "backgroundColor": "#0A2540",
           "android": {
-            "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
+            "image": "./assets/images/walletly-logo.png",
+            "imageWidth": 160
           }
         }
       ],
