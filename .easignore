@@ -26,6 +26,15 @@ example
 /ios
 replace.js
 
+# Android build outputs & local caches
+.gradle/
+android/.gradle/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/local.properties
+
 # Ensure google-services.json is NOT ignored for Android EAS Build
 !google-services.json
 !android/app/google-services.json
+
