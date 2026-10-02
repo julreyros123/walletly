@@ -527,6 +527,16 @@ export default function CryptoRocketScreen() {
                 </Text>
               </View>
 
+              {/* Real-world investing disclaimer */}
+              <View style={[styles.takeawayBox, { borderColor: 'rgba(239, 68, 68, 0.3)' }]}>
+                <Text color="#EF4444" fontSize={11.5} fontFamily={Fonts.bold} marginBottom={2}>
+                  ⚠️ SIMULATION DISCLAIMER
+                </Text>
+                <Text color="#94A3B8" fontSize={11.5} fontFamily={Fonts.medium} lineHeight={16}>
+                  This mini-game simulates the extreme volatility of speculative crypto trading. Real investing involves research, patience, and diversification — NOT timing a multiplier. Never invest money you can't afford to lose.
+                </Text>
+              </View>
+
               <TouchableOpacity
                 onPress={() => setShowRulesModal(false)}
                 style={styles.gotItBtn}

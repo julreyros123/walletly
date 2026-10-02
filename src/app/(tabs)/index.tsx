@@ -1,13 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { ScrollView, StyleSheet, View, Text, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Defs, LinearGradient, Stop, Rect, Circle } from 'react-native-svg';
 import { useRouter, Href, useFocusEffect } from 'expo-router';
-import { setStatusBarStyle } from 'expo-status-bar';
+import { StatusBar, setStatusBarStyle } from 'expo-status-bar';
 import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
 
 import { useAuthStore } from '@/store/authStore';
-import { useGamificationStore, getLocalDateString } from '@/store/gamificationStore';
+import { useGamificationStore, getLocalDateString, getCycleMetrics } from '@/store/gamificationStore';
 import { useTheme } from '@/hooks/use-theme';
 import { Fonts } from '@/constants/theme';
 import { toast } from '@/store/toastStore';
@@ -75,21 +74,47 @@ export default function DashboardScreen() {
   const router = useRouter();
   const store = useGamificationStore();
   const user = useAuthStore((state) => state.user);
+  const isAuthLoading = useAuthStore((state) => state.isLoading);
   const { symbol: currencySymbol } = useCurrency();
 
   useFocusEffect(
     React.useCallback(() => {
-      setStatusBarStyle('light');
-    }, [])
+      setStatusBarStyle(theme.mode === 'dark' ? 'light' : 'dark');
+    }, [theme.mode])
   );
 
   const [showDailyReward, setShowDailyReward] = useState(false);
   const [isBalanceHidden, setIsBalanceHidden] = useState(false);
   const [showQuickExpense, setShowQuickExpense] = useState(false);
 
+  const hasAutoPromptedReward = useRef(false);
+  const lastPromptedUserId = useRef<string | null>(null);
+  const currentUserId = user?.id || 'guest';
+
   useEffect(() => {
     store.checkAndUpdateStreak();
   }, []);
+
+  // Reset auto-prompt when user changes (e.g. login, logout, switch account)
+  useEffect(() => {
+    if (lastPromptedUserId.current !== currentUserId) {
+      hasAutoPromptedReward.current = false;
+      lastPromptedUserId.current = currentUserId;
+    }
+  }, [currentUserId]);
+
+  // Automatically pop up Daily Sign-In Reward if not yet claimed today
+  useEffect(() => {
+    if (isAuthLoading) return;
+    const today = getLocalDateString();
+    if (!hasAutoPromptedReward.current && store.lastClaimedRewardDate !== today) {
+      hasAutoPromptedReward.current = true;
+      const timer = setTimeout(() => {
+        setShowDailyReward(true);
+      }, 700);
+      return () => clearTimeout(timer);
+    }
+  }, [isAuthLoading, store.lastClaimedRewardDate]);
 
   const handleSaveQuickExpense = (num: number, name: string, category: string) => {
     const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -104,27 +129,26 @@ export default function DashboardScreen() {
   );
   const totalSimValue = store.virtualBalance + holdingsValue;
 
-  const totalSpent = store.loggedExpenses
-    .filter((item) => item.type !== 'income')
-    .reduce((sum, item) => sum + item.amount, 0);
   const currentCycle = store.budgetType || 'monthly';
   const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const todayISO = getLocalDateString();
   const isClaimedToday = store.lastClaimedRewardDate === todayISO;
-  const todaySpent = store.loggedExpenses
-    .filter((e) => e.type !== 'income' && (e.date === todayStr || e.date === todayISO))
-    .reduce((sum, e) => sum + e.amount, 0);
 
-  const displayLimit =
-    store.totalBudget > 0
-      ? store.totalBudget
-      : currentCycle === 'daily'
-      ? 150
-      : currentCycle === 'weekly'
-      ? 1000
-      : 4000;
-  const displaySpent = currentCycle === 'daily' ? todaySpent : totalSpent;
-  const displayBalance = Math.max(0, displayLimit - displaySpent);
+  const cycleMetrics = useMemo(
+    () => getCycleMetrics(store),
+    [store.totalBudget, store.budgetType, store.loggedExpenses]
+  );
+  const displayLimit = cycleMetrics.limit;
+  const displaySpent = cycleMetrics.spent;
+  const displayBalance = cycleMetrics.balance;
+
+  const totalSpent = useMemo(
+    () =>
+      store.loggedExpenses
+        .filter((item) => item.type !== 'income')
+        .reduce((sum, item) => sum + item.amount, 0),
+    [store.loggedExpenses]
+  );
 
   const cardTitle =
     currentCycle === 'daily'
@@ -138,11 +162,21 @@ export default function DashboardScreen() {
   const xpInCurrentLevel = Math.max(0, store.xp - currentLevelXP);
   const xpProgressRatio = Math.min(1, Math.max(0, xpInCurrentLevel / 100));
 
-  const avatarDetails = getMasteryAvatarDetails(store.customAvatar);
   const firstName = user?.name ? user.name.split(' ')[0] : 'Explorer';
+
+  // Compute initials fallback from user name
+  const getInitials = (name: string) => {
+    if (!name) return 'EX';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase().slice(0, 2);
+    }
+    return name.slice(0, 2).toUpperCase();
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <StatusBar style={theme.mode === 'dark' ? 'light' : 'dark'} />
       <BackgroundSystem mode="tabs" />
 
       {/* Main Scrollable Content */}
@@ -151,50 +185,46 @@ export default function DashboardScreen() {
         showsVerticalScrollIndicator={false}
         style={styles.scrollView}
       >
-        {/* ==================== 1. FULL-BLEED TOP HEADER ==================== */}
-        <View style={[styles.fullBleedHeader, { paddingTop: Math.max(insets.top, 42) + 20, paddingBottom: 28 }]}>
-          <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
-            <Defs>
-              <LinearGradient id="headerMeshGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <Stop offset="0%" stopColor="#080C16" stopOpacity={1} />
-                <Stop offset="55%" stopColor="#0F172A" stopOpacity={1} />
-                <Stop offset="100%" stopColor="#111B2E" stopOpacity={1} />
-              </LinearGradient>
-            </Defs>
-            <Rect width="100%" height="100%" fill="url(#headerMeshGrad)" />
-            {/* Subtle atmospheric ambient glows */}
-            <Circle cx="12%" cy="20%" r={100} fill="#10B981" fillOpacity={0.06} />
-            <Circle cx="88%" cy="35%" r={120} fill="#3B82F6" fillOpacity={0.05} />
-          </Svg>
-
+        {/* ==================== 1. CLEAN TRANSPARENT TOP HEADER ==================== */}
+        <View style={[styles.cleanHeader, { paddingTop: Math.max(insets.top, 16) + 10, paddingBottom: 6 }]}>
           <View style={styles.headerRow}>
             {/* Avatar & Greetings */}
             <View style={styles.profileSection}>
               <InteractivePressable
                 onPress={() => router.push('/(tabs)/profile' as Href)}
-                style={styles.headerAvatarContainer}
+                style={[
+                  styles.headerAvatarContainer,
+                  {
+                    backgroundColor: user?.avatarColor || theme.primary,
+                    borderColor: theme.mode === 'dark' ? theme.border : '#FFFFFF',
+                  },
+                ]}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Text style={styles.avatarInitials}>
-                  {avatarDetails.initials}
-                </Text>
+                {user?.avatarEmoji ? (
+                  <Text style={styles.avatarEmoji}>{user.avatarEmoji}</Text>
+                ) : (
+                  <Text style={styles.avatarInitials}>
+                    {getInitials(user?.name || '')}
+                  </Text>
+                )}
               </InteractivePressable>
 
               <View style={styles.greetingCol}>
-                <Text style={styles.greetingText}>
+                <Text style={[styles.greetingText, { color: theme.text }]} numberOfLines={1} ellipsizeMode="tail">
                   Hey {firstName} 👋
                 </Text>
 
                 <View style={styles.xpRow}>
                   <View style={styles.headerLevelBadge}>
-                    <Text style={styles.headerLevelText}>
+                    <Text style={styles.headerLevelText} numberOfLines={1}>
                       LVL {store.level}
                     </Text>
                   </View>
-                  <View style={styles.headerXpTrack}>
+                  <View style={[styles.headerXpTrack, { backgroundColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(15, 23, 42, 0.08)' }]}>
                     <View style={[styles.xpFill, { width: `${xpProgressRatio * 100}%` }]} />
                   </View>
-                  <Text style={styles.xpText}>
+                  <Text style={[styles.xpText, { color: theme.textSecondary }]} numberOfLines={1}>
                     {store.xp}/{nextLevelThreshold} XP
                   </Text>
                 </View>
@@ -204,10 +234,16 @@ export default function DashboardScreen() {
             {/* Notification Bell */}
             <InteractivePressable
               onPress={() => toast.info('Notifications', 'You are all caught up! ✨')}
-              style={styles.headerNotificationBtn}
+              style={[
+                styles.headerNotificationBtn,
+                {
+                  backgroundColor: theme.surface,
+                  borderColor: theme.border,
+                },
+              ]}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <MotionIcon name="bell" size={19} autoPlay={true} loop={true} color="#FFFFFF" />
+              <MotionIcon name="bell" size={19} autoPlay={true} loop={true} color={theme.text} />
             </InteractivePressable>
           </View>
         </View>
@@ -219,17 +255,19 @@ export default function DashboardScreen() {
             style={[styles.streakBadge, isClaimedToday && styles.streakBadgeChecked]}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <MotionIcon name="flame" size={15} autoPlay={true} loop={true} color="#F59E0B" />
+            <MotionIcon
+              name="flame"
+              size={17}
+              autoPlay={true}
+              loop={true}
+              color={isClaimedToday ? '#34D399' : '#FB923C'}
+            />
             <Text style={[styles.streakText, isClaimedToday && styles.streakTextChecked]}>
               {store.streakDays}d Streak
             </Text>
-            {isClaimedToday ? (
+            {isClaimedToday && (
               <View style={styles.streakCheckedTag}>
-                <Text style={styles.streakCheckedText}>✓</Text>
-              </View>
-            ) : (
-              <View style={styles.streakClaimTag}>
-                <Text style={styles.streakClaimText}>Claim</Text>
+                <PhosphorIcon name="Check" size={11} color="#34D399" weight="bold" />
               </View>
             )}
           </InteractivePressable>
@@ -251,7 +289,12 @@ export default function DashboardScreen() {
         {/* ==================== 4. BALANCED QUICK ACTIONS BAR ==================== */}
         <QuickActionsGrid
           onPressLogExpense={() => setShowQuickExpense(true)}
-          onPressAddSavings={() => router.push('/(tabs)/budget' as Href)}
+          onPressAddSavings={() =>
+            router.push({
+              pathname: '/(tabs)/budget',
+              params: { action: 'savings', t: Date.now().toString() },
+            } as any)
+          }
           onPressMiniGames={() => router.push('/arcade' as any)}
           onPressLearn={() => router.push('/(tabs)/learn' as Href)}
         />
@@ -264,7 +307,12 @@ export default function DashboardScreen() {
             totalSimValue={totalSimValue}
             virtualBalance={store.virtualBalance}
             holdingsValue={holdingsValue}
-            onPressViewGoals={() => router.push('/(tabs)/budget' as Href)}
+            onPressViewGoals={() =>
+              router.push({
+                pathname: '/(tabs)/budget',
+                params: { tab: 'savings', t: Date.now().toString() },
+              } as any)
+            }
             onPressInvestArena={() => router.push('/(tabs)/invest' as Href)}
           />
 
@@ -357,14 +405,24 @@ export default function DashboardScreen() {
                           {exp.name}
                         </Text>
                         <Text style={[styles.expenseSub, { color: theme.textSecondary }]}>
-                          {exp.category} • {exp.date}
+                          {exp.category}
                         </Text>
                       </View>
                     </View>
 
-                    <Text style={styles.expenseAmount}>
-                      -{currencySymbol}{exp.amount.toLocaleString()}
-                    </Text>
+                    <View style={{ alignItems: 'flex-end', gap: 1 }}>
+                      <Text style={[styles.expenseAmount, { color: exp.type === 'income' ? '#10B981' : '#EF4444' }]}>
+                        {exp.type === 'income' ? '+' : '-'}{currencySymbol}{exp.amount.toLocaleString()}
+                      </Text>
+                      <Text style={{ fontSize: 10, color: theme.textSecondary, fontFamily: Fonts.medium }}>
+                        {exp.date}
+                      </Text>
+                      {exp.time ? (
+                        <Text style={{ fontSize: 9.5, color: theme.textSecondary, opacity: 0.8, fontFamily: Fonts.regular }}>
+                          {exp.time}
+                        </Text>
+                      ) : null}
+                    </View>
                   </View>
                 ))}
               </View>
@@ -402,31 +460,15 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 40,
   },
-  fullBleedHeader: {
+  cleanHeader: {
     width: '100%',
-    position: 'relative',
-    overflow: 'hidden',
-    backgroundColor: '#080C16',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 10,
-      },
-      android: {
-        elevation: 4,
-      },
-      web: {
-        boxShadow: '0 4px 14px rgba(0, 0, 0, 0.15)',
-      } as any,
-    }),
+    paddingHorizontal: 18,
+    backgroundColor: 'transparent',
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 18,
     zIndex: 2,
   },
   profileSection: {
@@ -434,6 +476,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     flex: 1,
+    marginRight: 8,
   },
   headerAvatarContainer: {
     width: 42,
@@ -441,14 +484,32 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderWidth: 1.8,
-    borderColor: '#34D399',
+    borderWidth: 2,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.12,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+      web: {
+        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.12)',
+      } as any,
+    }),
+  },
+  avatarEmoji: {
+    fontSize: 21,
+    lineHeight: 25,
+    textAlign: 'center',
   },
   avatarInitials: {
     color: '#FFFFFF',
     fontSize: 15,
     fontFamily: Fonts.bold,
+    letterSpacing: 0.2,
   },
   greetingCol: {
     gap: 3,
@@ -456,10 +517,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   greetingText: {
-    color: '#FFFFFF',
-    fontSize: 17,
+    fontSize: 22,
     fontFamily: Fonts.bold,
-    letterSpacing: -0.3,
+    letterSpacing: -0.5,
   },
   xpRow: {
     flexDirection: 'row',
@@ -480,18 +540,16 @@ const styles = StyleSheet.create({
   },
   headerXpTrack: {
     height: 5,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 2.5,
     overflow: 'hidden',
     width: 65,
   },
   xpFill: {
     height: '100%',
-    backgroundColor: '#34D399',
+    backgroundColor: '#10B981',
     borderRadius: 2.5,
   },
   xpText: {
-    color: '#E2E8F0',
     fontSize: 10,
     fontFamily: Fonts.bold,
   },
@@ -501,62 +559,92 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    flexShrink: 0,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+      },
+      android: {
+        elevation: 1,
+      },
+      web: {
+        boxShadow: '0 1px 4px rgba(0, 0, 0, 0.05)',
+      } as any,
+    }),
   },
   mascotRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
     paddingHorizontal: 16,
-    marginTop: 8,
+    marginTop: 6,
     zIndex: 30,
   },
   streakBadge: {
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
-    borderRadius: 20,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
+    backgroundColor: '#F97316',
+    borderRadius: 22,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.3)',
+    gap: 7,
+    borderWidth: 0,
     marginBottom: 8,
     ...Platform.select({
       ios: {
-        shadowColor: '#F59E0B',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 6,
+        shadowColor: '#EA580C',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 10,
       },
       android: {
-        elevation: 2,
+        elevation: 6,
       },
       web: {
-        boxShadow: '0 2px 8px rgba(245, 158, 11, 0.15)',
+        boxShadow: '0 4px 14px rgba(234, 88, 12, 0.45)',
       } as any,
     }),
   },
   streakText: {
-    color: '#F59E0B',
-    fontSize: 11.5,
+    color: '#FFFFFF',
+    fontSize: 12.5,
     fontFamily: Fonts.bold,
+    letterSpacing: -0.2,
   },
   streakBadgeChecked: {
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-    borderColor: 'rgba(16, 185, 129, 0.35)',
+    backgroundColor: '#059669',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#047857',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 6,
+      },
+      web: {
+        boxShadow: '0 4px 14px rgba(4, 120, 87, 0.45)',
+      } as any,
+    }),
   },
   streakTextChecked: {
-    color: '#34D399',
+    color: '#FFFFFF',
   },
   streakCheckedTag: {
-    backgroundColor: 'rgba(16, 185, 129, 0.22)',
+    backgroundColor: 'rgba(52, 211, 153, 0.18)',
     paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 8,
-    marginLeft: 2,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginLeft: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(52, 211, 153, 0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   streakCheckedText: {
     color: '#34D399',
@@ -564,20 +652,31 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
   },
   streakClaimTag: {
-    backgroundColor: '#F59E0B',
-    paddingHorizontal: 7,
-    paddingVertical: 1.5,
-    borderRadius: 8,
-    marginLeft: 2,
+    backgroundColor: '#EA580C',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginLeft: 1,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#EA580C',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.4,
+        shadowRadius: 4,
+      },
+      android: { elevation: 2 },
+      web: { boxShadow: '0 1px 6px rgba(234, 88, 12, 0.5)' } as any,
+    }),
   },
   streakClaimText: {
-    color: '#0B132B',
-    fontSize: 9.5,
+    color: '#FFFFFF',
+    fontSize: 10,
     fontFamily: Fonts.bold,
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
   },
   bodyContent: {
-    paddingTop: 16,
+    marginTop: 22,
+    paddingHorizontal: 16,
   },
   spareChangeRow: {
     flexDirection: 'row',
@@ -587,6 +686,7 @@ const styles = StyleSheet.create({
   spareChangeLeft: {
     flex: 1,
     gap: 2,
+    marginRight: 8,
   },
   spareChangeTitleRow: {
     flexDirection: 'row',
@@ -613,6 +713,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 8,
+    flexShrink: 0,
   },
   sweepBtnText: {
     color: '#FFFFFF',
@@ -626,6 +727,8 @@ const styles = StyleSheet.create({
   },
   activityTitleCol: {
     gap: 2,
+    flex: 1,
+    marginRight: 8,
   },
   activityTitle: {
     fontSize: 14,
@@ -641,6 +744,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
+    flexShrink: 0,
   },
   seeAllText: {
     color: '#10B981',

@@ -10,10 +10,11 @@
 
 // ── Policy metadata ─────────────────────────────────────────────────
 export const POLICY_METADATA = {
-  APP_NAME: 'Cbudget',
-  COMPANY_NAME: 'Cbudget',
-  EFFECTIVE_DATE: 'September 8, 2026',
+  APP_NAME: 'CBudget',
+  COMPANY_NAME: 'CBudget',
+  EFFECTIVE_DATE: 'September 23, 2026',
   CONTACT_EMAIL: 'support@cbudget.app',
+  APP_VERSION: '1.0.0 (Build 2026.09)',
   /** Placeholder — replace with actual hosted URL when available */
   PRIVACY_POLICY_URL: 'https://cbudget.app/privacy',
   TERMS_URL: 'https://cbudget.app/terms',
@@ -80,20 +81,25 @@ export const TERMS_OF_SERVICE: PolicySection[] = [
   {
     title: '7. Simulated Market Data',
     content:
-      'All stock prices, market indices, portfolio valuations, dividends, and financial data displayed within the app are entirely fictional and generated for educational simulation purposes. They do not reflect real market conditions, real securities, or actual financial instruments. No correlation to real-world markets should be inferred.',
+      'All stock prices, market indices, portfolio valuations, dividends, and financial data displayed within the app are educational simulation models. They serve as interactive financial training tools and do not constitute actual trade executions or brokerage transactions in real securities.',
   },
   {
     title: '8. Intellectual Property',
     content:
-      `All content, designs, trademarks, logos, educational materials, gamification systems, and software code within ${POLICY_METADATA.APP_NAME} are the intellectual property of ${POLICY_METADATA.COMPANY_NAME} and are protected by applicable copyright, trademark, and intellectual property laws. You may not copy, modify, distribute, sell, or lease any part of the application without prior written permission.`,
+      `All original content, designs, trademarks, logos, educational materials, gamification systems, and software code within ${POLICY_METADATA.APP_NAME} are the intellectual property of ${POLICY_METADATA.COMPANY_NAME} and are protected by applicable copyright, trademark, and intellectual property laws. You may not copy, modify, distribute, sell, or lease any part of the application without prior written permission.`,
   },
   {
-    title: '9. No Regulatory Affiliation',
+    title: '9. Third-Party Trademarks & Fictional Company Aliases',
+    content:
+      `All company names, stock tickers, analogies, simulated brands, and sector descriptions appearing within the Trade Sandbox and Investment Lab (including but not limited to NovaChip AI Corp, Volt Motors, StarBrew Café, Apex Logi-Retail, and Solaris Power) are entirely fictitious entities created solely for financial literacy education, gamified simulation, and learning demonstration.\n\nAny resemblance to actual registered trademarks, commercial corporations, living persons, or real-world brand names is purely coincidental or used strictly for educational analogy and parody under fair use. The application is not sponsored by, endorsed by, affiliated with, or associated with any real-world commercial companies.\n\nAll real-world trademarks, product names, logos, and corporate designations (including but not limited to NYSE, NASDAQ, PSE, and third-party corporate entities) that may be referenced or indexed are the exclusive property of their respective trademark owners. Their reference does not imply any license, commercial partnership, or endorsement. Live baseline market reference indicators are powered by independent market data feeds (including Finnhub.io) for educational simulation only.`,
+  },
+  {
+    title: '10. No Regulatory Affiliation',
     content:
       `${POLICY_METADATA.APP_NAME} is not affiliated with, endorsed by, or associated with the Securities and Exchange Commission (SEC), Bangko Sentral ng Pilipinas (BSP), Philippine Deposit Insurance Corporation (PDIC), or any other government financial regulatory body in any jurisdiction. The app operates independently as a private educational tool.`,
   },
   {
-    title: '10. Limitation of Liability',
+    title: '11. Limitation of Liability',
     content:
       `To the maximum extent permitted by applicable law, ${POLICY_METADATA.COMPANY_NAME} shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including but not limited to loss of profits, data, or goodwill, arising out of or related to your use of or inability to use the application. The application is provided on an "as is" and "as available" basis without warranties of any kind.`,
   },
@@ -206,9 +212,9 @@ export const SIMULATOR_RULES: PolicySection[] = [
       'The simulated Philippine Peso (₱), US Dollar ($), Euro (€), and British Pound (£) displayed in the app are fictional game currencies with no real-world monetary value. They cannot be exchanged, withdrawn, redeemed, or converted into real currency or any asset of value.',
   },
   {
-    title: '3. Simulated Market Data',
+    title: '3. Simulated Market Data & Trademark Safe-Harbor',
     content:
-      'All stock tickers, prices, dividends, market movements, and portfolio performances shown in the app are entirely fictional. They are generated algorithmically for educational purposes and bear no relation to actual securities traded on any real stock exchange (e.g., PSE, NYSE, NASDAQ).',
+      'All stock tickers, company personas, dividends, and portfolio movements shown in the app are fictional educational simulations. Real-world market indicators are referenced solely to anchor baseline price movements via Finnhub.io for realistic financial education. All corporate trademarks and brand names belong to their respective owners, and their educational indexing does not imply any sponsorship, endorsement, or commercial affiliation.',
   },
   {
     title: '4. Gamification & Achievements',
@@ -218,7 +224,7 @@ export const SIMULATOR_RULES: PolicySection[] = [
   {
     title: '5. 100% Free Educational Access',
     content:
-      'All learning modules, budget monitoring tools, stock market simulators, arcade minigames, and financial literacy tracks in Cbudget are 100% free for educational use. There are no paid subscriptions, paywalls, in-app purchases, or premium tiers.',
+      `All learning modules, budget monitoring tools, stock market simulators, arcade minigames, and financial literacy tracks in ${POLICY_METADATA.APP_NAME} are 100% free for educational use. There are no paid subscriptions, paywalls, in-app purchases, or premium tiers.`,
   },
   {
     title: '6. Data Reset',

@@ -66,11 +66,11 @@ export default function ArcadeScreen() {
           {/* Section: Arcade Trophies & Milestones */}
           <YStack gap={12} marginTop={26}>
             <XStack justifyContent="space-between" alignItems="center">
-              <Text color="#94A3B8" fontSize={12} fontFamily={Fonts.bold} letterSpacing={0.6} textTransform="uppercase">
-                🏆 ARCADE TROPHIES & MILESTONES
+              <Text color="#94A3B8" fontSize={11} fontFamily={Fonts.bold} letterSpacing={0.6} textTransform="uppercase">
+                🏆 Trophies & Milestones
               </Text>
-              <Text color="#FBBF24" fontSize={11.5} fontFamily={Fonts.bold}>
-                Gamified Badges
+              <Text color="#FBBF24" fontSize={11} fontFamily={Fonts.bold}>
+                Badges
               </Text>
             </XStack>
 

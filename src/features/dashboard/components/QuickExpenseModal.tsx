@@ -16,6 +16,7 @@ import { InteractivePressable } from '@/components/ui/InteractivePressable';
 import { toast } from '@/store/toastStore';
 import { useGamificationStore } from '@/store/gamificationStore';
 import { useCurrency } from '@/utils/currency';
+import { useTheme } from '@/hooks/use-theme';
 
 interface QuickExpenseModalProps {
   visible: boolean;
@@ -39,6 +40,7 @@ export function QuickExpenseModal({
   onClose,
   onSave,
 }: QuickExpenseModalProps) {
+  const theme = useTheme();
   const insets = useSafeAreaInsets();
   const selectedCategories = useGamificationStore((state) => state.selectedCategories);
   const { currency: currencyCode, symbol: currencySymbol } = useCurrency();
@@ -68,6 +70,8 @@ export function QuickExpenseModal({
     onClose();
   };
 
+  const isDark = theme.mode === 'dark';
+
   return (
     <Modal
       visible={visible}
@@ -84,6 +88,8 @@ export function QuickExpenseModal({
           style={[
             styles.sheetContainer,
             {
+              backgroundColor: theme.surface,
+              borderColor: theme.border,
               paddingBottom: Math.max(insets.bottom, 24) + 24,
               marginBottom:
                 Platform.OS === 'android' ? Math.max(insets.bottom, 16) : 0,
@@ -91,11 +97,16 @@ export function QuickExpenseModal({
           ]}
         >
           {/* Sheet Handle */}
-          <View style={styles.sheetHandle} />
+          <View
+            style={[
+              styles.sheetHandle,
+              { backgroundColor: isDark ? '#475569' : '#CBD5E1' },
+            ]}
+          />
 
           {/* Header */}
           <View style={styles.headerRow}>
-            <Text style={styles.sheetTitle}>Quick Log Expense</Text>
+            <Text style={[styles.sheetTitle, { color: theme.text }]}>Quick Log Expense</Text>
             <InteractivePressable
               onPress={onClose}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -103,7 +114,7 @@ export function QuickExpenseModal({
               <PhosphorIcon
                 name="XCircle"
                 size={22}
-                color="#64748B"
+                color={theme.textSecondary}
                 weight="fill"
               />
             </InteractivePressable>
@@ -111,16 +122,24 @@ export function QuickExpenseModal({
 
           {/* Amount Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Amount ({currencyCode})</Text>
-            <View style={styles.amountInputRow}>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Amount ({currencyCode})</Text>
+            <View
+              style={[
+                styles.amountInputRow,
+                {
+                  backgroundColor: isDark ? '#0F172A' : '#F8FAFC',
+                  borderColor: theme.border,
+                },
+              ]}
+            >
               <Text style={styles.currencySymbol}>{currencySymbol}</Text>
               <TextInput
                 value={amount}
                 onChangeText={setAmount}
                 placeholder="0.00"
-                placeholderTextColor="#64748B"
+                placeholderTextColor={theme.textSecondary}
                 keyboardType="decimal-pad"
-                style={styles.amountInput}
+                style={[styles.amountInput, { color: theme.text }]}
                 autoFocus={true}
               />
             </View>
@@ -128,19 +147,26 @@ export function QuickExpenseModal({
 
           {/* Description Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Description</Text>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Description</Text>
             <TextInput
               value={name}
               onChangeText={setName}
               placeholder="e.g. Lunch, Grab Ride, Books"
-              placeholderTextColor="#64748B"
-              style={styles.textInput}
+              placeholderTextColor={theme.textSecondary}
+              style={[
+                styles.textInput,
+                {
+                  backgroundColor: isDark ? '#0F172A' : '#F8FAFC',
+                  borderColor: theme.border,
+                  color: theme.text,
+                },
+              ]}
             />
           </View>
 
           {/* Category Chips */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Category</Text>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Category</Text>
             <View style={styles.categoriesWrap}>
               {categories.map((cat) => {
                 const isSelected = category === cat;
@@ -150,12 +176,17 @@ export function QuickExpenseModal({
                     onPress={() => setCategory(cat)}
                     style={[
                       styles.categoryChip,
+                      {
+                        backgroundColor: isDark ? '#0F172A' : '#F5F5F5',
+                        borderColor: theme.border,
+                      },
                       isSelected && styles.categoryChipSelected,
                     ]}
                   >
                     <Text
                       style={[
                         styles.categoryChipText,
+                        { color: theme.textSecondary },
                         isSelected && styles.categoryChipTextSelected,
                       ]}
                     >

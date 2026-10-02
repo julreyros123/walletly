@@ -1,8 +1,60 @@
 import { create } from 'zustand';
-import { useAuthStore } from './authStore';
+import { AppState } from 'react-native';
 import { storage } from '@/utils/storage';
+import { supabase } from '@/utils/supabase';
+import { syncQueue } from '@/utils/syncQueue';
 
-const GAMIFICATION_STORAGE_KEY = 'cbudget_gamification_state';
+export const CURRENT_GAMIFICATION_VERSION = 2;
+const BASE_GAMIFICATION_KEY = 'cbudget_gamification_state';
+
+// Track the current authenticated user ID for state scoping
+let currentActiveUserId: string | null = null;
+let lastHydratedTarget: string | null | undefined = undefined;
+
+export function setActiveGamificationUser(userId: string | null) {
+  currentActiveUserId = userId;
+  lastHydratedTarget = undefined;
+}
+
+export function getUserStorageKey(userId?: string | null): string {
+  if (userId && userId !== 'guest') {
+    return `${BASE_GAMIFICATION_KEY}_${userId}`;
+  }
+  return `${BASE_GAMIFICATION_KEY}_guest`;
+}
+
+/**
+ * Standard RFC4122 v4 UUID generator compatible with PostgreSQL UUID primary keys
+ */
+export function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    try {
+      return crypto.randomUUID();
+    } catch {}
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+/**
+ * Normalizes input date strings (e.g. "Sep 25", "Sep 25, 2026", or undefined)
+ * into a strict YYYY-MM-DD format accepted by PostgreSQL DATE columns.
+ */
+export function toISODate(dateStr?: string): string {
+  if (!dateStr) return getLocalDateString();
+  const trimmed = dateStr.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const currentYear = new Date().getFullYear();
+  const withYear = trimmed.includes(String(currentYear)) ? trimmed : `${trimmed}, ${currentYear}`;
+  const parsed = new Date(withYear);
+  if (!isNaN(parsed.getTime())) {
+    return getLocalDateString(parsed);
+  }
+  return getLocalDateString();
+}
 
 /**
  * Returns the current date in local device timezone formatted as YYYY-MM-DD.
@@ -30,6 +82,7 @@ export interface Expense {
   category: string;
   amount: number;
   date: string;
+  time?: string; // 12-hour format e.g. "02:30 PM"
   notes?: string;
   type?: 'expense' | 'income';
 }
@@ -41,6 +94,148 @@ export interface SavingsGoal {
   currentSavings: number;
   targetDate: string;
   category: string; // Emergency Fund, New Laptop, School Tuition, etc.
+}
+
+export interface SavingsRecord {
+  id: string;
+  amount: number;
+  date: string; // e.g., "Sep 25, 2026"
+  time: string; // 12-hour format e.g., "09:15 PM"
+  note: string;
+  cycle: 'daily' | 'weekly' | 'monthly';
+  createdAtISO: string;
+}
+
+export function format12HourTime(d: Date = new Date()): string {
+  let hours = d.getHours();
+  const minutes = d.getMinutes();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  const minutesStr = String(minutes).padStart(2, '0');
+  const hoursStr = String(hours).padStart(2, '0');
+  return `${hoursStr}:${minutesStr} ${ampm}`;
+}
+
+export function formatShortDate(d: Date = new Date()): string {
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+export function parseExpenseDate(dateStr: string): Date {
+  if (!dateStr) return new Date();
+  const trimmed = dateStr.trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+    const cleanDate = trimmed.slice(0, 10);
+    const [y, m, d] = cleanDate.split('-').map(Number);
+    if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+      return new Date(y, m - 1, d);
+    }
+  }
+  const parsed = Date.parse(trimmed);
+  if (!isNaN(parsed)) {
+    const d = new Date(parsed);
+    if (d.getFullYear() < 2000) {
+      d.setFullYear(new Date().getFullYear());
+    }
+    return d;
+  }
+  return new Date();
+}
+
+export function isTodayDate(dateStr: string): boolean {
+  if (!dateStr) return true;
+  const todayISO = getLocalDateString();
+  const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (dateStr === todayISO || dateStr === todayStr || dateStr.startsWith(todayISO)) return true;
+  const d = parseExpenseDate(dateStr);
+  const now = new Date();
+  return (
+    d.getDate() === now.getDate() &&
+    d.getMonth() === now.getMonth() &&
+    d.getFullYear() === now.getFullYear()
+  );
+}
+
+export function isThisWeekDate(dateStr: string): boolean {
+  if (isTodayDate(dateStr)) return true;
+  const d = parseExpenseDate(dateStr);
+  const now = new Date();
+  const diffTime = now.getTime() - d.getTime();
+  const diffDays = diffTime / (1000 * 3600 * 24);
+  return diffDays >= 0 && diffDays <= 7;
+}
+
+export function isThisMonthDate(dateStr: string): boolean {
+  if (isTodayDate(dateStr) || isThisWeekDate(dateStr)) return true;
+  const d = parseExpenseDate(dateStr);
+  const now = new Date();
+  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+}
+
+export interface CycleMetrics {
+  cycle: 'daily' | 'weekly' | 'monthly';
+  cycleName: string;
+  limit: number;
+  spent: number;
+  income: number;
+  netSpent: number;
+  balance: number;
+}
+
+export function getCycleMetrics(state: {
+  totalBudget: number;
+  budgetType: 'daily' | 'weekly' | 'monthly' | null;
+  loggedExpenses: Expense[];
+}): CycleMetrics {
+  const cycle = state.budgetType || 'monthly';
+  const limit =
+    state.totalBudget > 0
+      ? state.totalBudget
+      : cycle === 'daily'
+      ? 150
+      : cycle === 'weekly'
+      ? 1000
+      : 4000;
+
+  const cycleName =
+    cycle === 'daily'
+      ? "Today's Baon"
+      : cycle === 'weekly'
+      ? "This Week's Allowance"
+      : "Current Balance";
+
+  let expenses = 0;
+  let income = 0;
+
+  for (const item of state.loggedExpenses) {
+    const isRelevant =
+      cycle === 'daily'
+        ? isTodayDate(item.date)
+        : cycle === 'weekly'
+        ? isThisWeekDate(item.date)
+        : isThisMonthDate(item.date);
+
+    if (isRelevant) {
+      if (item.type === 'income') {
+        income += item.amount;
+      } else {
+        expenses += item.amount;
+      }
+    }
+  }
+
+  const netSpent = Math.max(0, expenses - income);
+  const balance = Math.max(0, limit - expenses + income);
+
+  return {
+    cycle,
+    cycleName,
+    limit,
+    spent: expenses,
+    income,
+    netSpent,
+    balance,
+  };
 }
 
 interface GamificationState {
@@ -70,6 +265,8 @@ interface GamificationState {
   // Logged Expenses, Incomes & Savings Goals
   loggedExpenses: Expense[];
   savingsGoals: SavingsGoal[];
+  unspentSavingsVault: number;
+  savingsRecords: SavingsRecord[];
 
   // Simulated Investing Cash Balance
   virtualBalance: number;
@@ -80,6 +277,7 @@ interface GamificationState {
   // Completed Lessons Tracking (prevents duplicate XP exploits)
   completedLessonIds: string[];
   lastDividendClaimDates: Record<string, string>; // ticker -> YYYY-MM-DD
+  guestSessionDate?: string;
 
   // Core Actions
   addXP: (amount: number) => void;
@@ -95,10 +293,10 @@ interface GamificationState {
     limits: Record<string, number>
   ) => void;
   setBudgetType: (type: 'daily' | 'weekly' | 'monthly', amount?: number) => void;
-  addExpense: (name: string, category: string, amount: number, date: string, notes?: string) => void;
+  addExpense: (name: string, category: string, amount: number, date?: string, notes?: string, time?: string) => void;
   editExpense: (id: string, updated: Partial<Omit<Expense, 'id'>>) => void;
   deleteExpense: (id: string) => void;
-  addIncome: (name: string, category: string, amount: number, date: string, notes?: string) => void;
+  addIncome: (name: string, category: string, amount: number, date?: string, notes?: string, time?: string) => void;
   resetBudget: () => void;
   resetAllData: (defaultVirtualBalance?: number) => void;
 
@@ -107,6 +305,8 @@ interface GamificationState {
   contributeToSavingsGoal: (goalId: string, amount: number) => boolean;
   withdrawSavingsGoal: (goalId: string, amount: number) => boolean;
   deleteSavingsGoal: (goalId: string) => void;
+  allocateUnspentSavings: (amount: number, note?: string) => boolean;
+  withdrawUnspentSavings: (amount: number) => boolean;
 
   // Simulator & Games Actions
   allocateToSimulation: (amount: number) => boolean;
@@ -123,7 +323,8 @@ interface GamificationState {
   completeLesson: (moduleName: string, lessonId?: string) => void;
   setCustomAvatar: (avatar: string) => void;
   getFinancialHealthScore: () => number;
-  hydrate: () => Promise<void>;
+  checkMidnightGuestReset: () => void;
+  hydrate: (targetUserId?: string | null) => Promise<void>;
 }
 
 const LEVEL_THRESHOLDS = [0, 100, 250, 500, 1000, 2000, 3500, 5000];
@@ -216,9 +417,13 @@ export const ALL_ACHIEVEMENTS: Achievement[] = [
   },
 ];
 
-async function persistState(state: GamificationState) {
+async function persistState(state: GamificationState, specificUserId?: string | null) {
   try {
+    const targetUserId = specificUserId !== undefined ? specificUserId : currentActiveUserId;
+    const storageKey = getUserStorageKey(targetUserId);
+
     const dataToSave = {
+      _version: CURRENT_GAMIFICATION_VERSION,
       xp: state.xp,
       level: state.level,
       streakDays: state.streakDays,
@@ -237,54 +442,86 @@ async function persistState(state: GamificationState) {
       categoryLimits: state.categoryLimits,
       loggedExpenses: state.loggedExpenses,
       savingsGoals: state.savingsGoals,
+      unspentSavingsVault: state.unspentSavingsVault,
+      savingsRecords: state.savingsRecords,
       virtualBalance: state.virtualBalance,
       portfolioAllocations: state.portfolioAllocations,
       riskProfile: state.riskProfile,
       spareChangeAccumulated: state.spareChangeAccumulated,
       completedLessonIds: state.completedLessonIds,
       lastDividendClaimDates: state.lastDividendClaimDates,
+      guestSessionDate: state.guestSessionDate,
     };
-    await storage.setItem(GAMIFICATION_STORAGE_KEY, JSON.stringify(dataToSave));
+    await storage.setItem(storageKey, JSON.stringify(dataToSave));
   } catch (e) {
     console.warn('[GamificationStore] Failed to persist state:', e);
   }
 }
 
-export const useGamificationStore = create<GamificationState>()((set, get) => ({
+export type GamificationDataState = {
+  xp: number;
+  level: number;
+  streakDays: number;
+  lastActiveDate: string | null;
+  lastClaimedRewardDate: string | null;
+  achievements: Achievement[];
+  budgetingScore: number;
+  learningScore: number;
+  savingScore: number;
+  investingScore: number;
+  customAvatar: string;
+  isBudgetSetupComplete: boolean;
+  budgetType: 'daily' | 'weekly' | 'monthly' | null;
+  totalBudget: number;
+  selectedCategories: string[];
+  categoryLimits: Record<string, number>;
+  loggedExpenses: Expense[];
+  savingsGoals: SavingsGoal[];
+  unspentSavingsVault: number;
+  savingsRecords: SavingsRecord[];
+  virtualBalance: number;
+  portfolioAllocations: Record<string, number>;
+  riskProfile: 'Conservative' | 'Moderate' | 'Aggressive' | null;
+  spareChangeAccumulated: number;
+  completedLessonIds: string[];
+  lastDividendClaimDates: Record<string, string>;
+  guestSessionDate?: string;
+};
+
+export const DEFAULT_GAMIFICATION_DATA: GamificationDataState = {
   xp: 45,
   level: 1,
   streakDays: 1,
   lastActiveDate: null,
   lastClaimedRewardDate: null,
   achievements: [],
-
   budgetingScore: 0,
   learningScore: 0,
   savingScore: 0,
   investingScore: 0,
-
   customAvatar: 'Budget Beginner',
-
   isBudgetSetupComplete: false,
   budgetType: null,
   totalBudget: 0,
   selectedCategories: [],
   categoryLimits: {},
-
   loggedExpenses: [],
   savingsGoals: [],
-
+  unspentSavingsVault: 0,
+  savingsRecords: [],
   virtualBalance: 0,
   portfolioAllocations: {},
   riskProfile: null,
   spareChangeAccumulated: 0,
-
   completedLessonIds: [],
   lastDividendClaimDates: {},
+  guestSessionDate: undefined,
+};
+
+export const useGamificationStore = create<GamificationState>()((set, get) => ({
+  ...DEFAULT_GAMIFICATION_DATA,
 
   addXP: (amount) => {
-    const isGuest = useAuthStore.getState().user?.id === 'guest';
-    if (isGuest) return;
     set((state) => {
       const newXp = state.xp + amount;
       let newLevel = 1;
@@ -386,8 +623,6 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
   },
 
   unlockAchievement: (achievementId) => {
-    const isGuest = useAuthStore.getState().user?.id === 'guest';
-    if (isGuest) return;
     set((state) => {
       if (state.achievements.some((a) => a.id === achievementId)) {
         return state;
@@ -407,10 +642,9 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
   },
 
   setupBudget: (type, amount, categories, limits) => {
-    const isGuest = useAuthStore.getState().user?.id === 'guest';
     set((state) => {
       let updatedAchievements = [...state.achievements];
-      if (!isGuest && !updatedAchievements.some((a) => a.id === 'first_budget')) {
+      if (!updatedAchievements.some((a) => a.id === 'first_budget')) {
         const ach = ALL_ACHIEVEMENTS.find((a) => a.id === 'first_budget');
         if (ach) updatedAchievements.push({ ...ach, unlockedAt: new Date().toISOString() });
       }
@@ -421,35 +655,117 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         totalBudget: amount,
         selectedCategories: categories,
         categoryLimits: limits,
-        budgetingScore: isGuest ? 0 : 80,
+        budgetingScore: 80,
         achievements: updatedAchievements,
-        xp: isGuest ? state.xp : state.xp + 30,
+        xp: state.xp + 30,
       };
       persistState({ ...state, ...next });
+
+      // Enqueue sync for budgets with retry queue
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (session?.user?.id && session.user.id !== 'guest') {
+            const currentMonth = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+            const rowsToInsert = [
+              {
+                owner_id: session.user.id,
+                user_id: session.user.id,
+                category: '__total__',
+                limit_amount: amount,
+                allocated_amount: amount,
+                period: 'monthly',
+                month: currentMonth,
+              },
+              ...Object.entries(limits).map(([cat, limit]) => ({
+                owner_id: session.user.id,
+                user_id: session.user.id,
+                category: cat,
+                limit_amount: limit,
+                allocated_amount: limit,
+                period: 'monthly',
+                month: currentMonth,
+              })),
+            ];
+            await syncQueue.enqueue({
+              table: 'budgets',
+              action: 'delete',
+              match: { owner_id: session.user.id },
+            });
+            await syncQueue.enqueue({
+              table: 'budgets',
+              action: 'insert',
+              payload: rowsToInsert,
+            });
+          }
+        } catch (err) {
+          console.warn('[GamificationStore] setupBudget sync enqueue error:', err);
+        }
+      })();
+
       return next;
     });
   },
 
   setBudgetType: (type, amount) => {
     set((state) => {
+      const effectiveTotal = amount !== undefined ? amount : state.totalBudget;
       const next = {
         budgetType: type,
-        totalBudget: amount !== undefined ? amount : state.totalBudget,
+        totalBudget: effectiveTotal,
       };
       persistState({ ...state, ...next });
+
+      if (amount !== undefined) {
+        (async () => {
+          try {
+            const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+            if (session?.user?.id && session.user.id !== 'guest') {
+              const currentMonth = new Date().toISOString().slice(0, 7);
+              const { data: existing } = await supabase
+                .from('budgets')
+                .select('budget_id')
+                .eq('owner_id', session.user.id)
+                .eq('category', '__total__')
+                .maybeSingle();
+
+              if (existing?.budget_id) {
+                await supabase
+                  .from('budgets')
+                  .update({ limit_amount: amount, allocated_amount: amount, updated_at: new Date().toISOString() })
+                  .eq('budget_id', existing.budget_id);
+              } else {
+                await supabase.from('budgets').insert({
+                  owner_id: session.user.id,
+                  user_id: session.user.id,
+                  category: '__total__',
+                  limit_amount: amount,
+                  allocated_amount: amount,
+                  period: 'monthly',
+                  month: currentMonth,
+                });
+              }
+            }
+          } catch (err) {
+            console.warn('[GamificationStore] Supabase setBudgetType error:', err);
+          }
+        })();
+      }
+
       return next;
     });
   },
 
-  addExpense: (name, category, amount, date, notes) => {
-    const isGuest = useAuthStore.getState().user?.id === 'guest';
+  addExpense: (name, category, amount, date, notes, time) => {
     set((state) => {
+      const expenseId = generateUUID();
       const newExpense: Expense = {
-        id: Date.now().toString(),
+        id: expenseId,
         name,
         category,
         amount,
-        date,
+        date: date || getLocalDateString(),
+        time: time || format12HourTime(),
         notes,
         type: 'expense',
       };
@@ -465,7 +781,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       }
 
       let updatedAchievements = [...state.achievements];
-      if (!isGuest && nextBudgetingScore >= 90 && !updatedAchievements.some((a) => a.id === 'budget_master')) {
+      if (nextBudgetingScore >= 90 && !updatedAchievements.some((a) => a.id === 'budget_master')) {
         const ach = ALL_ACHIEVEMENTS.find((a) => a.id === 'budget_master');
         if (ach) updatedAchievements.push({ ...ach, unlockedAt: new Date().toISOString() });
       }
@@ -476,12 +792,38 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
 
       const next = {
         loggedExpenses: updatedExpenses,
-        budgetingScore: isGuest ? 0 : nextBudgetingScore,
+        budgetingScore: nextBudgetingScore,
         achievements: updatedAchievements,
-        xp: isGuest ? state.xp : state.xp + 10,
+        xp: state.xp + 10,
         spareChangeAccumulated: nextSpareChange,
       };
       persistState({ ...state, ...next });
+
+      // Enqueue sync for transaction insert
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (session?.user?.id && session.user.id !== 'guest') {
+            await syncQueue.enqueue({
+              table: 'transactions',
+              action: 'insert',
+              payload: {
+                transaction_id: expenseId,
+                owner_id: session.user.id,
+                user_id: session.user.id,
+                type: 'expense',
+                category: category,
+                amount,
+                description: notes ? `${name} - ${notes}` : name,
+                transaction_date: toISODate(date),
+              },
+            });
+          }
+        } catch (err) {
+          console.warn('[GamificationStore] insert expense sync enqueue error:', err);
+        }
+      })();
+
       return next;
     });
   },
@@ -496,12 +838,37 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       });
       const next = { loggedExpenses: updatedExpenses };
       persistState({ ...state, ...next });
+
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (session?.user?.id && session.user.id !== 'guest') {
+            const updatePayload: Record<string, unknown> = {};
+            if (updated.category) updatePayload.category = updated.category;
+            if (updated.amount !== undefined) updatePayload.amount = updated.amount;
+            if (updated.name || updated.notes) {
+              updatePayload.description = updated.notes ? `${updated.name} - ${updated.notes}` : updated.name;
+            }
+            if (updated.date) updatePayload.transaction_date = toISODate(updated.date);
+            if (updated.type) updatePayload.type = updated.type;
+
+            await syncQueue.enqueue({
+              table: 'transactions',
+              action: 'update',
+              payload: updatePayload,
+              match: { transaction_id: id, owner_id: session.user.id },
+            });
+          }
+        } catch (err) {
+          console.warn('[GamificationStore] edit expense sync enqueue error:', err);
+        }
+      })();
+
       return next;
     });
   },
 
   deleteExpense: (id) => {
-    const isGuest = useAuthStore.getState().user?.id === 'guest';
     set((state) => {
       const updatedExpenses = state.loggedExpenses.filter((e) => e.id !== id);
       const onlyExpenses = updatedExpenses.filter((e) => e.type !== 'income');
@@ -516,21 +883,39 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
 
       const next = {
         loggedExpenses: updatedExpenses,
-        budgetingScore: isGuest ? 0 : nextBudgetingScore,
+        budgetingScore: nextBudgetingScore,
       };
       persistState({ ...state, ...next });
+
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (session?.user?.id && session.user.id !== 'guest') {
+            await syncQueue.enqueue({
+              table: 'transactions',
+              action: 'delete',
+              match: { transaction_id: id, owner_id: session.user.id },
+            });
+          }
+        } catch (err) {
+          console.warn('[GamificationStore] delete expense sync enqueue error:', err);
+        }
+      })();
+
       return next;
     });
   },
 
-  addIncome: (name, category, amount, date, notes) => {
+  addIncome: (name, category, amount, date, notes, time) => {
     set((state) => {
+      const incomeId = generateUUID();
       const newIncome: Expense = {
-        id: Date.now().toString(),
+        id: incomeId,
         name,
         category: category || 'Income',
         amount,
-        date,
+        date: date || getLocalDateString(),
+        time: time || format12HourTime(),
         notes,
         type: 'income',
       };
@@ -540,6 +925,31 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         xp: state.xp + 10,
       };
       persistState({ ...state, ...next });
+
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (session?.user?.id && session.user.id !== 'guest') {
+            await syncQueue.enqueue({
+              table: 'transactions',
+              action: 'insert',
+              payload: {
+                transaction_id: incomeId,
+                owner_id: session.user.id,
+                user_id: session.user.id,
+                type: 'income',
+                category: category || 'Income',
+                amount,
+                description: notes ? `${name} - ${notes}` : name,
+                transaction_date: toISODate(date),
+              },
+            });
+          }
+        } catch (err) {
+          console.warn('[GamificationStore] addIncome sync enqueue error:', err);
+        }
+      })();
+
       return next;
     });
   },
@@ -571,40 +981,34 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
   resetAllData: (defaultVirtualBalance = 10000) => {
     set((state) => {
       const next = {
-        xp: 45,
-        level: 1,
-        streakDays: 1,
-        lastActiveDate: null,
-        lastClaimedRewardDate: null,
-        achievements: [],
-        budgetingScore: 0,
-        learningScore: 0,
-        savingScore: 0,
-        investingScore: 0,
-        customAvatar: 'Budget Beginner',
-        isBudgetSetupComplete: false,
-        budgetType: null,
-        totalBudget: 0,
-        selectedCategories: [],
-        categoryLimits: {},
-        loggedExpenses: [],
-        savingsGoals: [],
+        ...DEFAULT_GAMIFICATION_DATA,
         virtualBalance: defaultVirtualBalance,
-        portfolioAllocations: {},
-        riskProfile: null,
-        spareChangeAccumulated: 0,
-        completedLessonIds: [],
-        lastDividendClaimDates: {},
       };
       persistState({ ...state, ...next });
       return next;
     });
+
+    if (currentActiveUserId && currentActiveUserId !== 'guest') {
+      const uid = currentActiveUserId;
+      Promise.allSettled([
+        supabase.from('transactions').delete().eq('owner_id', uid),
+        supabase.from('budgets').delete().eq('owner_id', uid),
+        supabase.from('saving_challenges').delete().eq('user_id', uid),
+      ]).then((results) => {
+        results.forEach((res, i) => {
+          if (res.status === 'rejected') {
+            console.warn(`[GamificationStore] Cloud reset warning for step ${i}:`, res.reason);
+          }
+        });
+      });
+    }
   },
 
   addSavingsGoal: (name, targetAmount, targetDate, category) => {
     set((state) => {
+      const goalId = generateUUID();
       const newGoal: SavingsGoal = {
-        id: Date.now().toString(),
+        id: goalId,
         name,
         targetAmount,
         currentSavings: 0,
@@ -618,6 +1022,29 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         xp: state.xp + 15,
       };
       persistState({ ...state, ...next });
+
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (session?.user?.id && session.user.id !== 'guest') {
+            await syncQueue.enqueue({
+              table: 'saving_challenges',
+              action: 'insert',
+              payload: {
+                challenge_id: goalId,
+                user_id: session.user.id,
+                target_amount: targetAmount,
+                current_amount: 0,
+                end_date: targetDate.includes('-') ? targetDate : null,
+                is_completed: false,
+              },
+            });
+          }
+        } catch (err) {
+          console.warn('[GamificationStore] insert saving_challenge sync enqueue error:', err);
+        }
+      })();
+
       return next;
     });
   },
@@ -625,21 +1052,37 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
   contributeToSavingsGoal: (goalId, amount) => {
     let success = false;
     set((state) => {
-      const onlyExpenses = state.loggedExpenses.filter((e) => e.type !== 'income');
-      const totalSpent = onlyExpenses.reduce((sum, e) => sum + e.amount, 0);
-      const budgetRemaining = state.totalBudget - totalSpent;
-      const totalSavingsContribution = state.savingsGoals.reduce((sum, g) => sum + g.currentSavings, 0);
-      const budgetLeftover = budgetRemaining - totalSavingsContribution - state.virtualBalance;
+      const metrics = getCycleMetrics(state);
+      if (amount <= 0 || amount > metrics.balance) {
+        return state;
+      }
 
-      if (state.totalBudget > 0 && amount > budgetLeftover) {
+      const targetGoal = state.savingsGoals.find((g) => g.id === goalId);
+      if (!targetGoal) {
+        return state;
+      }
+
+      const goalName = targetGoal.name || 'Savings Goal';
+      const maxNeeded =
+        targetGoal.targetAmount > 0
+          ? Math.max(0, targetGoal.targetAmount - targetGoal.currentSavings)
+          : amount;
+      const actualContributed = Math.min(amount, maxNeeded > 0 ? maxNeeded : amount);
+
+      if (actualContributed <= 0) {
         return state;
       }
 
       success = true;
+      let updatedSavingsVal = 0;
+      let isGoalCompleted = false;
+
       const updatedGoals = state.savingsGoals.map((g) => {
         if (g.id === goalId) {
-          const nextVal = g.currentSavings + amount;
-          return { ...g, currentSavings: Math.min(g.targetAmount, nextVal) };
+          const nextVal = g.currentSavings + actualContributed;
+          updatedSavingsVal = targetGoal.targetAmount > 0 ? Math.min(g.targetAmount, nextVal) : nextVal;
+          isGoalCompleted = targetGoal.targetAmount > 0 && updatedSavingsVal >= targetGoal.targetAmount;
+          return { ...g, currentSavings: updatedSavingsVal };
         }
         return g;
       });
@@ -655,13 +1098,64 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         if (ach) updatedAchievements.push({ ...ach, unlockedAt: new Date().toISOString() });
       }
 
+      // Log transaction deducting from current cycle balance
+      const expenseId = generateUUID();
+      const savingsExpense: Expense = {
+        id: expenseId,
+        name: `Savings: ${goalName}`,
+        category: 'Savings',
+        amount: actualContributed,
+        date: getLocalDateString(),
+        time: format12HourTime(),
+        notes: `Allocated to ${goalName}`,
+        type: 'expense',
+      };
+      const updatedExpenses = [savingsExpense, ...state.loggedExpenses];
+
       const next = {
         savingsGoals: updatedGoals,
+        loggedExpenses: updatedExpenses,
         savingScore: Math.min(100, nextSavingScore),
         achievements: updatedAchievements,
         xp: state.xp + 15,
       };
       persistState({ ...state, ...next });
+
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (session?.user?.id && session.user.id !== 'guest') {
+            await syncQueue.enqueue({
+              table: 'saving_challenges',
+              action: 'update',
+              payload: {
+                current_amount: updatedSavingsVal,
+                is_completed: isGoalCompleted,
+                updated_at: new Date().toISOString(),
+              },
+              match: { challenge_id: goalId, user_id: session.user.id },
+            });
+
+            await syncQueue.enqueue({
+              table: 'transactions',
+              action: 'insert',
+              payload: {
+                transaction_id: expenseId,
+                owner_id: session.user.id,
+                user_id: session.user.id,
+                type: 'expense',
+                category: 'Savings',
+                amount: actualContributed,
+                description: `Allocated to ${goalName}`,
+                transaction_date: getLocalDateString(),
+              },
+            });
+          }
+        } catch (err) {
+          console.warn('[GamificationStore] contribute saving_challenge sync enqueue error:', err);
+        }
+      })();
+
       return next;
     });
     return success;
@@ -676,15 +1170,71 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       }
 
       success = true;
+      let updatedSavingsVal = 0;
+
       const updatedGoals = state.savingsGoals.map((g) => {
         if (g.id === goalId) {
-          return { ...g, currentSavings: Math.max(0, g.currentSavings - amount) };
+          updatedSavingsVal = Math.max(0, g.currentSavings - amount);
+          return { ...g, currentSavings: updatedSavingsVal };
         }
         return g;
       });
 
-      const next = { savingsGoals: updatedGoals };
+      // Log income transaction restoring money to current balance
+      const incomeId = generateUUID();
+      const withdrawalIncome: Expense = {
+        id: incomeId,
+        name: `Withdrawal: ${targetGoal.name}`,
+        category: 'Savings',
+        amount,
+        date: getLocalDateString(),
+        time: format12HourTime(),
+        notes: `Withdrawn from ${targetGoal.name}`,
+        type: 'income',
+      };
+      const updatedExpenses = [withdrawalIncome, ...state.loggedExpenses];
+
+      const next = {
+        savingsGoals: updatedGoals,
+        loggedExpenses: updatedExpenses,
+      };
       persistState({ ...state, ...next });
+
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (session?.user?.id && session.user.id !== 'guest') {
+            await syncQueue.enqueue({
+              table: 'saving_challenges',
+              action: 'update',
+              payload: {
+                current_amount: updatedSavingsVal,
+                is_completed: false,
+                updated_at: new Date().toISOString(),
+              },
+              match: { challenge_id: goalId, user_id: session.user.id },
+            });
+
+            await syncQueue.enqueue({
+              table: 'transactions',
+              action: 'insert',
+              payload: {
+                transaction_id: incomeId,
+                owner_id: session.user.id,
+                user_id: session.user.id,
+                type: 'income',
+                category: 'Savings',
+                amount,
+                description: `Withdrawn from ${targetGoal.name}`,
+                transaction_date: getLocalDateString(),
+              },
+            });
+          }
+        } catch (err) {
+          console.warn('[GamificationStore] withdraw saving_challenge sync enqueue error:', err);
+        }
+      })();
+
       return next;
     });
     return success;
@@ -695,8 +1245,163 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       const updatedGoals = state.savingsGoals.filter((g) => g.id !== goalId);
       const next = { savingsGoals: updatedGoals };
       persistState({ ...state, ...next });
+
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (session?.user?.id && session.user.id !== 'guest') {
+            await syncQueue.enqueue({
+              table: 'saving_challenges',
+              action: 'delete',
+              match: { challenge_id: goalId, user_id: session.user.id },
+            });
+          }
+        } catch (err) {
+          console.warn('[GamificationStore] delete saving_challenge sync enqueue error:', err);
+        }
+      })();
+
       return next;
     });
+  },
+
+  allocateUnspentSavings: (amount, note) => {
+    let success = false;
+    set((state) => {
+      const metrics = getCycleMetrics(state);
+      if (amount <= 0 || amount > metrics.balance) {
+        return state;
+      }
+      success = true;
+
+      const now = new Date();
+      const recordId = generateUUID();
+      const formattedDate = formatShortDate(now);
+      const formattedTime = format12HourTime(now);
+      const defaultNote = note?.trim() || `Unspent ${metrics.cycleName.toLowerCase()} surplus`;
+
+      const newRecord: SavingsRecord = {
+        id: recordId,
+        amount,
+        date: formattedDate,
+        time: formattedTime,
+        note: defaultNote,
+        cycle: metrics.cycle,
+        createdAtISO: now.toISOString(),
+      };
+
+      const expenseId = generateUUID();
+      const savingsExpense: Expense = {
+        id: expenseId,
+        name: `Savings Vault: ${defaultNote}`,
+        category: 'Savings',
+        amount,
+        date: getLocalDateString(now),
+        time: formattedTime,
+        notes: `Allocated to Savings Vault at ${formattedTime}`,
+        type: 'expense',
+      };
+
+      const updatedRecords = [newRecord, ...(state.savingsRecords || [])];
+      const updatedExpenses = [savingsExpense, ...state.loggedExpenses];
+      const nextVault = (state.unspentSavingsVault || 0) + amount;
+
+      const next = {
+        unspentSavingsVault: nextVault,
+        savingsRecords: updatedRecords,
+        loggedExpenses: updatedExpenses,
+        xp: state.xp + 15,
+        savingScore: Math.min(100, state.savingScore + 5),
+      };
+      persistState({ ...state, ...next });
+
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (session?.user?.id && session.user.id !== 'guest') {
+            await syncQueue.enqueue({
+              table: 'transactions',
+              action: 'insert',
+              payload: {
+                transaction_id: expenseId,
+                owner_id: session.user.id,
+                user_id: session.user.id,
+                type: 'expense',
+                category: 'Savings',
+                amount,
+                description: `Savings Vault: ${defaultNote}`,
+                transaction_date: getLocalDateString(now),
+              },
+            });
+          }
+        } catch (err) {
+          console.warn('[GamificationStore] allocate unspent sync enqueue error:', err);
+        }
+      })();
+
+      return next;
+    });
+    return success;
+  },
+
+  withdrawUnspentSavings: (amount) => {
+    let success = false;
+    set((state) => {
+      const currentVault = state.unspentSavingsVault || 0;
+      if (amount <= 0 || amount > currentVault) {
+        return state;
+      }
+      success = true;
+      const now = new Date();
+      const incomeId = generateUUID();
+      const formattedTime = format12HourTime(now);
+
+      const withdrawalIncome: Expense = {
+        id: incomeId,
+        name: 'Withdrawal from Savings Vault',
+        category: 'Savings',
+        amount,
+        date: getLocalDateString(now),
+        time: formattedTime,
+        notes: `Withdrawn from Savings Vault at ${formattedTime}`,
+        type: 'income',
+      };
+
+      const nextVault = Math.max(0, currentVault - amount);
+      const updatedExpenses = [withdrawalIncome, ...state.loggedExpenses];
+      const next = {
+        unspentSavingsVault: nextVault,
+        loggedExpenses: updatedExpenses,
+      };
+      persistState({ ...state, ...next });
+
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (session?.user?.id && session.user.id !== 'guest') {
+            await syncQueue.enqueue({
+              table: 'transactions',
+              action: 'insert',
+              payload: {
+                transaction_id: incomeId,
+                owner_id: session.user.id,
+                user_id: session.user.id,
+                type: 'income',
+                category: 'Savings',
+                amount,
+                description: `Withdrawal from Savings Vault at ${formattedTime}`,
+                transaction_date: getLocalDateString(now),
+              },
+            });
+          }
+        } catch (err) {
+          console.warn('[GamificationStore] withdraw unspent sync enqueue error:', err);
+        }
+      })();
+
+      return next;
+    });
+    return success;
   },
 
   setRiskProfile: (profile) => {
@@ -724,22 +1429,56 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
   allocateToSimulation: (amount) => {
     let success = false;
     set((state) => {
-      const onlyExpenses = state.loggedExpenses.filter((e) => e.type !== 'income');
-      const totalSpent = onlyExpenses.reduce((sum, e) => sum + e.amount, 0);
-      const budgetRemaining = state.totalBudget - totalSpent;
-      const totalSavingsContribution = state.savingsGoals.reduce((sum, g) => sum + g.currentSavings, 0);
-      const availableToTransfer = budgetRemaining - totalSavingsContribution - state.virtualBalance;
-
-      if (state.totalBudget > 0 && amount > availableToTransfer) {
+      const metrics = getCycleMetrics(state);
+      if (amount <= 0 || amount > metrics.balance) {
         return state;
       }
 
       success = true;
+      const expenseId = generateUUID();
+      const investExpense: Expense = {
+        id: expenseId,
+        name: 'Transfer to Investment Sandbox',
+        category: 'Savings',
+        amount,
+        date: getLocalDateString(),
+        time: format12HourTime(),
+        notes: 'Transferred from allowance to investment cash',
+        type: 'expense',
+      };
+      const updatedExpenses = [investExpense, ...state.loggedExpenses];
+
       const next = {
+        loggedExpenses: updatedExpenses,
         virtualBalance: state.virtualBalance + amount,
         xp: state.xp + 10,
       };
       persistState({ ...state, ...next });
+
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (session?.user?.id && session.user.id !== 'guest') {
+            await syncQueue.enqueue({
+              table: 'transactions',
+              action: 'insert',
+              payload: {
+                transaction_id: expenseId,
+                owner_id: session.user.id,
+                user_id: session.user.id,
+                type: 'expense',
+                category: 'Savings',
+                amount,
+                description: 'Transfer to Investment Sandbox',
+                transaction_date: getLocalDateString(),
+              },
+            });
+          }
+        } catch (err) {
+          console.warn('[GamificationStore] transfer investment sync enqueue error:', err);
+        }
+      })();
+
       return next;
     });
     return success;
@@ -827,7 +1566,14 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
   tradeAssetSim: (ticker, type, qty, price) => {
     let success = false;
     set((state) => {
-      const totalCost = qty * price;
+      // Simulated brokerage spread: 0.25% per trade (realistic bid-ask + fee friction)
+      // Real brokerages charge 0.1-0.5% via spreads even on "commission-free" platforms
+      const TRADE_SPREAD_PCT = 0.0025;
+      const effectivePrice = type === 'buy'
+        ? price * (1 + TRADE_SPREAD_PCT)  // Buy at slightly higher ask price
+        : price * (1 - TRADE_SPREAD_PCT); // Sell at slightly lower bid price
+
+      const totalCost = qty * effectivePrice;
       const currentOwned = state.portfolioAllocations[ticker] || 0;
 
       if (type === 'buy') {
@@ -959,36 +1705,213 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
     );
   },
 
-  hydrate: async () => {
+  checkMidnightGuestReset: () => {
+    const isGuest = currentActiveUserId === null || currentActiveUserId === 'guest';
+    if (!isGuest) return;
+    const today = getLocalDateString();
+    const state = get();
+    if (state.guestSessionDate && state.guestSessionDate !== today) {
+      const next = {
+        loggedExpenses: [] as Expense[],
+        guestSessionDate: today,
+      };
+      set(next);
+      persistState({ ...state, ...next }, 'guest');
+    }
+  },
+
+  hydrate: async (targetUserId?: string | null) => {
     try {
-      const stored = await storage.getItem(GAMIFICATION_STORAGE_KEY);
+      let resolvedUserId = targetUserId;
+      if (resolvedUserId === undefined) {
+        // Probe Supabase session
+        const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+        resolvedUserId = session?.user?.id || null;
+      }
+
+      if (resolvedUserId !== undefined && resolvedUserId === lastHydratedTarget) {
+        return;
+      }
+      lastHydratedTarget = resolvedUserId;
+
+      currentActiveUserId = resolvedUserId;
+      const userKey = getUserStorageKey(resolvedUserId);
+
+      // Immediately reset in-memory Zustand store to clean default state
+      // This strictly prevents state leakage between guests, alter accounts, and new accounts.
+      set({ ...DEFAULT_GAMIFICATION_DATA });
+
+      const isGuestMode = resolvedUserId === null || resolvedUserId === 'guest';
+      const todayISO = getLocalDateString();
+
+      // 1. Read from local cache for instant offline load
+      let stored = await storage.getItem(userKey);
+      if (!stored && isGuestMode) {
+        // Migration: check legacy un-scoped key only for guest/unauthenticated sessions
+        stored = await storage.getItem(BASE_GAMIFICATION_KEY);
+      }
+
       if (stored) {
-        const parsed = JSON.parse(stored);
-        set({
-          xp: parsed.xp ?? 45,
-          level: parsed.level ?? 1,
-          streakDays: parsed.streakDays ?? 1,
-          lastActiveDate: parsed.lastActiveDate ?? null,
-          lastClaimedRewardDate: parsed.lastClaimedRewardDate ?? null,
-          achievements: parsed.achievements ?? [],
-          budgetingScore: parsed.budgetingScore ?? 0,
-          learningScore: parsed.learningScore ?? 0,
-          savingScore: parsed.savingScore ?? 0,
-          investingScore: parsed.investingScore ?? 0,
-          customAvatar: parsed.customAvatar ?? 'Budget Beginner',
-          isBudgetSetupComplete: parsed.isBudgetSetupComplete ?? false,
-          budgetType: parsed.budgetType ?? null,
-          totalBudget: parsed.totalBudget ?? 0,
-          selectedCategories: parsed.selectedCategories ?? [],
-          categoryLimits: parsed.categoryLimits ?? {},
-          loggedExpenses: parsed.loggedExpenses ?? [],
-          savingsGoals: parsed.savingsGoals ?? [],
-          virtualBalance: parsed.virtualBalance ?? 0,
-          portfolioAllocations: parsed.portfolioAllocations ?? {},
-          riskProfile: parsed.riskProfile ?? null,
-          spareChangeAccumulated: parsed.spareChangeAccumulated ?? 0,
-          completedLessonIds: parsed.completedLessonIds ?? [],
-          lastDividendClaimDates: parsed.lastDividendClaimDates ?? {},
+        try {
+          const parsed = JSON.parse(stored);
+          const version = parsed._version || 1;
+
+          // Schema migrations for older versions
+          if (version < CURRENT_GAMIFICATION_VERSION) {
+            if (!Array.isArray(parsed.loggedExpenses)) parsed.loggedExpenses = [];
+            if (!Array.isArray(parsed.savingsGoals)) parsed.savingsGoals = [];
+            if (!Array.isArray(parsed.savingsRecords)) parsed.savingsRecords = [];
+            if (!Array.isArray(parsed.achievements)) parsed.achievements = [];
+            if (!Array.isArray(parsed.completedLessonIds)) parsed.completedLessonIds = [];
+            if (typeof parsed.unspentSavingsVault !== 'number') parsed.unspentSavingsVault = 0;
+            if (typeof parsed.virtualBalance !== 'number') parsed.virtualBalance = 0;
+            if (!parsed.portfolioAllocations || typeof parsed.portfolioAllocations !== 'object') {
+              parsed.portfolioAllocations = {};
+            }
+            if (!parsed.categoryLimits || typeof parsed.categoryLimits !== 'object') {
+              parsed.categoryLimits = {};
+            }
+          }
+
+          let effectiveExpenses: Expense[] = parsed.loggedExpenses ?? [];
+          let guestSessionDate = parsed.guestSessionDate || parsed.lastActiveDate || todayISO;
+
+          // Midnight reset for Guest Mode: if date changed, clear guest transactions
+          if (isGuestMode) {
+            if (guestSessionDate !== todayISO) {
+              effectiveExpenses = [];
+              guestSessionDate = todayISO;
+            }
+          }
+
+          set({
+            xp: parsed.xp ?? 45,
+            level: parsed.level ?? 1,
+            streakDays: parsed.streakDays ?? 1,
+            lastActiveDate: parsed.lastActiveDate ?? null,
+            lastClaimedRewardDate: parsed.lastClaimedRewardDate ?? null,
+            achievements: parsed.achievements ?? [],
+            budgetingScore: parsed.budgetingScore ?? 0,
+            learningScore: parsed.learningScore ?? 0,
+            savingScore: parsed.savingScore ?? 0,
+            investingScore: parsed.investingScore ?? 0,
+            customAvatar: parsed.customAvatar ?? 'Budget Beginner',
+            isBudgetSetupComplete: parsed.isBudgetSetupComplete ?? false,
+            budgetType: parsed.budgetType ?? null,
+            totalBudget: parsed.totalBudget ?? 0,
+            selectedCategories: parsed.selectedCategories ?? [],
+            categoryLimits: parsed.categoryLimits ?? {},
+            loggedExpenses: effectiveExpenses,
+            savingsGoals: parsed.savingsGoals ?? [],
+            unspentSavingsVault: parsed.unspentSavingsVault ?? 0,
+            savingsRecords: parsed.savingsRecords ?? [],
+            virtualBalance: parsed.virtualBalance ?? 0,
+            portfolioAllocations: parsed.portfolioAllocations ?? {},
+            riskProfile: parsed.riskProfile ?? null,
+            spareChangeAccumulated: parsed.spareChangeAccumulated ?? 0,
+            completedLessonIds: parsed.completedLessonIds ?? [],
+            lastDividendClaimDates: parsed.lastDividendClaimDates ?? {},
+            guestSessionDate,
+          });
+        } catch (parseErr) {
+          console.warn('[GamificationStore] Error parsing cached state:', parseErr);
+        }
+      }
+
+      // 2. If authenticated with Supabase, pull cloud records and sync permanently
+      if (resolvedUserId && resolvedUserId !== 'guest') {
+        const userId = resolvedUserId;
+
+        // Concurrent fetch of transactions, budgets, and saving challenges
+        // Uses .or(owner_id, user_id) so no transactions are ever omitted
+        const [txRes, budgetRes, goalsRes] = await Promise.allSettled([
+          supabase
+            .from('transactions')
+            .select('*')
+            .or(`owner_id.eq.${userId},user_id.eq.${userId}`)
+            .order('transaction_date', { ascending: false }),
+          supabase
+            .from('budgets')
+            .select('*')
+            .or(`owner_id.eq.${userId},user_id.eq.${userId}`),
+          supabase
+            .from('saving_challenges')
+            .select('*')
+            .eq('user_id', userId),
+        ]);
+
+        const nextUpdates: Partial<GamificationState> = {};
+
+        // Transactions / Activity history sync
+        if (txRes.status === 'fulfilled' && txRes.value.data) {
+          const remoteTxs = txRes.value.data;
+          if (remoteTxs.length > 0) {
+            const mappedExpenses: Expense[] = remoteTxs.map((t: any) => ({
+              id: t.transaction_id || t.id,
+              name: t.description || t.category_id || t.category,
+              category: t.category_id || t.category,
+              amount: Number(t.amount) || 0,
+              date: t.transaction_date || getLocalDateString(),
+              time: t.created_at ? format12HourTime(new Date(t.created_at)) : undefined,
+              type: (t.type === 'income' ? 'income' : 'expense') as 'expense' | 'income',
+            }));
+            nextUpdates.loggedExpenses = mappedExpenses;
+          }
+        }
+
+        // Budgets / Allocation sync
+        if (budgetRes.status === 'fulfilled' && budgetRes.value.data) {
+          const budgetRows = budgetRes.value.data;
+          if (budgetRows.length > 0) {
+            let total = 0;
+            const categoryLimits: Record<string, number> = {};
+            const categories: string[] = [];
+
+            for (const b of budgetRows) {
+              const cat = b.category_id || b.category;
+              const limit = Number(b.limit_amount ?? b.allocated_amount) || 0;
+              if (cat === '__total__') {
+                total = limit;
+              } else {
+                categoryLimits[cat] = limit;
+                categories.push(cat);
+              }
+            }
+
+            if (total === 0 && Object.keys(categoryLimits).length > 0) {
+              total = Object.values(categoryLimits).reduce((a, b) => a + b, 0);
+            }
+
+            nextUpdates.isBudgetSetupComplete = true;
+            nextUpdates.totalBudget = total;
+            nextUpdates.categoryLimits = categoryLimits;
+            nextUpdates.selectedCategories = categories;
+          }
+        }
+
+        // Savings Goals sync (saving_challenges in Supabase)
+        if (goalsRes.status === 'fulfilled' && goalsRes.value.data) {
+          const goalsRows = goalsRes.value.data;
+          if (goalsRows.length > 0) {
+            nextUpdates.savingsGoals = goalsRows.map((g: any) => ({
+              id: g.challenge_id || g.id,
+              name: g.title || 'Savings Goal',
+              targetAmount: Number(g.target_amount) || 0,
+              currentSavings: Number(g.current_amount) || 0,
+              targetDate: g.end_date || g.deadline || '120',
+              category: g.icon || 'Emergency Fund',
+            }));
+          }
+        }
+
+        if (Object.keys(nextUpdates).length > 0) {
+          set(nextUpdates);
+          persistState(get(), userId);
+        }
+
+        // Process any queued offline actions now that connection & user are verified
+        syncQueue.process().catch((err) => {
+          console.warn('[GamificationStore] Error processing sync queue post-hydration:', err);
         });
       }
     } catch (e) {
@@ -996,3 +1919,31 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
     }
   },
 }));
+
+// ── Automatic 12 Midnight Guest Reset Scheduler ──────────────────────
+let midnightTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleMidnightCheck() {
+  if (midnightTimer) {
+    clearTimeout(midnightTimer);
+    midnightTimer = null;
+  }
+  const now = new Date();
+  const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 1);
+  const msUntilMidnight = Math.max(1000, nextMidnight.getTime() - now.getTime());
+
+  midnightTimer = setTimeout(() => {
+    useGamificationStore.getState().checkMidnightGuestReset();
+    scheduleMidnightCheck();
+  }, msUntilMidnight);
+}
+
+scheduleMidnightCheck();
+
+// Listen to foreground resume so if device slept through midnight, guest resets immediately
+AppState.addEventListener('change', (nextAppState) => {
+  if (nextAppState === 'active') {
+    useGamificationStore.getState().checkMidnightGuestReset();
+  }
+});
+

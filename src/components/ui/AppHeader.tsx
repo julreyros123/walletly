@@ -187,50 +187,66 @@ export function AppHeader() {
               </YStack>
 
               {/* Quick Stats Summary */}
-              {user?.id === 'guest' ? (
-                <YStack gap={10} backgroundColor={`${theme.primary}10` as any} padding={14} borderRadius={12} borderWidth={1} borderColor={`${theme.primary}20` as any}>
-                  <Text color={theme.text} fontSize={13} fontWeight="700">
-                    Guest Session
+              {user?.id === 'guest' && (
+                <YStack gap={8} backgroundColor={`${theme.primary}10` as any} padding={12} borderRadius={10} borderWidth={1} borderColor={`${theme.primary}20` as any}>
+                  <XStack justifyContent="space-between" alignItems="center">
+                    <Text style={{ color: theme.primary }} fontSize={12} fontWeight="700">Offline Guest Mode</Text>
+                    <Pressable
+                      onPress={async () => {
+                        setShowDrawer(false);
+                        await logout();
+                        router.replace('/(auth)/register' as Href);
+                      }}
+                      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+                    >
+                      <Text style={{ color: theme.primary }} fontSize={11} fontWeight="700" textDecorationLine="underline">
+                        Create Account
+                      </Text>
+                    </Pressable>
+                  </XStack>
+                  <Text color={theme.textSecondary} fontSize={11} lineHeight={15}>
+                    All features, budgets, arcade games, and stats work 100% offline on this device.
                   </Text>
-                  <Text color={theme.textSecondary} fontSize={11} lineHeight={16}>
-                    Create an account to save your budgets, earn XP, track streaks, and unlock simulator games!
-                  </Text>
-                  <Button
-                    style={{ backgroundColor: theme.primary }}
-                    pressStyle={{ opacity: 0.8 }}
-                    borderWidth={0}
-                    borderRadius={8}
-                    height={32}
-                    onPress={async () => {
-                      setShowDrawer(false);
-                      await logout();
-                      router.replace('/(auth)/register' as Href);
-                    }}
-                  >
-                    <Text color="#FFFFFF" fontSize={12} fontWeight="700">
-                      Create Account
-                    </Text>
-                  </Button>
-                </YStack>
-              ) : (
-                <YStack gap={8} backgroundColor={theme.backgroundElement} padding={12} borderRadius={8}>
-                  <XStack justifyContent="space-between" alignItems="center">
-                    <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Financial Health</Text>
-                    <Text color={theme.text} fontSize={13} fontWeight="700">{getFinancialHealthScore()}/100</Text>
-                  </XStack>
-                  <XStack justifyContent="space-between" alignItems="center">
-                    <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Streak</Text>
-                    <Text color={theme.warning} fontSize={13} fontWeight="700">🔥 {streakDays} days</Text>
-                  </XStack>
-                  <XStack justifyContent="space-between" alignItems="center">
-                    <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Academy Level</Text>
-                    <Text color={theme.primary as any} fontSize={13} fontWeight="700">Lvl {level} ({xp} XP)</Text>
-                  </XStack>
                 </YStack>
               )}
 
+              <YStack gap={8} backgroundColor={theme.backgroundElement} padding={12} borderRadius={8}>
+                <XStack justifyContent="space-between" alignItems="center">
+                  <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Financial Health</Text>
+                  <Text color={theme.text} fontSize={13} fontWeight="700">{getFinancialHealthScore()}/100</Text>
+                </XStack>
+                <XStack justifyContent="space-between" alignItems="center">
+                  <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Streak</Text>
+                  <Text color={theme.warning} fontSize={13} fontWeight="700">🔥 {streakDays} days</Text>
+                </XStack>
+                <XStack justifyContent="space-between" alignItems="center">
+                  <Text color={theme.textSecondary} fontSize={12} fontWeight="500">Academy Level</Text>
+                  <Text color={theme.primary as any} fontSize={13} fontWeight="700">Lvl {level} ({xp} XP)</Text>
+                </XStack>
+              </YStack>
+
               {/* Actions List */}
               <YStack gap={10} marginTop={8}>
+                {/* Full App Settings */}
+                <Button
+                  backgroundColor={theme.backgroundElement}
+                  pressStyle={{ opacity: 0.8 }}
+                  borderWidth={0}
+                  borderRadius={8}
+                  height={40}
+                  onPress={() => {
+                    setShowDrawer(false);
+                    router.push('/settings' as Href);
+                  }}
+                >
+                  <XStack gap={8} alignItems="center" justifyContent="center">
+                    <PhosphorIcon name="GearSix" size={16} color={theme.text} weight="bold" />
+                    <Text color={theme.text} fontSize={13} fontWeight="600">
+                      Settings & Preferences
+                    </Text>
+                  </XStack>
+                </Button>
+
                 {/* Reset simulated data */}
                 <Button
                   backgroundColor={theme.backgroundElement}

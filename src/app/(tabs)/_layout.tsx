@@ -3,36 +3,33 @@ import { Tabs, useRouter, usePathname, Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/hooks/use-theme';
 import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
-import { Platform, Modal, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { Platform, Modal, TouchableOpacity, StyleSheet, Alert, PixelRatio } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/authStore';
 import { Fonts } from '@/constants/theme';
 import { YStack, Text, Button, View } from 'tamagui';
 import { DisclaimerInterstitial } from '@/components/DisclaimerInterstitial';
+import { AllocateUnspentModal } from '@/features/budget/components/AllocateUnspentModal';
 
 export default function TabsLayout() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
-  const { user, logout } = useAuthStore();
-  const isGuest = user?.id === 'guest';
   const router = useRouter();
-  const [registerModalVisible, setRegisterModalVisible] = useState(false);
   const [actionModalVisible, setActionModalVisible] = useState(false);
+  const [showAllocateUnspent, setShowAllocateUnspent] = useState(false);
 
-  // Home (index / (tabs) / root) and Invest tabs have dark backgrounds/headers even in light mode
-  const isDarkHeaderTab = pathname === '/' || pathname === '/(tabs)' || pathname.endsWith('/index') || pathname.includes('invest');
+  // Dynamic tab bar height scaling for accessibility
+  const fontScale = PixelRatio.getFontScale();
+  const adjustedHeight =
+    Platform.OS === 'web'
+      ? 76
+      : Math.max(70, Math.round(62 * Math.min(fontScale, 1.4))) + insets.bottom;
+
+  // Only tabs with persistent dark backgrounds (e.g. Invest) use light status bar in light mode
+  const isDarkHeaderTab = pathname.includes('invest');
   const isDark = theme.mode === 'dark';
   const tabStatusBarStyle = isDark || isDarkHeaderTab ? 'light' : 'dark';
-
-  const guestTabPressListener = {
-    tabPress: (e: any) => {
-      if (isGuest) {
-        e.preventDefault();
-        setRegisterModalVisible(true);
-      }
-    },
-  };
 
   return (
     <>
@@ -50,7 +47,7 @@ export default function TabsLayout() {
           tabBarStyle: {
             backgroundColor: theme.surface as any,
             borderTopWidth: 0,
-            height: Platform.OS === 'web' ? 76 : 70 + insets.bottom,
+            height: adjustedHeight,
             paddingBottom: Platform.OS === 'web' ? 14 : (insets.bottom > 0 ? insets.bottom + 4 : 12),
             paddingTop: 12,
             shadowColor: '#000000',
@@ -125,14 +122,12 @@ export default function TabsLayout() {
         />
         <Tabs.Screen
           name="learn"
-          listeners={guestTabPressListener}
           options={{
             href: null,
           }}
         />
         <Tabs.Screen
           name="invest"
-          listeners={guestTabPressListener}
           options={{
             title: 'Invest Lab',
             tabBarIcon: ({ color, focused }) => (
@@ -147,7 +142,6 @@ export default function TabsLayout() {
         />
         <Tabs.Screen
           name="profile"
-          listeners={guestTabPressListener}
           options={{
             title: 'Profile',
             tabBarIcon: ({ color, focused }) => (
@@ -164,88 +158,6 @@ export default function TabsLayout() {
 
       {/* Mandatory Financial Disclaimer — blocks access until accepted */}
       <DisclaimerInterstitial theme={theme} />
-
-      <Modal
-        visible={registerModalVisible}
-        transparent
-        animationType="none"
-        statusBarTranslucent
-        onRequestClose={() => setRegisterModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <YStack
-            backgroundColor={theme.surface}
-            borderColor={theme.border}
-            borderWidth={1}
-            borderRadius={24}
-            padding={24}
-            width="85%"
-            maxWidth={340}
-            alignItems="center"
-            gap={16}
-            elevation={10}
-            shadowColor="#000"
-            shadowOffset={{ width: 0, height: 4 }}
-            shadowOpacity={0.25}
-            shadowRadius={10}
-          >
-            {/* Lock Icon */}
-            <View
-              width={64}
-              height={64}
-              borderRadius={32}
-              backgroundColor={`${theme.primary}1A` as any}
-              alignItems="center"
-              justifyContent="center"
-            >
-              <PhosphorIcon name="Lock" size={26} color={theme.primary} weight="fill" />
-            </View>
-
-            {/* Information Text */}
-            <YStack alignItems="center" gap={8}>
-              <Text color={theme.text} fontSize={18} fontWeight="800" textAlign="center">
-                Create a Free Account
-              </Text>
-              <Text color={theme.textSecondary} fontSize={13} textAlign="center" lineHeight={18}>
-                To unlock financial stats tracking, investment simulations, learning academy modules, and achievements, please create your profile today!
-              </Text>
-            </YStack>
-
-            {/* Action Buttons */}
-            <YStack gap={10} width="100%" marginTop={8}>
-              <Button
-                style={{ backgroundColor: theme.primary }}
-                borderRadius={14}
-                height={48}
-                pressStyle={{ opacity: 0.85, scale: 0.98 }}
-                accessibilityRole="button"
-                accessibilityLabel="Create Account"
-                onPress={async () => {
-                  setRegisterModalVisible(false);
-                  await logout();
-                  router.replace('/(auth)/register' as Href);
-                }}
-              >
-                <Text color="#FFFFFF" fontSize={14} fontWeight="700">
-                  Create Account
-                </Text>
-              </Button>
-
-              <TouchableOpacity
-                onPress={() => setRegisterModalVisible(false)}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel="Continue as Guest"
-                style={{ height: 40, alignItems: 'center', justifyContent: 'center' }}
-              >
-                <Text color={theme.textSecondary} fontSize={13} fontWeight="600">
-                  Continue as Guest
-                </Text>
-              </TouchableOpacity>
-            </YStack>
-          </YStack>
-        </View>
-      </Modal>
 
       {/* Quick Actions (Rainbow Style) Modal */}
       <Modal
@@ -291,7 +203,10 @@ export default function TabsLayout() {
             <TouchableOpacity
               onPress={() => {
                 setActionModalVisible(false);
-                router.push('/(tabs)/budget?action=log' as Href);
+                router.push({
+                  pathname: '/(tabs)/budget',
+                  params: { action: 'log', t: Date.now().toString() },
+                } as any);
               }}
               activeOpacity={0.7}
               accessibilityRole="button"
@@ -313,7 +228,10 @@ export default function TabsLayout() {
             <TouchableOpacity
               onPress={() => {
                 setActionModalVisible(false);
-                router.push('/(tabs)/budget?action=savings' as Href);
+                router.push({
+                  pathname: '/(tabs)/budget',
+                  params: { action: 'savings', t: Date.now().toString() },
+                } as any);
               }}
               activeOpacity={0.7}
               accessibilityRole="button"

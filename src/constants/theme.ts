@@ -7,43 +7,73 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
+/**
+ * Unified Green Color System
+ * Signature executive forest & brand emerald palette for cards, accents, and hero actions.
+ */
+export const GreenPalette = {
+  // Executive Forest (Hero Cards & Canvas — matches Trade Sandbox button)
+  forestLight: '#239B56',  // Luminous top sheen / highlights
+  forest: '#1D8348',       // Signature Trade Sandbox green (hero card core)
+  forestDark: '#145A32',   // Deep pine foundation / shadows / borders
+  forestDeep: '#0B3B20',   // Ultra-deep contrast shadow
+
+  // Interactive Brand Emerald
+  emeraldLight: '#34D399', // Mint / progress glow / finger highlights
+  emerald: '#10B981',      // Core interactive primary action / active pills
+  emeraldDark: '#059669',  // Pressed states / secondary badges
+
+  // Accents & Tints
+  mintPale: '#D1FAE5',     // Tinted pill backgrounds / light icons
+  mintBorder: 'rgba(52, 211, 153, 0.25)', // Card subtle border
+} as const;
+
 export const Colors = {
   hybrid: {
     primary: '#10B981',     // Vibrant Brand Emerald — used for interactive/accent only
     teal: '#14B8A6',
     mint: '#5EEAD4',
+    forest: GreenPalette.forest,
+    forestLight: GreenPalette.forestLight,
+    forestDark: GreenPalette.forestDark,
     success: '#16A34A',     // Green for positive amounts
     warning: '#D97706',     // Amber
     error: '#DC2626',       // Red
-    background: '#F1F5F9',  // Soft slate background — eliminates glare and elevates white cards
+    background: '#F5F5F5',  // Clean near-white background
     surface: '#FFFFFF',     // Clean elevated white cards
     surfaceDark: '#0F172A', // Midnight card surface for hero balance card
     text: '#0F172A',        // Near-black — max readability
     textSecondary: '#64748B', // Slate-500 — readable secondary text
-    border: '#E2E8F0',      // Soft, clean border
-    backgroundElement: '#F1F5F9', // Elevated surface background
-    backgroundSelected: '#E2E8F0',
+    border: '#E5E7EB',      // Crisp, clean border
+    backgroundElement: '#F5F5F5', // Elevated surface background
+    backgroundSelected: '#E5E7EB',
   },
   light: {
     primary: '#10B981',     // Vibrant Brand Emerald — used for interactive/accent only
     teal: '#14B8A6',
     mint: '#5EEAD4',
+    forest: GreenPalette.forest,
+    forestLight: GreenPalette.forestLight,
+    forestDark: GreenPalette.forestDark,
     success: '#16A34A',     // Darker green — clearly distinct from brand primary
     warning: '#D97706',     // Amber — darkened for contrast on white backgrounds
     error: '#DC2626',       // Red — high contrast on light
-    background: '#F1F5F9',  // Soft slate background — eliminates glare
+    background: '#F5F5F5',  // Clean near-white background
     surface: '#FFFFFF',
     surfaceDark: '#0F172A',
     text: '#0F172A',        // Near-black — max readability
     textSecondary: '#475569', // Slate-600 — darker than before for better contrast
-    border: '#E2E8F0',      // Soft, clean border
-    backgroundElement: '#F1F5F9', // Near-white — clean on white surfaces
-    backgroundSelected: '#E2E8F0',
+    border: '#E5E7EB',      // Crisp, clean border
+    backgroundElement: '#F5F5F5', // Near-white — clean on white surfaces
+    backgroundSelected: '#E5E7EB',
   },
   dark: {
     primary: '#10B981',     // Vibrant Brand Emerald
     teal: '#14B8A6',
     mint: '#5EEAD4',
+    forest: GreenPalette.forest,
+    forestLight: GreenPalette.forestLight,
+    forestDark: GreenPalette.forestDark,
     success: '#4ADE80',     // Brighter green on dark bg — distinct from brand primary
     warning: '#FBBF24',     // Amber — readable on dark
     error: '#F87171',       // Red — softer on dark
@@ -51,7 +81,7 @@ export const Colors = {
     surface: '#1E293B',     // Card surfaces
     surfaceDark: '#0F172A',
     text: '#F1F5F9',        // Near-white — high contrast on dark
-    textSecondary: '#94A3B8', // Slate-400 — clear secondary on dark bg
+    textSecondary: '#CBD5E1', // Slate-300 — high contrast (>10:1 ratio on dark navy), passes WCAG AAA
     border: '#334155',
     backgroundElement: '#1E293B',
     backgroundSelected: '#334155',

@@ -136,16 +136,16 @@ export function DashboardMascot({ onPress, size = 114 }: DashboardMascotProps) {
           <Svg width={size} height={size * 0.7} viewBox="0 0 144 100">
             <Defs>
               <LinearGradient id="walletGrad" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0" stopColor="#3EB47D" />
-                <Stop offset="1" stopColor="#23965D" />
+                <Stop offset="0" stopColor="#239B56" />
+                <Stop offset="1" stopColor="#1D8348" />
               </LinearGradient>
               <LinearGradient id="coinGrad" x1="0" y1="0" x2="1" y2="1">
                 <Stop offset="0" stopColor="#FFE066" />
                 <Stop offset="1" stopColor="#F59E0B" />
               </LinearGradient>
               <LinearGradient id="handGrad" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0" stopColor="#3EB47D" />
-                <Stop offset="1" stopColor="#1B7849" />
+                <Stop offset="0" stopColor="#239B56" />
+                <Stop offset="1" stopColor="#145A32" />
               </LinearGradient>
             </Defs>
 
@@ -178,7 +178,7 @@ export function DashboardMascot({ onPress, size = 114 }: DashboardMascotProps) {
             {/* Leather Wallet Snap Flap on Right */}
             <Path
               d="M 108 46 L 130 46 A 8 8 0 0 1 130 62 L 108 62 Z"
-              fill="#1B7849"
+              fill="#145A32"
             />
             <Circle cx={124} cy={54} r={4.5} fill="#F59E0B" />
             <Circle cx={124} cy={54} r={2.5} fill="#FEF3C7" />
@@ -245,9 +245,9 @@ export function DashboardMascot({ onPress, size = 114 }: DashboardMascotProps) {
                 fill="url(#handGrad)"
               />
               {/* 3 Distinct Rounded Fingers Curling Over the Card Edge */}
-              <Rect x={1} y={6} width={6.5} height={16} rx={3.2} fill="#34D399" stroke="#064E3B" strokeWidth={1.5} />
-              <Rect x={8} y={6} width={6.5} height={17.5} rx={3.2} fill="#34D399" stroke="#064E3B" strokeWidth={1.5} />
-              <Rect x={15} y={6} width={6.5} height={16} rx={3.2} fill="#34D399" stroke="#064E3B" strokeWidth={1.5} />
+              <Rect x={1} y={6} width={6.5} height={16} rx={3.2} fill="#34D399" stroke="#145A32" strokeWidth={1.5} />
+              <Rect x={8} y={6} width={6.5} height={17.5} rx={3.2} fill="#34D399" stroke="#145A32" strokeWidth={1.5} />
+              <Rect x={15} y={6} width={6.5} height={16} rx={3.2} fill="#34D399" stroke="#145A32" strokeWidth={1.5} />
               {/* Finger Tip Glossy Highlights */}
               <Circle cx={4.2} cy={18} r={1.5} fill="#D1FAE5" />
               <Circle cx={11.2} cy={19.5} r={1.5} fill="#D1FAE5" />
@@ -263,9 +263,9 @@ export function DashboardMascot({ onPress, size = 114 }: DashboardMascotProps) {
                   fill="url(#handGrad)"
                 />
                 {/* 3 Distinct Rounded Fingers Curling Over the Card Edge */}
-                <Rect x={1} y={6} width={6.5} height={16} rx={3.2} fill="#34D399" stroke="#064E3B" strokeWidth={1.5} />
-                <Rect x={8} y={6} width={6.5} height={17.5} rx={3.2} fill="#34D399" stroke="#064E3B" strokeWidth={1.5} />
-                <Rect x={15} y={6} width={6.5} height={16} rx={3.2} fill="#34D399" stroke="#064E3B" strokeWidth={1.5} />
+                <Rect x={1} y={6} width={6.5} height={16} rx={3.2} fill="#34D399" stroke="#145A32" strokeWidth={1.5} />
+                <Rect x={8} y={6} width={6.5} height={17.5} rx={3.2} fill="#34D399" stroke="#145A32" strokeWidth={1.5} />
+                <Rect x={15} y={6} width={6.5} height={16} rx={3.2} fill="#34D399" stroke="#145A32" strokeWidth={1.5} />
                 {/* Finger Tip Glossy Highlights */}
                 <Circle cx={4.2} cy={18} r={1.5} fill="#D1FAE5" />
                 <Circle cx={11.2} cy={19.5} r={1.5} fill="#D1FAE5" />
@@ -292,26 +292,26 @@ export function DashboardMascot({ onPress, size = 114 }: DashboardMascotProps) {
                 {/* Arm Limb */}
                 <Path
                   d="M 8 36 C 12 26 20 18 26 10"
-                  stroke="#1B7849"
+                  stroke="#145A32"
                   strokeWidth={10}
                   strokeLinecap="round"
                   fill="none"
                 />
                 <Path
                   d="M 8 36 C 12 26 20 18 26 10"
-                  stroke="#3EB47D"
+                  stroke="#239B56"
                   strokeWidth={7.5}
                   strokeLinecap="round"
                   fill="none"
                 />
 
                 {/* Hand Palm & Waving Fingers */}
-                <Circle cx={28} cy={8} r={7.5} fill="#3EB47D" stroke="#1B7849" strokeWidth={1} />
+                <Circle cx={28} cy={8} r={7.5} fill="#239B56" stroke="#145A32" strokeWidth={1} />
                 {/* 4 Waving Fingers */}
-                <Rect x={26} y={1} width={4} height={8} rx={2} fill="#3EB47D" stroke="#1B7849" strokeWidth={0.8} />
-                <Rect x={31} y={3} width={3.6} height={7.5} rx={1.8} fill="#3EB47D" stroke="#1B7849" strokeWidth={0.8} />
-                <Rect x={21} y={3} width={3.6} height={7} rx={1.8} fill="#3EB47D" stroke="#1B7849" strokeWidth={0.8} />
-                <Circle cx={32} cy={12} r={2.8} fill="#3EB47D" />
+                <Rect x={26} y={1} width={4} height={8} rx={2} fill="#239B56" stroke="#145A32" strokeWidth={0.8} />
+                <Rect x={31} y={3} width={3.6} height={7.5} rx={1.8} fill="#239B56" stroke="#145A32" strokeWidth={0.8} />
+                <Rect x={21} y={3} width={3.6} height={7} rx={1.8} fill="#239B56" stroke="#145A32" strokeWidth={0.8} />
+                <Circle cx={32} cy={12} r={2.8} fill="#239B56" />
               </Svg>
             </Animated.View>
           )}
@@ -352,9 +352,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 78,
     right: 14,
-    backgroundColor: '#0F2642',
+    backgroundColor: '#0A1C12',
     borderWidth: 1.5,
-    borderColor: '#3EB47D',
+    borderColor: '#239B56',
     borderRadius: 14,
     paddingHorizontal: 13,
     paddingVertical: 9,
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 7,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: '#3EB47D',
+    borderTopColor: '#239B56',
   },
 });
 

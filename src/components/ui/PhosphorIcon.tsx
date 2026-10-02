@@ -1,5 +1,5 @@
 /**
- * PhosphorIcon — Centralized Phosphor icon component for the Walletly app.
+ * PhosphorIcon — Centralized Phosphor icon component for the CBudget app.
  *
  * Instead of importing individual Phosphor icons in every file, import this
  * single component and pass a `name` string. This keeps imports clean and
@@ -100,11 +100,27 @@ import {
   Code,
   Heart,
   Scales,
+  Gear,
+  GearSix,
+  SignOut,
+  Trophy,
+  Globe,
+  ChatCircle,
+  Phone,
+  MapPin,
 } from 'phosphor-react-native';
 import type { StyleProp, ViewStyle, ColorValue } from 'react-native';
 
 // ── Icon registry (maps string names → components) ───────────────────
 const ICON_MAP = {
+  SignOut: SignOut || Power,
+  Logout: SignOut || Power,
+  Exit: SignOut || Power,
+  Trophy,
+  Globe,
+  ChatCircle,
+  Phone,
+  MapPin,
   Clock,
   House,
   Wallet,
@@ -193,6 +209,8 @@ const ICON_MAP = {
   Code,
   Heart,
   Scales,
+  Gear,
+  GearSix,
 } as const;
 
 export type PhosphorIconName = keyof typeof ICON_MAP;
@@ -214,7 +232,7 @@ export function PhosphorIcon({
   style,
   mirrored,
 }: PhosphorIconProps) {
-  const IconComponent = ICON_MAP[name];
+  const IconComponent = (ICON_MAP as Record<string, any>)[name] || (name === 'SignOut' || name === 'Logout' ? Power : null);
 
   if (!IconComponent) {
     console.warn(`[PhosphorIcon] Unknown icon name: "${name}"`);

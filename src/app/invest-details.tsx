@@ -12,7 +12,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { BackgroundSystem } from '@/components/ui/BackgroundSystem';
 import { useCurrency } from '@/utils/currency';
-import { ASSET_DATA as assetData, TEEN_GUIDES as teenGuides } from '@/constants/assets';
+import { ASSET_DATA as assetData, TEEN_GUIDES as teenGuides, getLivePE, getValuationLabel } from '@/constants/assets';
+import { useMarketStore } from '@/store/marketStore';
 
 import { InteractiveChart } from '@/features/invest/components/InteractiveChart';
 
@@ -20,10 +21,17 @@ export default function InvestDetailsScreen() {
   const router = useRouter();
   const theme = useTheme() as any;
   const store = useGamificationStore();
+  const market = useMarketStore();
   const params = useLocalSearchParams<{ ticker?: string }>();
   const { symbol: currencySymbol } = useCurrency();
 
-  const asset = assetData[params.ticker || 'NOVA'] || assetData.NOVA;
+  const asset = market.assets[params.ticker || 'NOVA'] || assetData[params.ticker || 'NOVA'] || assetData.NOVA;
+
+  React.useEffect(() => {
+    market.initMarket();
+    const stopDrift = market.startLiveDrift();
+    return () => stopDrift();
+  }, []);
 
   const [chartTimeframe, setChartTimeframe] = useState<'1D' | '1W' | '1M'>('1D');
   const [scrubbedPrice, setScrubbedPrice] = useState<number | null>(null);
@@ -131,9 +139,11 @@ export default function InvestDetailsScreen() {
       return;
     }
 
-    // Daily simulated dividend of 1.0% of total holdings value
-    const dividendAmount = assetTotalValue * 0.01;
-    const roundedDividend = parseFloat(dividendAmount.toFixed(2));
+    // Realistic simulated dividend: ~3.5% annual yield ÷ 365 days ≈ 0.00959% daily
+    // Real-world S&P 500 average dividend yield is ~1.3-3.5% per year (paid quarterly)
+    const ANNUAL_DIVIDEND_YIELD = 0.035; // 3.5% per year — realistic average
+    const dividendAmount = assetTotalValue * (ANNUAL_DIVIDEND_YIELD / 365);
+    const roundedDividend = Math.max(0.01, parseFloat(dividendAmount.toFixed(2))); // Minimum ₱0.01 payout
 
     const success = store.claimDailyDividend(asset.ticker, roundedDividend);
     if (!success) {
@@ -143,7 +153,7 @@ export default function InvestDetailsScreen() {
 
     Alert.alert(
       '🎉 Dividends Claimed!',
-      `You earned ${currencySymbol}${roundedDividend.toLocaleString(undefined, { minimumFractionDigits: 2 })} in passive dividends from your ${ownedUnits.toFixed(4)} shares of ${asset.ticker}! (+5 XP)\n\n💡 Dividends are a share of the company's profits paid out to shareholders just for holding the stock.`
+      `You earned ${currencySymbol}${roundedDividend.toLocaleString(undefined, { minimumFractionDigits: 2 })} in passive dividends from your ${ownedUnits.toFixed(4)} shares of ${asset.ticker}! (+5 XP)\n\n💡 Dividends are a share of the company's profits paid out to shareholders just for holding the stock. This simulates a realistic ~3.5% annual dividend yield.`
     );
   };
 
@@ -169,9 +179,21 @@ export default function InvestDetailsScreen() {
             </XStack>
           </TouchableOpacity>
 
-          <View backgroundColor="rgba(245, 158, 11, 0.12)" paddingHorizontal={10} paddingVertical={4} borderRadius={100} borderWidth={1} borderColor="rgba(245, 158, 11, 0.3)">
-            <Text color="#F59E0B" fontSize={10} style={{ fontFamily: "Inter_700Bold" }} letterSpacing={0.5}>
-              SIMULATED
+          <View
+            backgroundColor={market.isLive ? 'rgba(16, 185, 129, 0.12)' : 'rgba(56, 189, 248, 0.12)'}
+            paddingHorizontal={10}
+            paddingVertical={4}
+            borderRadius={100}
+            borderWidth={1}
+            borderColor={market.isLive ? 'rgba(16, 185, 129, 0.3)' : 'rgba(56, 189, 248, 0.3)'}
+          >
+            <Text
+              color={market.isLive ? '#10B981' : '#38BDF8'}
+              fontSize={10}
+              style={{ fontFamily: 'Inter_700Bold' }}
+              letterSpacing={0.5}
+            >
+              {market.isLive ? '🟢 LIVE QUOTE' : 'SANDBOX SIM'}
             </Text>
           </View>
           
@@ -195,16 +217,16 @@ export default function InvestDetailsScreen() {
                 justifyContent="center"
                 borderWidth={1.5}
               >
-                <PhosphorIcon name={asset.icon} size={22} color={asset.color} weight="duotone" />
+                <PhosphorIcon name={asset.icon} size={22} color={asset.color} weight="fill" />
               </View>
               <YStack gap={6} flex={1}>
-                <Text color="#FFFFFF" fontSize={18} style={{ fontFamily: "Inter_700Bold" }} letterSpacing={-0.4} numberOfLines={1}>
+                <Text color={theme.text} fontSize={18} style={{ fontFamily: "Inter_700Bold" }} letterSpacing={-0.4} numberOfLines={1}>
                   {asset.name}
                 </Text>
                 <XStack gap={6} flexWrap="wrap" alignItems="center">
-                  <View backgroundColor="rgba(255, 255, 255, 0.06)" paddingHorizontal={8} paddingVertical={4} borderRadius={6} borderWidth={1} borderColor="rgba(255, 255, 255, 0.08)">
-                    <Text color="rgba(255, 255, 255, 0.85)" fontSize={11} style={{ fontFamily: "Inter_700Bold" }}>
-                      🏷️ {asset.partner}
+                  <View backgroundColor={theme.backgroundElement} paddingHorizontal={8} paddingVertical={4} borderRadius={6} borderWidth={1} borderColor={theme.border}>
+                    <Text color={theme.textSecondary} fontSize={11} style={{ fontFamily: "Inter_700Bold" }}>
+                      {asset.partner}
                     </Text>
                   </View>
                   <View 
@@ -521,7 +543,7 @@ export default function InvestDetailsScreen() {
                 {ownedUnits > 0 && (
                   <YStack gap={10} marginVertical={4}>
                     {/* Share Slice Progress Visualizer */}
-                    <XStack gap={10} alignItems="center" backgroundColor="rgba(255, 255, 255, 0.03)" padding={10} borderRadius={8} borderWidth={1} borderColor="rgba(255, 255, 255, 0.05)">
+                    <XStack gap={10} alignItems="center" backgroundColor={theme.backgroundElement} padding={10} borderRadius={8} borderWidth={1} borderColor={theme.border}>
                       <Text fontSize={16}>🍰</Text>
                       <YStack flex={1} gap={3}>
                         <XStack justifyContent="space-between" alignItems="center">
@@ -532,10 +554,10 @@ export default function InvestDetailsScreen() {
                             {ownedUnits < 1 ? `${(ownedUnits * 100).toFixed(1)}%` : '100%+' }
                           </Text>
                         </XStack>
-                        <View height={5} backgroundColor="rgba(255, 255, 255, 0.08)" borderRadius={4} overflow="hidden" width="100%">
+                        <View height={5} backgroundColor={theme.border} borderRadius={4} overflow="hidden" width="100%">
                           <View width={`${Math.min(100, ownedUnits * 100)}%`} height="100%" style={{ backgroundColor: asset.color }} borderRadius={4} />
                         </View>
-                        <Text color="rgba(255, 255, 255, 0.5)" fontSize={9} style={{ fontFamily: "Inter_600SemiBold" }}>
+                        <Text color={theme.textSecondary} fontSize={9} style={{ fontFamily: "Inter_600SemiBold" }}>
                           {ownedUnits < 1 
                             ? `You own a ${(ownedUnits * 100).toFixed(1)}% slice of 1 full share!`
                             : `You own ${Math.floor(ownedUnits)} whole share(s) + ${( (ownedUnits % 1) * 100 ).toFixed(1)}% slice!`
@@ -547,8 +569,8 @@ export default function InvestDetailsScreen() {
                     {/* Passive Dividends claim button */}
                     <XStack justifyContent="space-between" alignItems="center" backgroundColor="rgba(16, 185, 129, 0.05)" padding={10} borderRadius={8} borderWidth={1} borderColor="rgba(16, 185, 129, 0.15)">
                       <YStack gap={2} flex={1}>
-                        <Text color="#3EB47D" fontSize={10} style={{ fontFamily: "Inter_700Bold" }} letterSpacing={0.5}>
-                          🎁 PASSIVE DIVIDENDS (1% DAILY)
+                        <Text color="#10B981" fontSize={10} style={{ fontFamily: "Inter_700Bold" }} letterSpacing={0.5}>
+                          🎁 PASSIVE DIVIDENDS (~3.5% ANNUAL)
                         </Text>
                         <Text color={theme.textSecondary} fontSize={9} lineHeight={12}>
                           {dividendsClaimed[asset.ticker] 
@@ -561,15 +583,15 @@ export default function InvestDetailsScreen() {
                         disabled={dividendsClaimed[asset.ticker]}
                         activeOpacity={0.8}
                         style={{
-                          backgroundColor: dividendsClaimed[asset.ticker] ? 'rgba(255, 255, 255, 0.05)' : '#059669',
+                          backgroundColor: dividendsClaimed[asset.ticker] ? theme.backgroundElement : '#059669',
                           borderWidth: dividendsClaimed[asset.ticker] ? 1 : 0,
-                          borderColor: 'rgba(255,255,255,0.1)',
+                          borderColor: theme.border,
                           paddingHorizontal: 12,
                           paddingVertical: 6,
                           borderRadius: 6,
                         }}
                       >
-                        <Text color={dividendsClaimed[asset.ticker] ? 'rgba(255,255,255,0.3)' : '#FFFFFF'} fontSize={9} style={{ fontFamily: "Inter_700Bold" }}>
+                        <Text color={dividendsClaimed[asset.ticker] ? theme.textSecondary : '#FFFFFF'} fontSize={9} style={{ fontFamily: "Inter_700Bold" }}>
                           {dividendsClaimed[asset.ticker] ? 'CLAIMED' : 'CLAIM'}
                         </Text>
                       </TouchableOpacity>
@@ -590,7 +612,7 @@ export default function InvestDetailsScreen() {
                       setIsTrading(true);
                       setUnitsAmount('');
                     }}
-                    style={{ borderColor: 'rgba(255, 255, 255, 0.15)', backgroundColor: 'transparent', flex: 1 }}
+                    style={{ borderColor: theme.border, backgroundColor: 'transparent', flex: 1 }}
                   >
                     Sell
                   </FormButton>
@@ -624,7 +646,7 @@ export default function InvestDetailsScreen() {
                   color="#F59E0B"
                   weight="fill"
                 />
-                <Text color="#FFFFFF" fontSize={16} style={{ fontFamily: "Inter_700Bold" }} letterSpacing={-0.2}>
+                <Text color={theme.text} fontSize={16} style={{ fontFamily: "Inter_700Bold" }} letterSpacing={-0.2}>
                   Teen Academy 🎓
                 </Text>
               </XStack>
@@ -639,19 +661,19 @@ export default function InvestDetailsScreen() {
 
             {showTeenGuide ? (
               <YStack gap={12} marginTop={4}>
-                <Text color="#FFFFFF" fontSize={15} lineHeight={22} style={{ fontFamily: "Inter_500Medium" }}>
+                <Text color={theme.text} fontSize={15} lineHeight={22} style={{ fontFamily: "Inter_500Medium" }}>
                   {teenGuides[asset.ticker].analogy}
                 </Text>
-                <View height={1} backgroundColor="rgba(255, 255, 255, 0.1)" />
-                <XStack gap={10} alignItems="flex-start" backgroundColor="rgba(255, 255, 255, 0.03)" padding={12} borderRadius={10}>
+                <View height={1} backgroundColor={theme.border} />
+                <XStack gap={10} alignItems="flex-start" backgroundColor={theme.backgroundElement} padding={12} borderRadius={10}>
                   <PhosphorIcon name="Warning" size={16} color={asset.color} weight="fill" style={{ marginTop: 2 }} />
-                  <Text color="#E2E8F0" fontSize={13} style={{ fontFamily: "Inter_500Medium", flex: 1, lineHeight: 19 }}>
+                  <Text color={theme.textSecondary} fontSize={13} style={{ fontFamily: "Inter_500Medium", flex: 1, lineHeight: 19 }}>
                     {teenGuides[asset.ticker].riskExplanation}
                   </Text>
                 </XStack>
               </YStack>
             ) : (
-              <Text color="#94A3B8" fontSize={13} lineHeight={18} style={{ fontFamily: "Inter_400Regular" }}>
+              <Text color={theme.textSecondary} fontSize={13} lineHeight={18} style={{ fontFamily: "Inter_400Regular" }}>
                 Struggling with financial jargon? Tap the button to get a simplified explanation with gaming & school analogies!
               </Text>
             )}
@@ -724,8 +746,28 @@ export default function InvestDetailsScreen() {
               <XStack width="47%" gap={10} alignItems="center" paddingVertical={4}>
                 <PhosphorIcon name="Tag" size={16} color={theme.primary} />
                 <YStack gap={1}>
-                  <Text color={theme.textSecondary} opacity={0.6} fontSize={11} fontWeight="700">PRICE RATING</Text>
-                  <Text color={theme.text} fontSize={15} fontWeight="800">{asset.peRatio}</Text>
+                  <Text color={theme.textSecondary} opacity={0.6} fontSize={11} fontWeight="700">P/E RATIO (LIVE)</Text>
+                  <XStack gap={6} alignItems="center">
+                    <Text color={theme.text} fontSize={15} fontWeight="800">{getLivePE(asset.price, asset.eps)}</Text>
+                    <View
+                      paddingHorizontal={5}
+                      paddingVertical={1.5}
+                      borderRadius={4}
+                      borderWidth={1}
+                      style={{
+                        backgroundColor: `${getValuationLabel(getLivePE(asset.price, asset.eps)).color}15`,
+                        borderColor: `${getValuationLabel(getLivePE(asset.price, asset.eps)).color}30`,
+                      }}
+                    >
+                      <Text
+                        style={{ color: getValuationLabel(getLivePE(asset.price, asset.eps)).color }}
+                        fontSize={9}
+                        fontWeight="700"
+                      >
+                        {getValuationLabel(getLivePE(asset.price, asset.eps)).label}
+                      </Text>
+                    </View>
+                  </XStack>
                 </YStack>
               </XStack>
               <XStack width="47%" gap={10} alignItems="center" paddingVertical={4}>
@@ -804,6 +846,17 @@ export default function InvestDetailsScreen() {
                   </Text>
                   <Text color={theme.textSecondary} fontSize={12} lineHeight={17}>
                     When a company earns a profit, they sometimes choose to distribute a portion of that cash back to their shareholders. It is like a shop sharing some weekend profits with you because you helped fund them! You earn passive money <Text fontWeight="700" color={theme.text}>just by owning the stock</Text>.
+                  </Text>
+                </YStack>
+
+                <View height={1} backgroundColor={theme.border} opacity={0.6} />
+
+                <YStack gap={4}>
+                  <Text color={theme.primary} fontSize={13} fontWeight="800">
+                    📊 What is P/E Ratio?
+                  </Text>
+                  <Text color={theme.textSecondary} fontSize={12} lineHeight={17}>
+                    P/E stands for <Text fontWeight="700" color={theme.text}>Price-to-Earnings</Text>. Imagine you're buying a pizza shop for {currencySymbol}100,000 that earns {currencySymbol}10,000/year in profit — your P/E is 10 (it'd take 10 years of profit to pay back the price). A <Text fontWeight="700" color="#10B981">low P/E</Text> means the stock is a bargain. A <Text fontWeight="700" color="#EF4444">high P/E</Text> means investors are paying a premium, betting on massive future growth.
                   </Text>
                 </YStack>
               </YStack>

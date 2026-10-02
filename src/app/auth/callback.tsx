@@ -60,7 +60,13 @@ export default function AuthCallbackScreen() {
         await hydrate();
 
         if (isMounted) {
-          router.replace('/(tabs)' as Href);
+          const currentUser = useAuthStore.getState().user;
+          const isNewAccount = !currentUser?.isOnboarded || !currentUser?.name || currentUser.name === 'User' || !currentUser?.age;
+          if (isNewAccount && currentUser?.id !== 'guest') {
+            router.replace('/(onboarding)' as Href);
+          } else {
+            router.replace('/(tabs)' as Href);
+          }
         }
       } catch (err: unknown) {
         console.warn('[AuthCallback] Callback handling error:', err);
@@ -79,7 +85,7 @@ export default function AuthCallbackScreen() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color="#3EB47D" />
+      <ActivityIndicator size="large" color="#10B981" />
       <Text style={styles.text}>
         Completing sign in...
       </Text>

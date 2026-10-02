@@ -11,7 +11,7 @@ export function CbudgetSplashScreen({ onAnimationEnd }: SplashScreenProps) {
   const [isDone, setIsDone] = useState(false);
 
   // Animated entrance and exit values
-  const logoScale = useRef(new Animated.Value(0.82)).current;
+  const logoScale = useRef(new Animated.Value(0.92)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const containerOpacity = useRef(new Animated.Value(1)).current;
 
@@ -23,33 +23,33 @@ export function CbudgetSplashScreen({ onAnimationEnd }: SplashScreenProps) {
   };
 
   useEffect(() => {
-    // 1. Exact logo pops into center with smooth physics
+    // 1. Smooth entrance animation
     Animated.parallel([
       Animated.spring(logoScale, {
         toValue: 1,
-        friction: 6,
-        tension: 80,
+        friction: 7,
+        tension: 70,
         useNativeDriver: true,
       }),
       Animated.timing(logoOpacity, {
         toValue: 1,
-        duration: 380,
+        duration: 300,
         useNativeDriver: true,
       }),
     ]).start();
 
-    // 2. Smooth container fade-out to reveal the main app
+    // 2. Play full splash motion sequence, then smoothly fade out to reveal the app
     const exitTimer = setTimeout(() => {
       Animated.timing(containerOpacity, {
         toValue: 0,
-        duration: 400,
+        duration: 450,
         useNativeDriver: true,
       }).start(({ finished }) => {
         if (finished) {
           handleFinish();
         }
       });
-    }, 1800);
+    }, 2800);
 
     return () => {
       clearTimeout(exitTimer);
@@ -72,18 +72,14 @@ export function CbudgetSplashScreen({ onAnimationEnd }: SplashScreenProps) {
           style={{
             opacity: logoOpacity,
             transform: [{ scale: logoScale }],
-            shadowColor: '#2ECC71',
-            shadowOffset: { width: 0, height: 10 },
-            shadowOpacity: 0.28,
-            shadowRadius: 28,
-            elevation: 12,
           }}
         >
-          {/* Exact master PNG logo with 100% pixel-perfect accuracy */}
+          {/* Watermark-free animated splash asset */}
           <Image
-            source={require('@/assets/images/walletly-logo.png')}
+            source={require('@/assets/animations/walletly_splash.webp')}
             style={styles.masterLogo}
             contentFit="contain"
+            priority="high"
           />
         </Animated.View>
       </View>
@@ -94,7 +90,7 @@ export function CbudgetSplashScreen({ onAnimationEnd }: SplashScreenProps) {
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: '#020C18',
+    backgroundColor: '#121E3F',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 99999,
@@ -104,9 +100,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   masterLogo: {
-    width: 220,
-    height: 220,
-    borderRadius: 48,
+    width: 240,
+    height: 240,
   },
 });
 

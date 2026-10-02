@@ -37,9 +37,11 @@ yarn-error.*
 Thumbs.db
 *.pem
 
-# local env files
+# local env files & secrets
 .env*.local
 .env
+google-services.json
+android/app/google-services.json
 
 # typescript
 *.tsbuildinfo

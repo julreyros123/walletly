@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { YStack, XStack, Text, View } from 'tamagui';
 import { useTheme } from '@/hooks/use-theme';
 import { PhosphorIcon, PhosphorIconName } from '@/components/ui/PhosphorIcon';
-import { useGamificationStore } from '@/store/gamificationStore';
+import { useGamificationStore, getCycleMetrics } from '@/store/gamificationStore';
 import { CbudgetCard } from '@/components/ui/CbudgetCard';
 import { FormInput } from '@/components/ui/FormInput';
 import { FormButton } from '@/components/ui/FormButton';
@@ -12,12 +12,15 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { setStatusBarStyle } from 'expo-status-bar';
 import { BackgroundSystem } from '@/components/ui/BackgroundSystem';
 import { AnimatedSegmentSwitch } from '@/components/ui/AnimatedSegmentSwitch';
-import { ASSETS_LIST as assets, Asset } from '@/constants/assets';
+import { Asset } from '@/constants/assets';
+import { useMarketStore } from '@/store/marketStore';
 import { safeHaptic } from '@/utils/haptics';
 import { MotionIcon } from '@/components/ui/MotionIcon';
 import { Fonts } from '@/constants/theme';
 import { toast } from '@/store/toastStore';
 import { RiskAssessmentModal } from '@/features/invest/components/RiskAssessmentModal';
+import { DepositFundsModal } from '@/features/invest/components/DepositFundsModal';
+import { CompoundForecastView } from '@/features/invest/components/CompoundForecastView';
 import { useCurrency } from '@/utils/currency';
 import Svg, { Path, Defs, LinearGradient, Stop, Line, Circle } from 'react-native-svg';
 
@@ -204,8 +207,8 @@ export default function InvestScreen() {
     return () => pulse.stop();
   }, []);
   
-  // Active Tab Segment: Portfolio & Market vs Compounding vs Sandbox Cash
-  const [activeTab, setActiveTab] = useState<'portfolio' | 'compound' | 'cash'>('portfolio');
+  // Active Tab Segment: Portfolio & Market vs Compounding Forecast
+  const [activeTab, setActiveTab] = useState<'portfolio' | 'compound'>('portfolio');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [assetFilter, setAssetFilter] = useState<'ALL' | 'Conservative' | 'Moderate' | 'Aggressive'>('ALL');
@@ -220,8 +223,20 @@ export default function InvestScreen() {
 
   const [transferAmount, setTransferAmount] = useState('');
 
-  // Risk Assessment Modal State
+  // Modals
   const [showRiskModal, setShowRiskModal] = useState(false);
+  const [showDepositModal, setShowDepositModal] = useState(false);
+
+  const market = useMarketStore();
+  const assets = market.assetsList;
+
+  useEffect(() => {
+    market.initMarket();
+    const stopDrift = market.startLiveDrift();
+    return () => {
+      stopDrift();
+    };
+  }, []);
 
   const getAssetOwnedUnits = (ticker: string) => {
     return store.portfolioAllocations[ticker] || 0;
@@ -261,18 +276,17 @@ export default function InvestScreen() {
   const dailyGainPercent = totalPortfolioValue > 0 ? (dailyGain / totalPortfolioValue) * 100 : 0;
   const isPerformancePositive = dailyGain >= 0;
 
-  // Dynamic scaled chart data based on user's actual portfolio balance
-  const isDemoPortfolio = totalPortfolioValue <= 0;
-  const effectivePortfolioValue = isDemoPortfolio ? 10000 : totalPortfolioValue;
-  const effectiveDailyGain = isDemoPortfolio ? 425.80 : dailyGain;
-  const effectiveDailyGainPercent = isDemoPortfolio ? 4.45 : dailyGainPercent;
+  // Dynamic scaled chart data based on user's actual portfolio balance (Cash + Stock Holdings)
+  const effectivePortfolioValue = totalPortfolioValue;
+  const effectiveDailyGain = dailyGain;
+  const effectiveDailyGainPercent = dailyGainPercent;
 
   const portfolioChartSeries = useMemo((): PortfolioDataPoint[] => {
     const cur = effectivePortfolioValue;
     const g = effectiveDailyGain;
 
     if (timeRange === '1D') {
-      const start = Math.max(10, cur - g);
+      const start = Math.max(0, cur - g);
       const intradayProfile = [
         { t: '9:30 AM', m: 0.0 },
         { t: '9:45 AM', m: -0.12 },
@@ -302,7 +316,7 @@ export default function InvestScreen() {
       return intradayProfile.map((p) => ({
         timestamp: `Today, ${p.t}`,
         label: p.t,
-        value: Math.max(10, start + g * p.m),
+        value: Math.max(0, start + g * p.m),
       }));
     }
 
@@ -435,11 +449,11 @@ export default function InvestScreen() {
     return ['2022', '2023', '2024', '2025', 'Now'];
   }, [timeRange]);
 
-  const effectiveTotal = Math.max(1, totalPortfolioValue > 0 ? totalPortfolioValue : 10000);
-  const effectiveHoldings = totalPortfolioValue > 0 ? holdingsValue : 6800;
-  const effectiveCash = totalPortfolioValue > 0 ? store.virtualBalance : 3200;
-  const equitiesRatio = Math.round((effectiveHoldings / effectiveTotal) * 100);
-  const cashRatio = 100 - equitiesRatio;
+  const effectiveTotal = Math.max(1, totalPortfolioValue);
+  const effectiveHoldings = holdingsValue;
+  const effectiveCash = store.virtualBalance;
+  const equitiesRatio = totalPortfolioValue > 0 ? Math.round((effectiveHoldings / effectiveTotal) * 100) : 0;
+  const cashRatio = totalPortfolioValue > 0 ? 100 - equitiesRatio : 0;
 
   const handleScrubMove = (evt: GestureResponderEvent) => {
     const touchX = evt.nativeEvent.locationX;
@@ -462,14 +476,15 @@ export default function InvestScreen() {
     lastHapticIndex.current = null;
   };
 
-  // Calculate available leftover allowance from budget
-  const totalSpent = store.loggedExpenses.reduce((sum, e) => sum + e.amount, 0);
-  const budgetRemaining = store.totalBudget - totalSpent;
-  const totalSavingsContribution = store.savingsGoals.reduce((sum, g) => sum + g.currentSavings, 0);
-  const availableToTransfer = Math.max(0, budgetRemaining - totalSavingsContribution - store.virtualBalance);
+  // Calculate available leftover allowance from current cycle budget
+  const cycleMetrics = useMemo(
+    () => getCycleMetrics(store),
+    [store.totalBudget, store.budgetType, store.loggedExpenses]
+  );
+  const availableToTransfer = cycleMetrics.balance;
 
   const handleTransferFromAllowance = () => {
-    const amt = parseFloat(transferAmount);
+    const amt = parseFloat((transferAmount || '').replace(/[^0-9.]/g, ''));
     if (isNaN(amt) || amt <= 0) {
       toast.warning('Invalid Amount', 'Please enter a valid amount to transfer.');
       return;
@@ -477,7 +492,7 @@ export default function InvestScreen() {
     if (amt > availableToTransfer) {
       toast.warning(
         'Insufficient Allowance',
-        `You only have ${currencySymbol}${availableToTransfer.toLocaleString()} available to transfer.`
+        `You only have ${currencySymbol}${availableToTransfer.toLocaleString()} available in your ${cycleMetrics.cycleName.toLowerCase()} to transfer.`
       );
       return;
     }
@@ -486,7 +501,7 @@ export default function InvestScreen() {
       store.addXP(15);
       toast.success(
         'Transfer Successful (+15 XP)',
-        `${currencySymbol}${amt.toLocaleString()} transferred from allowance to Investment Sandbox Cash!`
+        `${currencySymbol}${amt.toLocaleString()} transferred from ${cycleMetrics.cycleName.toLowerCase()} to Investment Sandbox Cash!`
       );
       setTransferAmount('');
     } else {
@@ -556,27 +571,45 @@ export default function InvestScreen() {
         <View style={styles.topHeader}>
           <YStack gap={2} flex={1} paddingRight={8}>
             <Text color="#FFFFFF" fontSize={24} style={{ fontFamily: Fonts.bold }} letterSpacing={-0.4} lineHeight={30}>
-              Investment Lab
+              Investing
             </Text>
             <Text color="rgba(255, 255, 255, 0.6)" fontSize={12.5} style={{ fontFamily: Fonts.regular }} lineHeight={17}>
-              Virtual portfolio & market simulator
+              Market & Portfolio
             </Text>
           </YStack>
-          <XStack style={styles.statusBadge} alignItems="center" gap={6} flexShrink={0}>
-            <View width={6} height={6} borderRadius={3} backgroundColor="#10B981" />
-            <Text style={styles.statusText} textTransform="uppercase">
-              Sim Active
-            </Text>
-          </XStack>
+          <TouchableOpacity
+            onPress={() => {
+              safeHaptic('light');
+              market.refreshAnchor(true);
+              toast.info(
+                'Market Sync',
+                market.isLive
+                  ? 'Refreshing live Wall Street prices from Finnhub...'
+                  : 'Running in offline simulation mode. Add an API key in .env to connect to live Finnhub data.'
+              );
+            }}
+            activeOpacity={0.7}
+          >
+            <XStack style={styles.statusBadge} alignItems="center" gap={6} flexShrink={0}>
+              <View
+                width={6}
+                height={6}
+                borderRadius={3}
+                backgroundColor={market.isSyncing ? '#F59E0B' : market.isLive ? '#10B981' : '#38BDF8'}
+              />
+              <Text style={styles.statusText} textTransform="uppercase">
+                {market.isSyncing ? 'Syncing...' : market.isLive ? 'Live Market' : 'Sim Mode'}
+              </Text>
+            </XStack>
+          </TouchableOpacity>
         </View>
 
-        {/* ==================== SEGMENTED TOP SWITCHER (SINGLE CAPSULE TRACK - MATCHING BUDGET.TSX) ==================== */}
+        {/* ==================== SEGMENTED TOP SWITCHER ==================== */}
         <View style={styles.capsuleTrackWrapper}>
-          <AnimatedSegmentSwitch<'portfolio' | 'compound' | 'cash'>
+          <AnimatedSegmentSwitch<'portfolio' | 'compound'>
             options={[
               { id: 'portfolio', label: 'Portfolio' },
-              { id: 'compound', label: 'Time Machine' },
-              { id: 'cash', label: 'Sandbox Cash' },
+              { id: 'compound', label: 'Forecast' },
             ]}
             activeId={activeTab}
             onChange={(tab) => setActiveTab(tab)}
@@ -672,7 +705,7 @@ export default function InvestScreen() {
               </View>
 
               <Text color="#FFFFFF" fontSize={10.5} style={{ fontFamily: Fonts.bold }} letterSpacing={0.5}>
-                LIVE FEED
+                REFERENCE
               </Text>
             </View>
 
@@ -738,9 +771,23 @@ export default function InvestScreen() {
               >
                 {/* Header Row: Label + Risk Archetype Chip */}
                 <XStack justifyContent="space-between" alignItems="center" width="100%">
-                  <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">
-                    Net Portfolio Value
-                  </Text>
+                  <XStack alignItems="center" gap={6}>
+                    <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">
+                      Net Portfolio Value
+                    </Text>
+                    <View
+                      backgroundColor="rgba(255, 255, 255, 0.06)"
+                      paddingHorizontal={6}
+                      paddingVertical={2}
+                      borderRadius={4}
+                      borderWidth={1}
+                      borderColor="rgba(255, 255, 255, 0.08)"
+                    >
+                      <Text color="rgba(255, 255, 255, 0.55)" fontSize={9.5} style={{ fontFamily: Fonts.medium }}>
+                        Market Model
+                      </Text>
+                    </View>
+                  </XStack>
                   <TouchableOpacity
                     onPress={() => {
                       safeHaptic('light');
@@ -809,21 +856,6 @@ export default function InvestScreen() {
                     <Text color="#FFFFFF" fontSize={32} style={{ fontFamily: Fonts.bold }} letterSpacing={-0.5} lineHeight={38}>
                       {displayVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </Text>
-                    {isDemoPortfolio && (
-                      <View
-                        backgroundColor="rgba(245, 158, 11, 0.15)"
-                        borderColor="rgba(245, 158, 11, 0.3)"
-                        borderWidth={1}
-                        borderRadius={6}
-                        paddingHorizontal={6}
-                        paddingVertical={2}
-                        marginLeft={6}
-                      >
-                        <Text color="#F59E0B" fontSize={10} style={{ fontFamily: Fonts.bold }}>
-                          DEMO MODEL
-                        </Text>
-                      </View>
-                    )}
                   </XStack>
 
                   <XStack alignItems="center" gap={6} marginTop={2} flexWrap="wrap">
@@ -850,7 +882,7 @@ export default function InvestScreen() {
                       </Text>
                     </View>
 
-                    {activePoint ? (
+                    {activePoint && (
                       <View 
                         backgroundColor="rgba(62, 180, 125, 0.15)"
                         borderColor="rgba(62, 180, 125, 0.3)"
@@ -867,10 +899,6 @@ export default function InvestScreen() {
                           {activePoint.timestamp}
                         </Text>
                       </View>
-                    ) : (
-                      <Text color="rgba(255, 255, 255, 0.45)" fontSize={11} style={{ fontFamily: Fonts.regular }}>
-                        {timeRange === '1D' ? 'Today' : timeRange === '1W' ? 'Past 5 Days' : timeRange === '1M' ? 'Past 30 Days' : timeRange === '1Y' ? 'Past Year' : 'All-Time'}
-                      </Text>
                     )}
 
                     {activePoint && (
@@ -1202,25 +1230,7 @@ export default function InvestScreen() {
                         </YStack>
                       </XStack>
 
-                      {/* Demo Mode Advisory Notice (only when virtual balance is zero) */}
-                      {isDemoPortfolio && (
-                        <View
-                          backgroundColor="rgba(245, 158, 11, 0.08)"
-                          borderColor="rgba(245, 158, 11, 0.2)"
-                          borderWidth={1}
-                          borderRadius={8}
-                          padding={8}
-                          marginTop={4}
-                          flexDirection="row"
-                          alignItems="center"
-                          gap={8}
-                        >
-                          <PhosphorIcon name="Info" size={15} color="#F59E0B" />
-                          <Text color="rgba(255, 255, 255, 0.75)" fontSize={11} style={{ fontFamily: Fonts.medium }} flex={1} lineHeight={15}>
-                            Simulated {currencySymbol}10,000 model trajectory. Deposit sandbox cash below to trade and track live portfolio returns!
-                          </Text>
-                        </View>
-                      )}
+                      {/* Removed Demo Mode Advisory Notice for cleaner UI */}
                     </YStack>
                   );
                 })()}
@@ -1231,7 +1241,7 @@ export default function InvestScreen() {
                   <TouchableOpacity
                     onPress={() => {
                       safeHaptic('light');
-                      setActiveTab('cash');
+                      setShowDepositModal(true);
                     }}
                     activeOpacity={0.8}
                     style={{
@@ -1272,7 +1282,7 @@ export default function InvestScreen() {
                   >
                     <PhosphorIcon name="Hourglass" size={15} color="#6EE7B7" weight="bold" />
                     <Text color="#FFFFFF" fontSize={12} style={{ fontFamily: Fonts.bold }}>
-                      Time Machine
+                      Forecast
                     </Text>
                   </TouchableOpacity>
                 </XStack>
@@ -1289,9 +1299,9 @@ export default function InvestScreen() {
                   </YStack>
                   <YStack alignItems="flex-end" gap={2}>
                     <Text color="#8D99AE" fontSize={12} style={{ fontFamily: Fonts.medium }} lineHeight={16}>
-                      Sandbox Cash
+                      Buying Power
                     </Text>
-                    <Text color="#3EB47D" fontSize={15} style={{ fontFamily: Fonts.bold }} lineHeight={20}>
+                    <Text color="#10B981" fontSize={15} style={{ fontFamily: Fonts.bold }} lineHeight={20}>
                       {currencySymbol}{store.virtualBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </Text>
                   </YStack>
@@ -1305,7 +1315,7 @@ export default function InvestScreen() {
                     </Text>
                     <XStack gap={10}>
                       <XStack gap={4} alignItems="center">
-                        <View width={6} height={6} borderRadius={3} backgroundColor="#3EB47D" />
+                        <View width={6} height={6} borderRadius={3} backgroundColor="#1D8348" />
                         <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.medium }}>
                           Stocks ({totalPortfolioValue > 0 ? Math.round((holdingsValue / totalPortfolioValue) * 100) : 0}%)
                         </Text>
@@ -1323,7 +1333,7 @@ export default function InvestScreen() {
                     <View 
                       width={`${totalPortfolioValue > 0 ? Math.min(100, (holdingsValue / totalPortfolioValue) * 100) : 0}%`} 
                       height="100%" 
-                      backgroundColor="#3EB47D" 
+                      backgroundColor="#1D8348" 
                     />
                     <View 
                       width={`${totalPortfolioValue > 0 ? Math.min(100, (store.virtualBalance / totalPortfolioValue) * 100) : 100}%`} 
@@ -1660,7 +1670,7 @@ export default function InvestScreen() {
                                   name={asset.icon}
                                   size={17}
                                   color={asset.color}
-                                  weight="duotone"
+                                  weight="fill"
                                 />
                               </View>
 
@@ -1799,7 +1809,7 @@ export default function InvestScreen() {
                                     name={asset.icon}
                                     size={18}
                                     color={asset.color}
-                                    weight="duotone"
+                                    weight="fill"
                                   />
                                 </View>
 
@@ -1892,413 +1902,18 @@ export default function InvestScreen() {
             </>
           )}
 
-          {/* TAB 2: COMPOUND INTEREST TIME MACHINE */}
+          {/* TAB 2: INSTITUTIONAL COMPOUND INTEREST WEALTH FORECAST */}
           {activeTab === 'compound' && (
-            <>
-              <CbudgetCard 
-                padding={20} 
-                gap={16} 
-                marginBottom={16}
-                backgroundColor="#1C2541"
-                borderColor="rgba(255, 255, 255, 0.08)"
-                borderWidth={1}
-                borderRadius={16}
-                elevation={0}
-              >
-                <YStack gap={2}>
-                  <XStack gap={6} alignItems="center">
-                    <PhosphorIcon
-                      name="Hourglass"
-                      size={16}
-                      color="#3EB47D"
-                      weight="duotone"
-                    />
-                    <Text color="#FFFFFF" fontSize={16} style={{ fontFamily: Fonts.bold }} letterSpacing={-0.2} lineHeight={22}>
-                      Compound Interest Time Machine
-                    </Text>
-                  </XStack>
-                  <Text color="#8D99AE" fontSize={13} style={{ fontFamily: Fonts.regular }} lineHeight={18} marginTop={2}>
-                    Simulate how small regular monthly savings compound and grow over time!
-                  </Text>
-                </YStack>
-
-                {/* 0. Target Goal Milestone Filter Presets */}
-                <YStack gap={6}>
-                  <Text color="rgba(255, 255, 255, 0.7)" fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">
-                    Target Goal Presets (Quick Filter)
-                  </Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {[
-                      { id: 'console', label: `🎮 Console (${currencySymbol}30k)`, m: 500, y: 4, r: 8 },
-                      { id: 'phone', label: `📱 Phone (${currencySymbol}60k)`, m: 1000, y: 4, r: 8 },
-                      { id: 'pc', label: `💻 Custom PC (${currencySymbol}120k)`, m: 1500, y: 5, r: 12 },
-                      { id: 'motor', label: `🏍️ Motorcycle (${currencySymbol}250k)`, m: 2500, y: 6, r: 10 },
-                      { id: 'college', label: `🎓 College Fund (${currencySymbol}500k)`, m: 2500, y: 10, r: 8 },
-                      { id: 'wealth', label: `🚀 First Million (${currencySymbol}1.5M)`, m: 5000, y: 15, r: 10 },
-                    ].map((preset) => {
-                      const isLoaded = compoundMonthly === preset.m && compoundYears === preset.y && compoundRate === preset.r;
-                      return (
-                        <TouchableOpacity
-                          key={preset.id}
-                          onPress={() => {
-                            safeHaptic('light');
-                            setCompoundMonthly(preset.m);
-                            setCompoundYears(preset.y);
-                            setCompoundRate(preset.r);
-                            toast.info('Goal Loaded', `${preset.label}: ${currencySymbol}${preset.m.toLocaleString()}/mo for ${preset.y} yrs.`);
-                          }}
-                          activeOpacity={0.8}
-                          style={{
-                            paddingHorizontal: 10,
-                            paddingVertical: 5,
-                            borderRadius: 12,
-                            backgroundColor: isLoaded ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.05)',
-                            borderWidth: 1,
-                            borderColor: isLoaded ? '#10B981' : 'rgba(255, 255, 255, 0.08)',
-                          }}
-                        >
-                          <Text
-                            color={isLoaded ? '#10B981' : '#CBD5E1'}
-                            fontSize={11}
-                            style={{ fontFamily: isLoaded ? Fonts.bold : Fonts.medium }}
-                          >
-                            {preset.label}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-                </YStack>
-
-                {/* 1. Monthly Savings Amount Selector */}
-                <YStack gap={8}>
-                  <Text color="rgba(255, 255, 255, 0.7)" fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">
-                    Monthly Savings Amount
-                  </Text>
-                  <XStack gap={8} flexWrap="wrap">
-                    {([100, 500, 1000, 2500, 5000] as const).map((amt) => {
-                      const isSel = compoundMonthly === amt;
-                      return (
-                        <TouchableOpacity
-                          key={amt}
-                          onPress={() => setCompoundMonthly(amt)}
-                          activeOpacity={0.8}
-                          style={{
-                            paddingHorizontal: 12,
-                            paddingVertical: 7,
-                            borderRadius: 8,
-                            borderWidth: 1,
-                            borderColor: isSel ? '#10B981' : 'rgba(255, 255, 255, 0.08)',
-                            backgroundColor: isSel ? '#10B981' : '#0B132B',
-                          }}
-                        >
-                          <Text color="#FFFFFF" fontSize={12} style={{ fontFamily: Fonts.bold }}>
-                            {currencySymbol}{amt.toLocaleString()}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </XStack>
-                </YStack>
-
-                {/* 2. Target Horizon Selection */}
-                <YStack gap={8}>
-                  <Text color="rgba(255, 255, 255, 0.7)" fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">
-                    Years to Compounding
-                  </Text>
-                  <XStack gap={8} flexWrap="wrap">
-                    {([2, 5, 10, 20] as const).map((yr) => {
-                      const isSel = compoundYears === yr;
-                      return (
-                        <TouchableOpacity
-                          key={yr}
-                          onPress={() => setCompoundYears(yr)}
-                          activeOpacity={0.8}
-                          style={{
-                            paddingHorizontal: 14,
-                            paddingVertical: 7,
-                            borderRadius: 8,
-                            borderWidth: 1,
-                            borderColor: isSel ? '#10B981' : 'rgba(255, 255, 255, 0.08)',
-                            backgroundColor: isSel ? '#10B981' : '#0B132B',
-                          }}
-                        >
-                          <Text color="#FFFFFF" fontSize={12} style={{ fontFamily: Fonts.bold }}>
-                            {yr} Yrs
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </XStack>
-                </YStack>
-
-                {/* 3. Interest Rates Strategy Selection */}
-                <YStack gap={8}>
-                  <Text color="rgba(255, 255, 255, 0.7)" fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">
-                    Compounding Strategy (Growth Rate)
-                  </Text>
-                  <XStack gap={8} flexWrap="wrap">
-                    {([
-                      { rate: 4, label: '4% (Savings)' },
-                      { rate: 8, label: '8% (Index Fund)' },
-                      { rate: 12, label: '12% (Tech Stock)' }
-                    ] as const).map((strategy) => {
-                      const isSel = compoundRate === strategy.rate;
-                      return (
-                        <TouchableOpacity
-                          key={strategy.rate}
-                          onPress={() => setCompoundRate(strategy.rate)}
-                          activeOpacity={0.8}
-                          style={{
-                            paddingHorizontal: 12,
-                            paddingVertical: 7,
-                            borderRadius: 8,
-                            borderWidth: 1,
-                            borderColor: isSel ? '#10B981' : 'rgba(255, 255, 255, 0.08)',
-                            backgroundColor: isSel ? '#10B981' : '#0B132B',
-                          }}
-                        >
-                          <Text color="#FFFFFF" fontSize={12} style={{ fontFamily: Fonts.bold }}>
-                            {strategy.label}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </XStack>
-                </YStack>
-
-                {/* 4. Future Value and Visual Projections Split */}
-                <YStack backgroundColor="#0B132B" padding={14} borderRadius={12} gap={10} borderWidth={1} borderColor="rgba(255, 255, 255, 0.06)">
-                  <XStack justifyContent="space-between">
-                    <Text color="#8D99AE" fontSize={12} style={{ fontFamily: Fonts.medium }}>Principal Saved</Text>
-                    <Text color="#FFFFFF" fontSize={13} style={{ fontFamily: Fonts.bold }}>{currencySymbol}{Math.round(compoundPrincipal).toLocaleString()}</Text>
-                  </XStack>
-                  <XStack justifyContent="space-between">
-                    <Text color="#8D99AE" fontSize={12} style={{ fontFamily: Fonts.medium }}>Simulated Growth</Text>
-                    <Text color="#10B981" fontSize={13} style={{ fontFamily: Fonts.bold }}>+{currencySymbol}{Math.round(compoundInterestEarned).toLocaleString()}</Text>
-                  </XStack>
-                  <View height={1} backgroundColor="rgba(255, 255, 255, 0.08)" />
-                  <XStack justifyContent="space-between" alignItems="baseline">
-                    <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">Future Wealth</Text>
-                    <Text color="#FFFFFF" fontSize={22} style={{ fontFamily: Fonts.bold }}>{currencySymbol}{Math.round(compoundFV).toLocaleString()}</Text>
-                  </XStack>
-
-                  <View height={6} backgroundColor="rgba(255, 255, 255, 0.08)" borderRadius={3} overflow="hidden" flexDirection="row" width="100%" marginTop={2}>
-                    <View 
-                      width={`${compoundFV > 0 ? Math.min(100, (compoundPrincipal / compoundFV) * 100) : 100}%`} 
-                      height="100%" 
-                      backgroundColor="#64748B" 
-                    />
-                    <View 
-                      width={`${compoundFV > 0 ? Math.min(100, (compoundInterestEarned / compoundFV) * 100) : 0}%`} 
-                      height="100%" 
-                      backgroundColor="#10B981" 
-                    />
-                  </View>
-                  <XStack justifyContent="space-between" marginTop={-2}>
-                    <Text color="#8D99AE" fontSize={10} style={{ fontFamily: Fonts.medium }}>• Principal ({compoundFV > 0 ? Math.round((compoundPrincipal / compoundFV) * 100) : 100}%)</Text>
-                    <Text color="#10B981" fontSize={10} style={{ fontFamily: Fonts.semiBold }}>• Growth ({compoundFV > 0 ? Math.round((compoundInterestEarned / compoundFV) * 100) : 0}%)</Text>
-                  </XStack>
-                </YStack>
-
-                {/* 5. Relatable Teenage Milestone Converter */}
-                <View backgroundColor="rgba(16, 185, 129, 0.05)" padding={12} borderRadius={10} borderWidth={1} borderColor="rgba(16, 185, 129, 0.15)">
-                  <Text color="#10B981" fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">
-                    Relatable Teenage Milestone
-                  </Text>
-                  <Text color="#E2E8F0" fontSize={13} style={{ fontFamily: Fonts.medium }} lineHeight={18} marginTop={4}>
-                    {(() => {
-                      if (compoundFV < 15000) {
-                        return "👟 That's equal to buying 2 pairs of premium sneakers or a mechanical keyboard!";
-                      } else if (compoundFV >= 15000 && compoundFV < 50000) {
-                        return "🎮 That's equivalent to 2 Nintendo Switch consoles or a standard iPad!";
-                      } else if (compoundFV >= 50000 && compoundFV < 200000) {
-                        return "🖥️ That's equivalent to a custom watercooled gaming PC or a roundtrip flight to Japan!";
-                      } else if (compoundFV >= 200000 && compoundFV < 1000000) {
-                        return "🏍️ That's equivalent to a brand new underbone motorcycle or a full college semester!";
-                      } else {
-                        return "🚗 That's enough to buy a brand new EV sports car or a downpayment on a condo!";
-                      }
-                    })()}
-                  </Text>
-                </View>
-              </CbudgetCard>
-
-              {/* Compounding Wisdom Card */}
-              <CbudgetCard
-                padding={18}
-                gap={10}
-                marginBottom={16}
-                backgroundColor="#131D31"
-                borderColor="rgba(255, 255, 255, 0.08)"
-                borderWidth={1}
-                borderRadius={16}
-              >
-                <XStack gap={8} alignItems="center">
-                  <PhosphorIcon
-                    name="Sparkle"
-                    size={16}
-                    color="#F59E0B"
-                    weight="fill"
-                  />
-                  <Text color="#FFFFFF" fontSize={14} style={{ fontFamily: Fonts.bold }}>
-                    The Teenage Compounding Superpower
-                  </Text>
-                </XStack>
-                <Text color="rgba(255, 255, 255, 0.7)" fontSize={13} style={{ fontFamily: Fonts.regular }} lineHeight={18}>
-                  Albert Einstein called compound interest the 8th wonder of the world. Because you start early, time multiplies your gains exponentially. Even modest savings of {currencySymbol}500/month in early years will outpace huge sums invested late in life!
-                </Text>
-              </CbudgetCard>
-            </>
+            <CompoundForecastView
+              currencySymbol={currencySymbol}
+              monthly={compoundMonthly}
+              years={compoundYears}
+              rate={compoundRate}
+              onMonthlyChange={setCompoundMonthly}
+              onYearsChange={setCompoundYears}
+              onRateChange={setCompoundRate}
+            />
           )}
-
-          {/* TAB 3: SANDBOX CASH & TRANSFERS */}
-          {activeTab === 'cash' && (
-            <>
-              {/* Buying Power Hero Card */}
-              <CbudgetCard 
-                padding={20} 
-                gap={14} 
-                marginBottom={16}
-                backgroundColor="#1C2541"
-                borderColor="rgba(255, 255, 255, 0.08)"
-                borderWidth={1}
-                borderRadius={16}
-                elevation={0}
-              >
-                <YStack alignItems="center" gap={4}>
-                  <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">
-                    Available Buying Power
-                  </Text>
-                  <XStack alignItems="baseline" gap={4} marginTop={4}>
-                    <Text color="#3EB47D" fontSize={22} style={{ fontFamily: Fonts.bold }}>{currencySymbol}</Text>
-                    <Text color="#FFFFFF" fontSize={30} style={{ fontFamily: Fonts.bold }} letterSpacing={-0.5} lineHeight={36}>
-                      {store.virtualBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </Text>
-                  </XStack>
-                </YStack>
-
-                <XStack justifyContent="space-between" paddingTop={14} borderTopWidth={1} borderTopColor="rgba(255, 255, 255, 0.06)">
-                  <YStack gap={2}>
-                    <Text color="#8D99AE" fontSize={12} style={{ fontFamily: Fonts.medium }} lineHeight={16}>
-                      Invested in Stocks
-                    </Text>
-                    <Text color="#FFFFFF" fontSize={15} style={{ fontFamily: Fonts.bold }} lineHeight={20}>
-                      {currencySymbol}{holdingsValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </Text>
-                  </YStack>
-                  <YStack alignItems="flex-end" gap={2}>
-                    <Text color="#8D99AE" fontSize={12} style={{ fontFamily: Fonts.medium }} lineHeight={16}>
-                      Allowance Buffer
-                    </Text>
-                    <Text color="#3EB47D" fontSize={15} style={{ fontFamily: Fonts.bold }} lineHeight={20}>
-                      {currencySymbol}{Math.round(availableToTransfer).toLocaleString()}
-                    </Text>
-                  </YStack>
-                </XStack>
-              </CbudgetCard>
-
-              {/* Sandbox Cash Manager Card */}
-              <CbudgetCard 
-                padding={20} 
-                gap={14} 
-                marginBottom={16}
-                backgroundColor="#1C2541"
-                borderColor="rgba(255, 255, 255, 0.08)"
-                borderWidth={1}
-                borderRadius={16}
-                elevation={0}
-              >
-                <YStack gap={2}>
-                  <Text color="#FFFFFF" fontSize={15} style={{ fontFamily: Fonts.bold }} letterSpacing={-0.2} lineHeight={20}>
-                    Transfer Allowance to Simulator
-                  </Text>
-                  <Text color="#8D99AE" fontSize={12} style={{ fontFamily: Fonts.medium }} lineHeight={16}>
-                    Available leftover allowance to allocate: <Text color="#3EB47D" style={{ fontFamily: Fonts.bold }}>{currencySymbol}{Math.round(availableToTransfer).toLocaleString()}</Text>
-                  </Text>
-                </YStack>
-                
-                <YStack gap={10}>
-                  <FormInput
-                    placeholder={`Enter amount (${currencySymbol})`}
-                    keyboardType="numeric"
-                    value={transferAmount}
-                    onChangeText={setTransferAmount}
-                  />
-                  
-                  <XStack gap={8} width="100%" alignItems="center">
-                    <FormButton
-                      variant="primary"
-                      height={40}
-                      borderRadius={8}
-                      fullWidth={false}
-                      leftIcon="ArrowsLeftRight"
-                      onPress={handleTransferFromAllowance}
-                      style={{ backgroundColor: '#059669', flex: 1.2 }}
-                    >
-                      Transfer Cash
-                    </FormButton>
-                    <FormButton
-                      variant="outline"
-                      height={40}
-                      borderRadius={8}
-                      fullWidth={false}
-                      leftIcon="PlusCircle"
-                      onPress={handleAddSimulationCash}
-                      style={{ borderColor: 'rgba(255, 255, 255, 0.15)', backgroundColor: 'transparent', flex: 0.8 }}
-                    >
-                      Sim Grant
-                    </FormButton>
-                  </XStack>
-                </YStack>
-
-                <YStack gap={8} marginTop={4}>
-                  <Text color="rgba(255, 255, 255, 0.5)" fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase" textAlign="center">
-                    Instant Sandbox Test Grants
-                  </Text>
-                  <XStack gap={8} justifyContent="center">
-                    <TouchableOpacity onPress={() => handleQuickAddCash(500)} style={styles.quickCashBtn}>
-                      <Text color="#FFFFFF" fontSize={12} style={{ fontFamily: Fonts.bold }}>+{currencySymbol}500</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleQuickAddCash(1000)} style={styles.quickCashBtn}>
-                      <Text color="#FFFFFF" fontSize={12} style={{ fontFamily: Fonts.bold }}>+{currencySymbol}1K</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleQuickAddCash(5000)} style={styles.quickCashBtn}>
-                      <Text color="#FFFFFF" fontSize={12} style={{ fontFamily: Fonts.bold }}>+{currencySymbol}5K</Text>
-                    </TouchableOpacity>
-                  </XStack>
-                </YStack>
-              </CbudgetCard>
-
-              {/* Safety & Learning Guidelines Card */}
-              <CbudgetCard
-                padding={16}
-                gap={8}
-                marginBottom={16}
-                backgroundColor="#131D31"
-                borderColor="rgba(255, 255, 255, 0.08)"
-                borderWidth={1}
-                borderRadius={16}
-              >
-                <XStack gap={8} alignItems="center">
-                  <PhosphorIcon
-                    name="ShieldCheck"
-                    size={16}
-                    color="#10B981"
-                    weight="duotone"
-                  />
-                  <Text color="#FFFFFF" fontSize={14} style={{ fontFamily: Fonts.bold }}>
-                    Safe Sandbox Environment
-                  </Text>
-                </XStack>
-                <Text color="rgba(255, 255, 255, 0.7)" fontSize={13} style={{ fontFamily: Fonts.regular }} lineHeight={18}>
-                  All trades in the Investment Lab use simulated currency. No actual banking money is lost or risked. Practice placing orders, tracking gains, and understanding volatility with complete peace of mind.
-                </Text>
-              </CbudgetCard>
-            </>
-          )}
-
-
         </ScrollView>
       </SafeAreaView>
 
@@ -2306,6 +1921,11 @@ export default function InvestScreen() {
         visible={showRiskModal}
         onClose={() => setShowRiskModal(false)}
         onComplete={() => setShowRiskModal(false)}
+      />
+
+      <DepositFundsModal
+        visible={showDepositModal}
+        onClose={() => setShowDepositModal(false)}
       />
     </YStack>
   );

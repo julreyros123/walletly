@@ -429,7 +429,7 @@ export function EducationalPromoCard() {
                   <Rect x="25" y="114" width="14" height="4" rx="2" fill="#FFFFFF" />
                   <Rect x="47" y="114" width="14" height="4" rx="2" fill="#FFFFFF" />
                   <Path d="M26 80H60V105H47V88H39V105H26V80Z" fill="#1E3A8A" />
-                  <Path d="M20 50C20 40 28 36 43 36C58 36 66 40 66 50V80H20V50Z" fill="#3EB47D" />
+                  <Path d="M20 50C20 40 28 36 43 36C58 36 66 40 66 50V80H20V50Z" fill="#10B981" />
                   <Path d="M36 36L43 45L50 36" stroke="#FFDFC4" strokeWidth={2} fill="#F0BE9B" />
                   <Rect x="39" y="30" width="8" height="8" fill="#FFDFC4" />
                 </Svg>
@@ -639,7 +639,7 @@ export function EducationalPromoCard() {
         <XStack justifyContent="space-between" alignItems="center">
           <XStack alignItems="center" gap={6}>
             <View style={styles.badgePill}>
-              <Text color="#3EB47D" fontSize={9.5} fontFamily={Fonts.bold} letterSpacing={0.6}>
+              <Text color="#10B981" fontSize={9.5} fontFamily={Fonts.bold} letterSpacing={0.6}>
                 {currentStage.badge}
               </Text>
             </View>
@@ -790,7 +790,7 @@ const styles = StyleSheet.create({
   },
   activeDotIndicator: {
     width: 14,
-    backgroundColor: '#3EB47D',
+    backgroundColor: '#1D8348',
   },
   inactiveDotIndicator: {
     width: 6,

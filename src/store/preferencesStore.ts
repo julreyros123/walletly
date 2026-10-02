@@ -15,10 +15,13 @@ export interface UserPreferences {
   streakRemindersEnabled: boolean;
   weeklyReportEnabled: boolean;
   currency: SupportedCurrency;
+  currencyMigratedToPhp?: boolean;
+  language: string;
   guardianEmail: string;
   guardianLinked: boolean;
   /** Whether the user has accepted the mandatory financial disclaimer */
   disclaimerAccepted: boolean;
+  expoPushToken: string | null;
 }
 
 const DEFAULT_PREFERENCES: UserPreferences = {
@@ -28,9 +31,12 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   streakRemindersEnabled: true,
   weeklyReportEnabled: true,
   currency: 'PHP',
+  currencyMigratedToPhp: true,
+  language: 'English (US)',
   guardianEmail: '',
   guardianLinked: false,
   disclaimerAccepted: false,
+  expoPushToken: null,
 };
 
 interface PreferencesState extends UserPreferences {
@@ -40,8 +46,10 @@ interface PreferencesState extends UserPreferences {
   setStreakRemindersEnabled: (enabled: boolean) => Promise<void>;
   setWeeklyReportEnabled: (enabled: boolean) => Promise<void>;
   setCurrency: (currency: SupportedCurrency) => Promise<void>;
+  setLanguage: (language: string) => Promise<void>;
   setGuardianInfo: (email: string, linked: boolean) => Promise<void>;
   setDisclaimerAccepted: () => Promise<void>;
+  setExpoPushToken: (token: string | null) => Promise<void>;
   hydrate: () => Promise<void>;
 }
 
@@ -74,7 +82,12 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   },
 
   setCurrency: async (currency: SupportedCurrency) => {
-    set({ currency });
+    set({ currency, currencyMigratedToPhp: true });
+    await savePreferences(get());
+  },
+
+  setLanguage: async (language: string) => {
+    set({ language });
     await savePreferences(get());
   },
 
@@ -105,25 +118,47 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     await savePreferences(get());
   },
 
+  setExpoPushToken: async (token: string | null) => {
+    set({ expoPushToken: token });
+    await savePreferences(get());
+  },
+
   hydrate: async () => {
     try {
       const stored = await storage.getItem(PREFERENCE_STORAGE_KEYS.PREFERENCES);
       if (stored) {
         const parsed = JSON.parse(stored) as Partial<UserPreferences>;
+        // Ensure default is strictly PHP, fixing any legacy corrupted/stuck 'GBP'
+        const isMigrated = parsed.currencyMigratedToPhp === true;
+        const validCurrency: SupportedCurrency = 
+          (!isMigrated || !parsed.currency || !['PHP', 'USD', 'EUR', 'GBP'].includes(parsed.currency))
+            ? 'PHP'
+            : (parsed.currency as SupportedCurrency);
+
         set({
           soundEffectsEnabled: parsed.soundEffectsEnabled ?? DEFAULT_PREFERENCES.soundEffectsEnabled,
           hapticsEnabled: parsed.hapticsEnabled ?? DEFAULT_PREFERENCES.hapticsEnabled,
           notificationsEnabled: parsed.notificationsEnabled ?? DEFAULT_PREFERENCES.notificationsEnabled,
           streakRemindersEnabled: parsed.streakRemindersEnabled ?? DEFAULT_PREFERENCES.streakRemindersEnabled,
           weeklyReportEnabled: parsed.weeklyReportEnabled ?? DEFAULT_PREFERENCES.weeklyReportEnabled,
-          currency: parsed.currency ?? DEFAULT_PREFERENCES.currency,
+          currency: validCurrency,
+          currencyMigratedToPhp: true,
+          language: parsed.language ?? DEFAULT_PREFERENCES.language,
           guardianEmail: parsed.guardianEmail ?? DEFAULT_PREFERENCES.guardianEmail,
           guardianLinked: parsed.guardianLinked ?? DEFAULT_PREFERENCES.guardianLinked,
           disclaimerAccepted: parsed.disclaimerAccepted ?? DEFAULT_PREFERENCES.disclaimerAccepted,
+          expoPushToken: parsed.expoPushToken ?? DEFAULT_PREFERENCES.expoPushToken,
         });
+
+        if (!isMigrated) {
+          await savePreferences(get());
+        }
+      } else {
+        set({ currency: 'PHP', currencyMigratedToPhp: true });
       }
     } catch (e) {
       console.error('Failed to hydrate preferences store:', e);
+      set({ currency: 'PHP' });
     }
   },
 }));
@@ -137,9 +172,12 @@ async function savePreferences(state: PreferencesState) {
       streakRemindersEnabled: state.streakRemindersEnabled,
       weeklyReportEnabled: state.weeklyReportEnabled,
       currency: state.currency,
+      currencyMigratedToPhp: state.currencyMigratedToPhp,
+      language: state.language,
       guardianEmail: state.guardianEmail,
       guardianLinked: state.guardianLinked,
       disclaimerAccepted: state.disclaimerAccepted,
+      expoPushToken: state.expoPushToken,
     };
     await storage.setItem(PREFERENCE_STORAGE_KEYS.PREFERENCES, JSON.stringify(dataToSave));
   } catch (e) {

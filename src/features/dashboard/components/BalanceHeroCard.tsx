@@ -1,9 +1,9 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, View, Text } from 'react-native';
-import Svg, { Defs, LinearGradient, Stop, Rect, Circle } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
-import { Fonts, Typography } from '@/constants/theme';
+import { Fonts } from '@/constants/theme';
 import { InteractivePressable } from '@/components/ui/InteractivePressable';
 import { useCurrency } from '@/utils/currency';
 
@@ -42,26 +42,16 @@ export function BalanceHeroCard({
 
   return (
     <View style={styles.cardContainer}>
-      {/* Background Gradient & Ambient Sheen */}
+      {/* Background Gradient matching Budget Card — No ambient circles */}
       <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
         <Defs>
           <LinearGradient id="heroCardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="#0B1322" stopOpacity={1} />
-            <Stop offset="50%" stopColor="#0F172A" stopOpacity={1} />
-            <Stop offset="100%" stopColor="#141E33" stopOpacity={1} />
-          </LinearGradient>
-          <LinearGradient id="heroBorderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="rgba(16, 185, 129, 0.45)" stopOpacity={1} />
-            <Stop offset="50%" stopColor="rgba(255, 255, 255, 0.10)" stopOpacity={1} />
-            <Stop offset="100%" stopColor="rgba(59, 130, 246, 0.25)" stopOpacity={1} />
+            <Stop offset="0%" stopColor="#239B56" stopOpacity={1} />
+            <Stop offset="50%" stopColor="#1D8348" stopOpacity={1} />
+            <Stop offset="100%" stopColor="#145A32" stopOpacity={1} />
           </LinearGradient>
         </Defs>
         <Rect width="100%" height="100%" rx={20} fill="url(#heroCardGrad)" />
-        {/* Atmospheric ambient glows */}
-        <Circle cx="88%" cy="12%" r={90} fill="#10B981" fillOpacity={0.08} />
-        <Circle cx="12%" cy="85%" r={80} fill="#3B82F6" fillOpacity={0.05} />
-        {/* Dual-tinted glass hairline border */}
-        <Rect width="100%" height="100%" rx={20} fill="none" stroke="url(#heroBorderGrad)" strokeWidth={1.2} />
       </Svg>
 
       <View style={styles.cardContent}>
@@ -79,7 +69,7 @@ export function BalanceHeroCard({
               <PhosphorIcon
                 name={isBalanceHidden ? 'EyeSlash' : 'Eye'}
                 size={14}
-                color="#94A3B8"
+                color="#A7F3D0"
                 weight="fill"
               />
             </InteractivePressable>
@@ -92,6 +82,7 @@ export function BalanceHeroCard({
             accessibilityHint="Opens your budget breakdown"
           >
             <Text style={styles.budgetPillText}>Budget Details</Text>
+            <PhosphorIcon name="CaretRight" size={11} color="#D1FAE5" weight="bold" />
           </InteractivePressable>
         </View>
 
@@ -105,9 +96,10 @@ export function BalanceHeroCard({
               ? 'Balance hidden'
               : `Current balance: ${currencySymbol} ${displayBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
           }
+          accessibilityHint="Remaining budget available to spend in your current cycle"
         >
           <Text style={styles.currencySymbol}>{currencySymbol}</Text>
-          <Text style={styles.balanceDigits}>
+          <Text style={styles.balanceDigits} numberOfLines={1} adjustsFontSizeToFit>
             {isBalanceHidden
               ? '• • • • • •'
               : displayBalance.toLocaleString('en-US', {
@@ -120,16 +112,14 @@ export function BalanceHeroCard({
         {/* Spend Progress Section */}
         <View style={styles.progressSection}>
           <View style={styles.progressLabelsRow}>
-            <Text style={styles.spentLabel}>
+            <Text style={styles.spentLabel} numberOfLines={1} ellipsizeMode="tail">
               Spent: {isBalanceHidden ? `${currencySymbol} •••` : `${currencySymbol} ${displaySpent.toLocaleString()}`}
             </Text>
             <View style={styles.limitGroup}>
               {isOverLimit && (
-                <View style={styles.overLimitBadge}>
-                  <Text style={styles.overLimitText}>OVER LIMIT</Text>
-                </View>
+                <Text style={styles.overLimitText} numberOfLines={1}>OVER LIMIT</Text>
               )}
-              <Text style={styles.limitLabel}>
+              <Text style={styles.limitLabel} numberOfLines={1}>
                 Limit: {currencySymbol} {displayLimit.toLocaleString()}
               </Text>
             </View>
@@ -147,7 +137,7 @@ export function BalanceHeroCard({
               style={[
                 styles.progressBarFill,
                 progressStyle,
-                { backgroundColor: isOverLimit ? '#EF4444' : '#10B981' },
+                { backgroundColor: isOverLimit ? '#EF4444' : '#34D399' },
               ]}
             />
           </View>
@@ -161,12 +151,12 @@ const styles = StyleSheet.create({
   cardContainer: {
     borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: '#0F172A',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.32,
+    backgroundColor: '#1D8348',
+    shadowColor: '#1D8348',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
     shadowRadius: 18,
-    elevation: 8,
+    elevation: 6,
     marginTop: 0,
     marginHorizontal: 16,
     zIndex: 10,
@@ -188,24 +178,28 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   cardTitle: {
-    color: '#94A3B8',
+    color: '#A7F3D0',
     fontSize: 11,
     fontFamily: Fonts.bold,
     letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   eyeBtn: {
     padding: 2,
   },
   budgetPill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 4.5,
     borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   budgetPillText: {
-    color: '#E2E8F0',
+    color: '#D1FAE5',
     fontSize: 11,
     fontFamily: Fonts.bold,
   },
@@ -216,7 +210,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   currencySymbol: {
-    color: '#10B981',
+    color: '#D1FAE5',
     fontSize: 22,
     fontFamily: Fonts.bold,
   },
@@ -236,35 +230,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   spentLabel: {
-    color: 'rgba(148, 163, 184, 0.9)',
+    color: 'rgba(255, 255, 255, 0.85)',
     fontSize: 11,
     fontFamily: Fonts.medium,
+    flex: 1,
+    marginRight: 6,
   },
   limitGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-  },
-  overLimitBadge: {
-    backgroundColor: '#DC2626',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    flexShrink: 0,
   },
   overLimitText: {
-    color: '#FFFFFF',
-    fontSize: 9,
+    color: '#FCA5A5',
+    fontSize: 10,
     fontFamily: Fonts.bold,
     letterSpacing: 0.3,
   },
   limitLabel: {
-    color: '#E2E8F0',
+    color: '#A7F3D0',
     fontSize: 11,
     fontFamily: Fonts.bold,
   },
   progressBarTrack: {
-    height: 5,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    height: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
     borderRadius: 3,
     overflow: 'hidden',
   },

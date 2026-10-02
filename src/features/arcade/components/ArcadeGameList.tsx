@@ -8,7 +8,7 @@ import { safeHaptic } from '@/utils/haptics';
 
 const Text = (props: any) => <TamaguiText {...props} />;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = SCREEN_WIDTH * 0.82;
+const CARD_WIDTH = SCREEN_WIDTH * 0.70;
 
 interface MiniGameItem {
   id: string;
@@ -30,11 +30,11 @@ export const MINI_GAMES_LIST: MiniGameItem[] = [
   {
     id: 'headline-trader',
     title: 'Headline Trader',
-    category: 'Wall Street Sentiment',
-    tag: 'LIVE NOW 🔥',
+    category: 'Market Sentiment',
+    tag: 'LIVE 🔥',
     tagColor: '#047857',
     tagBg: '#A7F3D0',
-    description: 'Swipe breaking company news right to BUY 📈 or left to SELL 📉 with 2x combo streaks!',
+    description: 'Swipe breaking headlines to Buy or Sell with streak combos.',
     sceneType: 'trader',
     route: '/headline-trader',
     xpReward: '+150 XP',
@@ -45,11 +45,11 @@ export const MINI_GAMES_LIST: MiniGameItem[] = [
   {
     id: 'crypto-rocket',
     title: 'Crypto Rocket',
-    category: 'Space Volatility',
-    tag: 'MOON SHOT 🚀',
+    category: 'Volatility',
+    tag: 'FAST 🚀',
     tagColor: '#7E22CE',
     tagBg: '#E9D5FF',
-    description: 'Ride the candlestick rocket to 10x! Tap Cash Out before the space thrusters explode!',
+    description: 'Ride the multiplier and cash out before the drop.',
     sceneType: 'rocket',
     route: '/crypto-rocket',
     xpReward: '+200 XP',
@@ -60,30 +60,30 @@ export const MINI_GAMES_LIST: MiniGameItem[] = [
   {
     id: 'portfolio-balancer',
     title: 'Portfolio Balancer',
-    category: 'Asset Strategist',
+    category: 'Asset Allocation',
     tag: 'STRATEGY 🥧',
     tagColor: '#854D0E',
     tagBg: '#FEF08A',
-    description: 'Distribute 100% across Tech, Dividends, Gold & Cash to survive 4 dynamic market cycles!',
+    description: 'Balance your asset mix to survive dynamic market cycles.',
     sceneType: 'balancer',
     route: '/portfolio-balancer',
     xpReward: '+180 XP',
-    timeEstimate: '4 Cycles • 90s',
+    timeEstimate: '4 Cycles',
     borderColor: '#F59E0B',
     playBtnColor: '#F59E0B',
   },
   {
     id: 'dividend-snowball',
     title: 'Dividend Snowball',
-    category: 'Alpine Compound DRIP',
-    tag: 'DRIP ARCADE ❄️',
+    category: 'Compounding DRIP',
+    tag: 'DRIP ❄️',
     tagColor: '#0E7490',
     tagBg: '#CFFAFE',
-    description: 'Tap falling quarterly dividend coin bubbles (DRIP) to multiply your passive income snowball!',
+    description: 'Collect dividend yields to accelerate your compound growth.',
     sceneType: 'snowball',
     route: '/dividend-snowball',
     xpReward: '+160 XP',
-    timeEstimate: 'Fast Tapping',
+    timeEstimate: 'Tapping Game',
     borderColor: '#06B6D4',
     playBtnColor: '#06B6D4',
   },
@@ -132,12 +132,12 @@ export function ArcadeGameList() {
           >
             {/* 1. SCENIC SETTING ILLUSTRATION BANNER */}
             <View style={styles.bannerContainer}>
-              <GameSceneIllustration type={game.sceneType} width={CARD_WIDTH - 24} height={140} />
+              <GameSceneIllustration type={game.sceneType} width={CARD_WIDTH - 20} height={96} />
 
               {/* Overlay Badges */}
               <View style={styles.tagOverlay}>
                 <View style={[styles.tagPill, { backgroundColor: game.tagBg }]}>
-                  <Text color={game.tagColor} fontSize={9.5} fontFamily={Fonts.bold}>
+                  <Text color={game.tagColor} fontSize={9} fontFamily={Fonts.bold}>
                     {game.tag}
                   </Text>
                 </View>
@@ -145,30 +145,30 @@ export function ArcadeGameList() {
             </View>
 
             {/* 2. CARD INFO DETAILS */}
-            <YStack gap={4} marginTop={12}>
+            <YStack gap={2} marginTop={8}>
               <XStack justifyContent="space-between" alignItems="center">
-                <Text color="#FFFFFF" fontSize={18} fontFamily={Fonts.bold}>
+                <Text color="#FFFFFF" fontSize={15} fontFamily={Fonts.bold}>
                   {game.title}
                 </Text>
-                <Text color="#94A3B8" fontSize={11} fontFamily={Fonts.bold}>
+                <Text color="#94A3B8" fontSize={10} fontFamily={Fonts.bold} textTransform="uppercase">
                   {game.category}
                 </Text>
               </XStack>
 
-              <Text color="#94A3B8" fontSize={12} fontFamily={Fonts.medium} lineHeight={17}>
+              <Text color="#94A3B8" fontSize={11} fontFamily={Fonts.medium} lineHeight={15} numberOfLines={2}>
                 {game.description}
               </Text>
             </YStack>
 
             {/* 3. CARD FOOTER */}
-            <XStack justifyContent="space-between" alignItems="center" paddingTop={12} borderTopWidth={1} borderTopColor="#1E293B" marginTop={12}>
-              <Text color="#64748B" fontSize={11.5} fontFamily={Fonts.medium}>
+            <XStack justifyContent="space-between" alignItems="center" paddingTop={8} borderTopWidth={1} borderTopColor="#1E293B" marginTop={8}>
+              <Text color="#64748B" fontSize={11} fontFamily={Fonts.medium}>
                 {game.timeEstimate}
               </Text>
 
               <View style={[styles.playBtn, { backgroundColor: game.playBtnColor }]}>
-                <Text color="#FFFFFF" fontSize={13} fontFamily={Fonts.bold}>
-                  Play Now ➔
+                <Text color="#FFFFFF" fontSize={11.5} fontFamily={Fonts.bold}>
+                  Play ➔
                 </Text>
               </View>
             </XStack>
@@ -181,43 +181,43 @@ export function ArcadeGameList() {
 
 const styles = StyleSheet.create({
   horizontalRowContainer: {
-    paddingVertical: 6,
-    gap: 14,
+    paddingVertical: 4,
+    gap: 12,
   },
   gameCardItem: {
     width: CARD_WIDTH,
     backgroundColor: '#131D31',
-    borderRadius: 24,
-    padding: 12,
+    borderRadius: 18,
+    padding: 10,
     borderWidth: 1.5,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
   bannerContainer: {
     position: 'relative',
-    borderRadius: 18,
+    borderRadius: 12,
     overflow: 'hidden',
   },
   tagOverlay: {
     position: 'absolute',
-    top: 10,
-    left: 10,
+    top: 8,
+    left: 8,
   },
   tagPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3.5,
-    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 5,
   },
   playBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 6.5,
-    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
   },
 });

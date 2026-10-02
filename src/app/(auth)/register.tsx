@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { YStack, Text, XStack, View } from 'tamagui';
@@ -14,7 +14,7 @@ import { Fonts } from '@/constants/theme';
 import { Alert, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { GoogleIcon, FacebookIcon } from '@/components/ui/SocialIcons';
 import { LegalPolicyModal } from '@/features/profile/components/LegalPolicyModal';
-import { CONSENT_TEXT, POLICY_METADATA } from '@/constants/legalPolicies';
+import { CONSENT_TEXT } from '@/constants/legalPolicies';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
 function SocialIconButton({
@@ -22,11 +22,13 @@ function SocialIconButton({
   onPress,
   loading = false,
   accessibilityLabel,
+  theme,
 }: {
   icon: React.ReactNode;
   onPress: () => void;
   loading?: boolean;
-  accessibilityLabel?: string;
+  accessibilityLabel: string;
+  theme: any;
 }) {
   const scale = useSharedValue(1);
   const aStyle = useAnimatedStyle(() => ({
@@ -34,7 +36,7 @@ function SocialIconButton({
   }));
 
   return (
-    <Animated.View style={[aStyle, styles.socialBtn, loading && { opacity: 0.7 }]}>
+    <Animated.View style={[aStyle, styles.socialBtn]}>
       <Pressable
         disabled={loading}
         onPressIn={() => {
@@ -44,12 +46,19 @@ function SocialIconButton({
           if (!loading) scale.value = withSpring(1, { damping: 15, stiffness: 300 });
         }}
         onPress={onPress}
-        style={styles.socialBtnInner}
+        style={({ pressed }) => [
+          styles.socialBtnInner,
+          {
+            backgroundColor: theme.surface,
+            borderColor: theme.border,
+            opacity: pressed || loading ? 0.75 : 1,
+          },
+        ]}
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
         accessibilityState={{ disabled: loading }}
       >
-        {loading ? <ActivityIndicator size="small" color="#FFFFFF" /> : icon}
+        {loading ? <ActivityIndicator size="small" color={theme.text} /> : icon}
       </Pressable>
     </Animated.View>
   );
@@ -60,17 +69,20 @@ export default function RegisterScreen() {
   const theme = useTheme();
   const signUp = useAuthStore((state) => state.signUp);
   const loginWithGoogle = useAuthStore((state) => state.loginWithGoogle);
+  const loginWithFacebook = useAuthStore((state) => state.loginWithFacebook);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [facebookLoading, setFacebookLoading] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [legalModalVisible, setLegalModalVisible] = useState(false);
+  const lastSubmitRef = useRef(0);
 
   const canSubmit = termsAccepted && ageConfirmed;
 
   // Navigate to onboarding funnel when registration succeeds
-  React.useEffect(() => {
+  useEffect(() => {
     if (isAuthenticated) {
       router.replace('/(onboarding)' as Href);
     }
@@ -99,23 +111,32 @@ export default function RegisterScreen() {
     if (/[0-9]/.test(pass)) score += 1;
     if (/[A-Z]/.test(pass)) score += 1;
     if (/[^A-Za-z0-9]/.test(pass)) score += 1;
-    if (score <= 2) return { score, label: 'Weak', color: theme.error };
-    if (score <= 4) return { score, label: 'Medium', color: theme.warning };
-    return { score, label: 'Strong', color: theme.success };
+
+    if (score <= 1) return { score: 1, label: 'Weak', color: theme.error };
+    if (score <= 3) return { score: 2, label: 'Fair', color: theme.warning };
+    return { score: 3, label: 'Strong', color: theme.success };
   };
 
   const strength = getPasswordStrength(password);
 
   const onSubmit = async (data: RegisterFormData) => {
+    if (!canSubmit) {
+      Alert.alert(
+        'Consent Required',
+        'Please accept the Terms of Service and confirm your age to create an account.',
+      );
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastSubmitRef.current < 2000) return;
+    lastSubmitRef.current = now;
+
     setLoading(true);
     try {
       await signUp(data.email, data.password);
-      
-      // Check if user is logged in (email verification disabled)
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        router.replace('/(onboarding)' as Href);
-      } else {
+      if (!session) {
         Alert.alert(
           'Verification Required',
           'Please check your inbox and verify your email address to continue.',
@@ -138,15 +159,43 @@ export default function RegisterScreen() {
       );
       return;
     }
+
+    const now = Date.now();
+    if (now - lastSubmitRef.current < 2000) return;
+    lastSubmitRef.current = now;
+
     setGoogleLoading(true);
     try {
       await loginWithGoogle();
-      // Navigation is handled reactively by the useEffect on isAuthenticated
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Google sign up failed. Please try again.';
       Alert.alert('Google Sign Up', message);
     } finally {
       setGoogleLoading(false);
+    }
+  };
+
+  const handleFacebookSignUp = async () => {
+    if (!canSubmit) {
+      Alert.alert(
+        'Consent Required',
+        'Please accept the Terms of Service and confirm your age before signing up.',
+      );
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastSubmitRef.current < 2000) return;
+    lastSubmitRef.current = now;
+
+    setFacebookLoading(true);
+    try {
+      await loginWithFacebook();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Facebook sign up was cancelled or failed.';
+      Alert.alert('Facebook Sign Up', message);
+    } finally {
+      setFacebookLoading(false);
     }
   };
 
@@ -168,83 +217,75 @@ export default function RegisterScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
-              placeholder="Enter your email"
-              onBlur={onBlur}
-              onChangeText={onChange}
+              placeholder="alex@cbudget.com"
               value={value}
+              onChangeText={onChange}
+              onBlur={onBlur}
               error={errors.email?.message}
+              accessibilityLabel="Email address"
             />
           )}
         />
 
         {/* Password */}
-        <Controller
-          control={control}
-          name="password"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <YStack gap={6}>
+        <YStack gap={6}>
+          <Controller
+            control={control}
+            name="password"
+            render={({ field: { onChange, onBlur, value } }) => (
               <FormInput
                 label="Password"
                 leftIcon="Lock"
                 secureTextEntry
-                autoCapitalize="none"
-                autoComplete="new-password"
-                placeholder="Enter your password"
-                onBlur={onBlur}
-                onChangeText={onChange}
+                autoComplete="password-new"
+                placeholder="••••••••"
                 value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
                 error={errors.password?.message}
+                accessibilityLabel="Password"
               />
-              {value.length > 0 && (
-                <YStack gap={4} paddingHorizontal={2} marginTop={2}>
-                  <XStack justifyContent="space-between" alignItems="center">
-                    <Text
-                      fontSize={11}
-                      color="#94A3B8"
-                      fontFamily={Fonts.medium as any}
-                    >
-                      Password strength
-                    </Text>
-                    <Text
-                      fontSize={11}
-                      color={strength.color as any}
-                      fontFamily={Fonts.bold as any}
-                    >
-                      {strength.label}
-                    </Text>
-                  </XStack>
-                  <XStack gap={4} width="100%" height={3}>
-                    <View
-                      flex={1}
-                      height="100%"
-                      borderRadius={2}
-                      backgroundColor={(strength.score >= 1 ? strength.color : '#1E334D') as any}
-                    />
-                    <View
-                      flex={1}
-                      height="100%"
-                      borderRadius={2}
-                      backgroundColor={(strength.score >= 3 ? strength.color : '#1E334D') as any}
-                    />
-                    <View
-                      flex={1}
-                      height="100%"
-                      borderRadius={2}
-                      backgroundColor={(strength.score >= 5 ? strength.color : '#1E334D') as any}
-                    />
-                  </XStack>
-                </YStack>
-              )}
+            )}
+          />
+
+          {/* Password strength indicator */}
+          {password.length > 0 && (
+            <YStack gap={4} marginTop={2}>
+              <XStack gap={4} width="100%">
+                {[1, 2, 3].map((level) => (
+                  <View
+                    key={level}
+                    flex={1}
+                    height={3}
+                    borderRadius={2}
+                    style={{
+                      backgroundColor:
+                        strength.score >= level ? strength.color : theme.border,
+                    }}
+                  />
+                ))}
+              </XStack>
+              <Text
+                fontSize={11}
+                color={strength.color as any}
+                fontFamily={Fonts.medium as any}
+                alignSelf="flex-end"
+              >
+                {strength.label}
+              </Text>
             </YStack>
           )}
-        />
+        </YStack>
 
-        {/* Legal Consent Checkboxes */}
+        {/* Legal Consent Checkboxes with Focus & Touch feedback */}
         <YStack gap={12} marginTop={4}>
           {/* Terms & Privacy Policy Checkbox */}
           <Pressable
             onPress={() => setTermsAccepted(!termsAccepted)}
-            style={styles.checkboxRow}
+            style={({ pressed }) => [
+              styles.checkboxRow,
+              { opacity: pressed ? 0.75 : 1 },
+            ]}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: termsAccepted }}
             accessibilityLabel="I agree to the Terms of Service and Privacy Policy"
@@ -252,7 +293,10 @@ export default function RegisterScreen() {
             <View
               style={[
                 styles.checkbox,
-                termsAccepted && { backgroundColor: theme.primary, borderColor: theme.primary },
+                {
+                  borderColor: termsAccepted ? theme.primary : theme.border,
+                  backgroundColor: termsAccepted ? theme.primary : theme.surface,
+                },
               ]}
             >
               {termsAccepted && (
@@ -260,7 +304,7 @@ export default function RegisterScreen() {
               )}
             </View>
             <Text
-              color="#94A3B8"
+              color={theme.textSecondary as any}
               fontSize={12}
               fontFamily={Fonts.medium as any}
               flex={1}
@@ -290,7 +334,10 @@ export default function RegisterScreen() {
           {/* Age Confirmation Checkbox */}
           <Pressable
             onPress={() => setAgeConfirmed(!ageConfirmed)}
-            style={styles.checkboxRow}
+            style={({ pressed }) => [
+              styles.checkboxRow,
+              { opacity: pressed ? 0.75 : 1 },
+            ]}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: ageConfirmed }}
             accessibilityLabel={CONSENT_TEXT.AGE_CONFIRM}
@@ -298,7 +345,10 @@ export default function RegisterScreen() {
             <View
               style={[
                 styles.checkbox,
-                ageConfirmed && { backgroundColor: theme.primary, borderColor: theme.primary },
+                {
+                  borderColor: ageConfirmed ? theme.primary : theme.border,
+                  backgroundColor: ageConfirmed ? theme.primary : theme.surface,
+                },
               ]}
             >
               {ageConfirmed && (
@@ -306,7 +356,7 @@ export default function RegisterScreen() {
               )}
             </View>
             <Text
-              color="#94A3B8"
+              color={theme.textSecondary as any}
               fontSize={12}
               fontFamily={Fonts.medium as any}
               flex={1}
@@ -324,18 +374,20 @@ export default function RegisterScreen() {
           borderRadius={999}
           loading={loading}
           disabled={loading || !canSubmit}
-          glow
+          glow={canSubmit}
           onPress={handleSubmit(onSubmit)}
           marginTop={4}
+          accessibilityRole="button"
+          accessibilityLabel="Create Account"
         >
           Create Account
         </FormButton>
 
         {/* Divider */}
         <XStack alignItems="center" width="100%" marginVertical={6}>
-          <View flex={1} height={1} backgroundColor="#1E334D" />
+          <View flex={1} height={1} backgroundColor={theme.border} />
           <Text
-            color="#94A3B8"
+            color={theme.textSecondary as any}
             fontSize={12}
             fontFamily={Fonts.semiBold as any}
             letterSpacing={0.4}
@@ -343,28 +395,31 @@ export default function RegisterScreen() {
           >
             OR SIGN UP WITH
           </Text>
-          <View flex={1} height={1} backgroundColor="#1E334D" />
+          <View flex={1} height={1} backgroundColor={theme.border} />
         </XStack>
 
-        {/* Logo-only side-by-side social buttons */}
+        {/* Social authentication buttons (Google & Facebook) */}
         <XStack justifyContent="center" gap={16} width="100%">
           <SocialIconButton
             icon={<GoogleIcon size={22} />}
             onPress={handleGoogleSignUp}
             loading={googleLoading}
             accessibilityLabel="Sign up with Google"
+            theme={theme}
           />
           <SocialIconButton
             icon={<FacebookIcon size={22} />}
-            onPress={() => Alert.alert('Facebook', 'Facebook Sign Up is coming soon.')}
+            onPress={handleFacebookSignUp}
+            loading={facebookLoading}
             accessibilityLabel="Sign up with Facebook"
+            theme={theme}
           />
         </XStack>
 
         {/* Footer Link */}
         <XStack justifyContent="center" gap={6} marginTop={10}>
           <Text
-            color="#94A3B8"
+            color={theme.textSecondary as any}
             fontSize={14}
             fontFamily={Fonts.regular as any}
             letterSpacing={-0.1}
@@ -398,31 +453,28 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   socialBtn: {
-    width: 64,
-    height: 46,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#0C1829',
-    borderWidth: 1,
-    borderColor: '#1E334D',
+    width: 68,
+    height: 48,
+    borderRadius: 12,
   },
   socialBtnInner: {
     flex: 1,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
   },
   checkboxRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
+    paddingVertical: 2,
   },
   checkbox: {
     width: 20,
     height: 20,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: '#334155',
-    backgroundColor: '#0C1829',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 1,

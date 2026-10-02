@@ -15,19 +15,27 @@ const customStorageAdapter = {
   },
 };
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+export const isSupabaseConfigured = Boolean(
+  process.env.EXPO_PUBLIC_SUPABASE_URL &&
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY &&
+  !process.env.EXPO_PUBLIC_SUPABASE_URL.includes('placeholder')
+);
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error(
-    '[Supabase] Missing env vars. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in your .env file.',
+const supabaseUrl =
+  process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://placeholder-project.supabase.co';
+const supabaseAnonKey =
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key';
+
+if (!isSupabaseConfigured) {
+  console.warn(
+    '[Supabase] Missing or unconfigured env vars. Operating in offline/guest mode. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY for live database operations.',
   );
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: customStorageAdapter,
-    autoRefreshToken: true,
+    autoRefreshToken: isSupabaseConfigured,
     persistSession: true,
     detectSessionInUrl: false,
   },

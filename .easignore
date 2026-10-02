@@ -1,0 +1,31 @@
+# Ignore dependencies and build artifacts for EAS Build
+node_modules/
+.expo/
+.tamagui/
+.claude/
+dist/
+web-build/
+.vscode/
+.idea/
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+Thumbs.db
+*.pem
+*.tsbuildinfo
+example
+/ios
+replace.js
+
+# Ensure google-services.json is NOT ignored for Android EAS Build
+!google-services.json
+!android/app/google-services.json

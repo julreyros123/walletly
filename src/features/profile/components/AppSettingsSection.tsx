@@ -59,12 +59,6 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
   const [guardianModalVisible, setGuardianModalVisible] = useState(false);
   const [inputEmail, setInputEmail] = useState(guardianEmail);
 
-  const currencies: { code: SupportedCurrency; label: string; symbol: string }[] = [
-    { code: 'PHP', label: 'PHP', symbol: '₱' },
-    { code: 'USD', label: 'USD', symbol: '$' },
-    { code: 'EUR', label: 'EUR', symbol: '€' },
-    { code: 'GBP', label: 'GBP', symbol: '£' },
-  ];
 
   const handleSendGuardianReport = async (emailOverride?: string) => {
     const targetEmail = (emailOverride || guardianEmail).trim();
@@ -262,7 +256,7 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
                   </View>
                 </XStack>
                 <Text color={theme.textSecondary} fontSize={11.5} fontFamily={Fonts.medium}>
-                  Allow Walletly to send learning alerts
+                  Allow CBudget to send learning alerts
                 </Text>
               </YStack>
             </XStack>
@@ -357,9 +351,14 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
 
       {/* 3. SIMULATOR CURRENCY DISPLAY */}
       <YStack gap={10}>
-        <Text color={theme.text} fontSize={16} fontFamily={Fonts.bold} paddingHorizontal={2}>
-          Display Currency
-        </Text>
+        <XStack justifyContent="space-between" alignItems="center" paddingHorizontal={2}>
+          <Text color={theme.text} fontSize={16} fontFamily={Fonts.bold}>
+            Display Currency
+          </Text>
+          <Text color={theme.textSecondary} fontSize={12} fontFamily={Fonts.medium}>
+            Active: {currency}
+          </Text>
+        </XStack>
 
         <CbudgetCard padding={16} gap={10}>
           <Text color={theme.textSecondary} fontSize={12} fontFamily={Fonts.medium}>

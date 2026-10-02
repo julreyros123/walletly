@@ -21,7 +21,7 @@ export type MotionIconName =
 export interface MotionIconProps {
   name?: MotionIconName;
   size?: number;
-  color?: string; // Foreground inner color (defaults to #3EB47D green)
+  color?: string; // Foreground inner color (defaults to #10B981 emerald green)
   edgeColor?: string; // Double-edge outer contour (defaults to #FFFFFF white)
   autoPlay?: boolean;
   loop?: boolean;
@@ -31,7 +31,7 @@ export interface MotionIconProps {
 export function MotionIcon({
   name = 'bell',
   size = 22,
-  color = '#3EB47D',
+  color = '#10B981',
   edgeColor = '#FFFFFF',
   autoPlay = true,
   loop = true,

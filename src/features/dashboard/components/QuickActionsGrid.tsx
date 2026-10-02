@@ -60,45 +60,47 @@ export function QuickActionsGrid({
       ]}
     >
       <View style={styles.actionsRow}>
-        {actions.map((action) => (
-          <InteractivePressable
-            key={action.id}
-            onPress={action.onPress}
-            style={styles.actionItem}
-            accessibilityLabel={action.title}
-            accessibilityHint={`Opens ${action.title.toLowerCase()}`}
-          >
-            <View
-              style={[
-                styles.iconWrapper,
-                {
-                  backgroundColor:
-                    theme.mode === 'dark' ? '#0F172A' : '#F1F5F9',
-                  borderColor:
-                    theme.mode === 'dark'
-                      ? 'rgba(255, 255, 255, 0.1)'
-                      : 'rgba(15, 23, 42, 0.08)',
-                },
-              ]}
+        {actions.map((action) => {
+          return (
+            <InteractivePressable
+              key={action.id}
+              onPress={action.onPress}
+              style={styles.actionItem}
+              accessibilityLabel={action.title}
+              accessibilityHint={`Opens ${action.title.toLowerCase()}`}
             >
-              <PhosphorIcon
-                name={action.icon}
-                size={22}
-                color={BRAND_ACCENT}
-                weight="duotone"
-              />
-            </View>
-            <Text
-              style={[
-                styles.actionLabel,
-                { color: theme.text },
-              ]}
-              numberOfLines={1}
-            >
-              {action.title}
-            </Text>
-          </InteractivePressable>
-        ))}
+              <View
+                style={[
+                  styles.iconWrapper,
+                  {
+                    backgroundColor:
+                      theme.mode === 'dark'
+                        ? 'rgba(16, 185, 129, 0.14)'
+                        : 'rgba(16, 185, 129, 0.08)',
+                    borderColor: BRAND_ACCENT,
+                    borderWidth: 1.8,
+                  },
+                ]}
+              >
+                <PhosphorIcon
+                  name={action.icon}
+                  size={22}
+                  color={BRAND_ACCENT}
+                  weight="bold"
+                />
+              </View>
+              <Text
+                style={[
+                  styles.actionLabel,
+                  { color: theme.text },
+                ]}
+                numberOfLines={1}
+              >
+                {action.title}
+              </Text>
+            </InteractivePressable>
+          );
+        })}
       </View>
     </View>
   );
@@ -134,8 +136,7 @@ const styles = StyleSheet.create({
   iconWrapper: {
     width: 50,
     height: 50,
-    borderRadius: 999,
-    overflow: 'hidden',
+    borderRadius: 25,
     borderWidth: 1.2,
     alignItems: 'center',
     justifyContent: 'center',
@@ -143,14 +144,11 @@ const styles = StyleSheet.create({
       ios: {
         shadowColor: '#0F172A',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
+        shadowOpacity: 0.05,
         shadowRadius: 4,
       },
-      android: {
-        elevation: 2,
-      },
       web: {
-        boxShadow: '0 2px 6px rgba(15, 23, 42, 0.06)',
+        boxShadow: '0 2px 6px rgba(15, 23, 42, 0.05)',
       } as any,
     }),
   },

@@ -17,8 +17,9 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false,
-      "package": "com.julreyros123.cbudget"
+      "predictiveBackGestureEnabled": true,
+      "package": "com.julreyros123.cbudget",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static",
@@ -45,7 +46,8 @@
       "expo-secure-store",
       "expo-localization",
       "@react-native-google-signin/google-signin",
-      "expo-audio"
+      "expo-audio",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,

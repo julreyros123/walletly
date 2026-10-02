@@ -1,25 +1,26 @@
 import React, { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet } from 'react-native';
-import { YStack } from 'tamagui';
-import { Redirect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
-import { useTheme } from '@/hooks/use-theme';
+import { CbudgetSplashScreen } from '@/components/CbudgetSplashScreen';
 
 export default function Index() {
+  const router = useRouter();
   const { isAuthenticated, isLoading, user } = useAuthStore();
-  const theme = useTheme();
 
-  if (isLoading) {
-    return (
-      <YStack flex={1} backgroundColor={theme.background} justifyContent="center" alignItems="center">
-        <ActivityIndicator size="large" color={theme.primary} />
-      </YStack>
-    );
-  }
+  useEffect(() => {
+    if (isLoading) return;
 
-  if (isAuthenticated) {
-    return <Redirect href="/(tabs)" />;
-  }
+    if (isAuthenticated) {
+      const isNewAccount = !user?.isOnboarded || !user?.name || user.name === 'User' || !user?.age;
+      if (isNewAccount && user?.id !== 'guest') {
+        router.replace('/(onboarding)');
+      } else {
+        router.replace('/(tabs)');
+      }
+    } else {
+      router.replace('/(auth)');
+    }
+  }, [isAuthenticated, isLoading, user, router]);
 
-  return <Redirect href="/(auth)" />;
+  return <CbudgetSplashScreen />;
 }

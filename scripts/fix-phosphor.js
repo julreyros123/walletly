@@ -49,7 +49,7 @@ if (!RCTAsyncStorage) {
       setTimeout(function () { callback(null); }, 0);
     },
     multiRemove: function (keys, callback) {
-      keys.forEach(function (k) { memoryStore.delete(k)); });
+      keys.forEach(function (k) { memoryStore.delete(k); });
       setTimeout(function () { callback(null); }, 0);
     },
     clear: function (callback) {
@@ -126,3 +126,18 @@ if (!RCTAsyncStorage) {
 } catch (e) {
   console.warn('[postinstall] async-storage patch warning:', e.message);
 }
+
+// 3. Ensure expo-modules-autolinking binary exists
+try {
+  const autolinkBinDir = path.resolve(__dirname, '../node_modules/expo-modules-autolinking/bin');
+  const autolinkBinFile = path.join(autolinkBinDir, 'expo-modules-autolinking.js');
+  if (!fs.existsSync(autolinkBinFile)) {
+    if (!fs.existsSync(autolinkBinDir)) fs.mkdirSync(autolinkBinDir, { recursive: true });
+    const binScript = `#!/usr/bin/env node\n'use strict';\nif (!process.env.NO_COLOR) { process.env.FORCE_COLOR = 'true'; }\nrequire('../build')(process.argv.slice(2)).catch((error) => {\n  console.error('expo-modules-autolinking failed:', error);\n  process.exitCode = 1;\n});\n`;
+    fs.writeFileSync(autolinkBinFile, binScript, 'utf8');
+    console.log('[postinstall] Restored missing expo-modules-autolinking.js');
+  }
+} catch (e) {
+  console.warn('[postinstall] autolinking patch warning:', e.message);
+}
+
