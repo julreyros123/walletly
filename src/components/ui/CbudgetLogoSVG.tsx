@@ -12,19 +12,23 @@ export interface CbudgetLogoSVGProps {
   style?: ViewStyle;
 }
 
+const FULL_LOGO = require('@/assets/images/walletly-logo.png');
+// Symbol-only mark with transparent background (cropped from the master logo, no wordmark)
+const MARK_LOGO = require('@/assets/images/cbudget-mark.png');
+
 export function CbudgetLogoSVG({
   size = 64,
+  showText = true,
   style,
 }: CbudgetLogoSVGProps) {
-  // Uses the exact high-resolution master PNG logo asset with unified proportions
   return (
     <View style={[{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }, style]}>
       <Image
-        source={require('@/assets/images/walletly-logo.png')}
+        source={showText ? FULL_LOGO : MARK_LOGO}
         style={{
           width: size,
           height: size,
-          borderRadius: Math.round(size * 0.22),
+          borderRadius: showText ? Math.round(size * 0.22) : 0,
         }}
         contentFit="contain"
       />

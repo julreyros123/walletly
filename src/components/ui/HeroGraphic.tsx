@@ -63,7 +63,7 @@ export function HeroGraphic({ title, subtitle }: HeroGraphicProps) {
           { opacity: logoOpacity, transform: [{ scale: logoScale }] },
         ]}
       >
-        <CbudgetLogoSVG size={72} showText={false} />
+        <CbudgetLogoSVG size={64} showText={false} />
       </Animated.View>
 
       {/* Title & Subtitle */}
@@ -105,7 +105,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
     shadowRadius: 16,
-    elevation: 8,
   },
   logo: {
     width: 72,

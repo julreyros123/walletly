@@ -75,8 +75,10 @@ export function FormButton({
   let shadowStyle: any = {};
 
   if (isDisabled) {
-    backgroundColor = theme.backgroundElement || 'rgba(255, 255, 255, 0.08)';
-    textColor = 'rgba(255, 255, 255, 0.4)';
+    // Faded brand tint reads correctly on both light and dark surfaces
+    // (theme.backgroundElement is near-white in light mode → white label became invisible).
+    backgroundColor = `${theme.primary}55`;
+    textColor = 'rgba(255, 255, 255, 0.85)';
   } else {
     switch (variant) {
       case 'primary':

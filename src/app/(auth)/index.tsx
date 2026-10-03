@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   Platform,
@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   useWindowDimensions,
   View,
+  AppState,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text, YStack, XStack } from 'tamagui';
@@ -110,6 +111,23 @@ export default function WelcomeScreen() {
     opacity: modalContentFade.value,
   }));
 
+  // Snap the sheet back to its resting state. Returning from the native Google/Facebook
+  // activity can leave the sheet's animation stranded off-screen (only the logo stays visible).
+  const restoreSheet = useCallback(() => {
+    if (!hasLoadedSplashOnce) return;
+    logoTranslateY.value = 0;
+    modalTranslateY.value = 0;
+    brandTextFade.value = 1;
+    modalContentFade.value = 1;
+  }, [logoTranslateY, modalTranslateY, brandTextFade, modalContentFade]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') restoreSheet();
+    });
+    return () => subscription.remove();
+  }, [restoreSheet]);
+
   // Handlers
   const handleEmailRegister = () => {
     router.push('/(auth)/register' as Href);
@@ -133,6 +151,7 @@ export default function WelcomeScreen() {
       Alert.alert('Google Sign-In', message);
     } finally {
       setLoadingType(null);
+      restoreSheet();
     }
   };
 
@@ -154,6 +173,7 @@ export default function WelcomeScreen() {
       Alert.alert('Facebook Sign-In', message);
     } finally {
       setLoadingType(null);
+      restoreSheet();
     }
   };
 
@@ -179,7 +199,7 @@ export default function WelcomeScreen() {
       <View style={[styles.topBlueHalf, { paddingTop: insets.top }]}>
         <Animated.View style={[styles.brandCenterWrapper, animatedBrandStyle]}>
           <Image
-            source={require('@/assets/animations/walletly_splash.webp')}
+            source={require('@/assets/images/cbudget-mark.png')}
             style={styles.logoImage}
             contentFit="contain"
             priority="high"
@@ -419,12 +439,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   logoImage: {
-    width: 120,
-    height: 120,
+    width: 96,
+    height: 96,
   },
   brandTextWrapper: {
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 16,
   },
   brandTitle: {
     color: '#FFFFFF',

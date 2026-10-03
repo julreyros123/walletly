@@ -36,7 +36,7 @@ export default function OnboardingWelcomeScreen() {
               style={styles.logoContainer}
             >
               <Image
-                source={require('../../../assets/images/walletly-logo.png')}
+                source={require('../../../assets/images/cbudget-mark.png')}
                 style={styles.logo}
                 contentFit="contain"
               />
@@ -81,16 +81,14 @@ export default function OnboardingWelcomeScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   logoContainer: {
-    shadowColor: '#0052FF',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.4,
-    shadowRadius: 24,
-    elevation: 16,
+    shadowColor: '#2ECC71',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 18,
   },
   logo: {
-    width: 140,
-    height: 140,
-    borderRadius: 32,
+    width: 88,
+    height: 88,
   },
   glowTop: {
     position: 'absolute',
