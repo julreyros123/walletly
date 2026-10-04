@@ -1,33 +1,59 @@
-import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Alert, TouchableOpacity, Modal } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  ScrollView,
+  StyleSheet,
+  Alert,
+  TouchableOpacity,
+  Modal,
+  Platform,
+  KeyboardAvoidingView,
+  TextInput,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { YStack, XStack, Text, Button, View } from 'tamagui';
-import { useTheme } from '@/hooks/use-theme';
+import { YStack, XStack, Text as TamaguiText, View } from 'tamagui';
+const Text = (props: any) => <TamaguiText {...props} />;
+import { setStatusBarStyle } from 'expo-status-bar';
 import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
 import { useGamificationStore } from '@/store/gamificationStore';
-import { CbudgetCard } from '@/components/ui/CbudgetCard';
-import { FormInput } from '@/components/ui/FormInput';
-import { FormButton } from '@/components/ui/FormButton';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import { BackgroundSystem } from '@/components/ui/BackgroundSystem';
-import { useCurrency } from '@/utils/currency';
-import { ASSET_DATA as assetData, TEEN_GUIDES as teenGuides, getLivePE, getValuationLabel } from '@/constants/assets';
+import { useCurrency, formatNumberMask, parseMaskedNumber } from '@/utils/currency';
+import {
+  ASSET_DATA as assetData,
+  TEEN_GUIDES as teenGuides,
+  ASSET_THESIS,
+  getLivePE,
+  getValuationLabel,
+} from '@/constants/assets';
 import { useMarketStore } from '@/store/marketStore';
-
 import { InteractiveChart } from '@/features/invest/components/InteractiveChart';
+import { Fonts } from '@/constants/theme';
+import { safeHaptic } from '@/utils/haptics';
 
 export default function InvestDetailsScreen() {
   const router = useRouter();
-  const theme = useTheme() as any;
   const store = useGamificationStore();
   const market = useMarketStore();
   const params = useLocalSearchParams<{ ticker?: string }>();
   const { symbol: currencySymbol } = useCurrency();
 
-  const asset = market.assets[params.ticker || 'NOVA'] || assetData[params.ticker || 'NOVA'] || assetData.NOVA;
+  const asset =
+    market.assets[params.ticker || 'NOVA'] ||
+    assetData[params.ticker || 'NOVA'] ||
+    assetData.NOVA;
 
-  React.useEffect(() => {
+  const thesis = ASSET_THESIS[asset.ticker] || {
+    businessModel: asset.description,
+    catalysts: 'Ongoing enterprise execution, product roadmap milestones, and customer adoption.',
+    riskExplanation: `${asset.riskProfile} Risk Profile: Subject to industry competition, regulatory scrutiny, and macroeconomic volatility.`,
+  };
+
+  const simpleGuide = teenGuides[asset.ticker] || {
+    analogy: asset.description,
+    riskExplanation: `${asset.riskProfile} Risk profile based on sector volatility.`,
+  };
+
+  useEffect(() => {
+    setStatusBarStyle('light');
     market.initMarket();
     const stopDrift = market.startLiveDrift();
     return () => stopDrift();
@@ -37,42 +63,47 @@ export default function InvestDetailsScreen() {
   const [scrubbedPrice, setScrubbedPrice] = useState<number | null>(null);
   const [allocationType, setAllocationType] = useState<'buy' | 'sell'>('buy');
   const [unitsAmount, setUnitsAmount] = useState('');
-  const [tradeMode, setTradeMode] = useState<'pesos' | 'shares'>('pesos'); // Default to Pesos for simple teen micro-investing
+  const [tradeMode, setTradeMode] = useState<'pesos' | 'shares'>('pesos');
   const [isTrading, setIsTrading] = useState(false);
-  const [showTeenGuide, setShowTeenGuide] = useState(true); // Default to open for teenager education
+  const [thesisViewMode, setThesisViewMode] = useState<'thesis' | 'simple'>('thesis');
   const [showJargonModal, setShowJargonModal] = useState(false);
   const [dividendsClaimed, setDividendsClaimed] = useState<Record<string, boolean>>({});
 
-  const getAssetOwnedUnits = (ticker: string) => {
-    return store.portfolioAllocations[ticker] || 0;
-  };
-
-  const ownedUnits = getAssetOwnedUnits(asset.ticker);
+  const ownedUnits = store.portfolioAllocations[asset.ticker] || 0;
   const assetTotalValue = ownedUnits * asset.price;
   const changeIsPositive = asset.change >= 0;
 
-  const activeHistory = 
-    chartTimeframe === '1D' ? asset.history1D :
-    chartTimeframe === '1W' ? asset.history1W :
-    asset.history1M;
+  const activeHistory =
+    chartTimeframe === '1D'
+      ? asset.history1D
+      : chartTimeframe === '1W'
+      ? asset.history1W
+      : asset.history1M;
 
-  const typedUnits = tradeMode === 'shares'
-    ? (parseFloat(unitsAmount) || 0)
-    : (parseFloat(unitsAmount) || 0) / asset.price;
+  const numericInput = parseMaskedNumber(unitsAmount);
 
-  const estimatedCost = tradeMode === 'shares'
-    ? typedUnits * asset.price
-    : (parseFloat(unitsAmount) || 0);
+  const typedUnits =
+    tradeMode === 'shares'
+      ? numericInput
+      : asset.price > 0
+      ? numericInput / asset.price
+      : 0;
+
+  const estimatedCost =
+    tradeMode === 'shares'
+      ? typedUnits * asset.price
+      : numericInput;
 
   // Percentage preset calculations for quick allocations
   const handleQuickPercent = (pct: number) => {
+    safeHaptic('light');
     if (allocationType === 'buy') {
       const maxCash = store.virtualBalance;
       const targetCash = maxCash * pct;
       if (tradeMode === 'pesos') {
-        setUnitsAmount(targetCash.toFixed(2));
+        setUnitsAmount(formatNumberMask(targetCash.toFixed(2)));
       } else {
-        const targetUnits = targetCash / asset.price;
+        const targetUnits = asset.price > 0 ? targetCash / asset.price : 0;
         setUnitsAmount(targetUnits.toFixed(4));
       }
     } else {
@@ -80,7 +111,7 @@ export default function InvestDetailsScreen() {
       const targetUnits = maxUnits * pct;
       if (tradeMode === 'pesos') {
         const targetCash = targetUnits * asset.price;
-        setUnitsAmount(targetCash.toFixed(2));
+        setUnitsAmount(formatNumberMask(targetCash.toFixed(2)));
       } else {
         setUnitsAmount(targetUnits.toFixed(4));
       }
@@ -88,7 +119,8 @@ export default function InvestDetailsScreen() {
   };
 
   const handleExecuteAllocation = () => {
-    const inputVal = parseFloat(unitsAmount);
+    safeHaptic('medium');
+    const inputVal = parseMaskedNumber(unitsAmount);
     if (isNaN(inputVal) || inputVal <= 0) {
       Alert.alert('Invalid Amount', 'Please enter a valid amount.');
       return;
@@ -99,33 +131,39 @@ export default function InvestDetailsScreen() {
 
     if (allocationType === 'buy') {
       if (totalCost > store.virtualBalance) {
-        Alert.alert('Insufficient Cash', 'You do not have enough simulated cash in your balance.');
+        Alert.alert(
+          'Insufficient Cash',
+          `You need ${currencySymbol}${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })} but only have ${currencySymbol}${store.virtualBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} in simulation cash.`
+        );
         return;
       }
 
       const success = store.tradeAssetSim(asset.ticker, 'buy', qty, asset.price);
       if (success) {
+        safeHaptic('success');
+        store.addXP(25);
         Alert.alert(
-          '🎉 Order Executed!',
-          `You just bought ${qty.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 })} units of ${asset.ticker} with your virtual sandbox cash.\n\n🚀 You're officially tracking the ${asset.partner} sector—watch your dashboard to see how your factory slice performs! (+15 XP)`
+          'Order Executed!',
+          `Successfully purchased ${qty.toFixed(4)} units of ${asset.ticker} for ${currencySymbol}${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}. (+25 XP)`
         );
-      } else {
-        Alert.alert('Error', 'Transaction failed.');
       }
     } else {
       if (qty > ownedUnits) {
-        Alert.alert('Insufficient Units', `You only have ${ownedUnits.toFixed(4)} units of this asset.`);
+        Alert.alert(
+          'Insufficient Units',
+          `You only own ${ownedUnits.toFixed(4)} units of ${asset.ticker}.`
+        );
         return;
       }
 
       const success = store.tradeAssetSim(asset.ticker, 'sell', qty, asset.price);
       if (success) {
+        safeHaptic('success');
+        store.addXP(25);
         Alert.alert(
-          '🎉 Order Executed!',
-          `You just sold ${qty.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 })} units of ${asset.ticker} with your virtual sandbox cash.\n\n🚀 You've updated your position in the ${asset.partner} sector! (+10 XP)`
+          'Order Executed!',
+          `Successfully sold ${qty.toFixed(4)} units of ${asset.ticker} for ${currencySymbol}${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}. (+25 XP)`
         );
-      } else {
-        Alert.alert('Error', 'Transaction failed.');
       }
     }
 
@@ -135,158 +173,246 @@ export default function InvestDetailsScreen() {
 
   const handleClaimDividends = () => {
     if (ownedUnits <= 0) {
-      Alert.alert('No Shares Owned', 'You must own at least a fraction of this stock to earn dividends!');
+      Alert.alert('No Shares Owned', 'You must hold shares of this asset to collect dividends!');
       return;
     }
 
-    // Realistic simulated dividend: ~3.5% annual yield ÷ 365 days ≈ 0.00959% daily
-    // Real-world S&P 500 average dividend yield is ~1.3-3.5% per year (paid quarterly)
-    const ANNUAL_DIVIDEND_YIELD = 0.035; // 3.5% per year — realistic average
+    const ANNUAL_DIVIDEND_YIELD = 0.035;
     const dividendAmount = assetTotalValue * (ANNUAL_DIVIDEND_YIELD / 365);
-    const roundedDividend = Math.max(0.01, parseFloat(dividendAmount.toFixed(2))); // Minimum ₱0.01 payout
+    const roundedDividend = Math.max(0.01, parseFloat(dividendAmount.toFixed(2)));
 
     const success = store.claimDailyDividend(asset.ticker, roundedDividend);
     if (!success) {
-      Alert.alert('Dividends Already Claimed', 'You have already claimed dividends for this stock today. Check back tomorrow!');
+      Alert.alert('Already Claimed', 'You have already collected dividends for this asset today. Check back tomorrow!');
       return;
     }
 
+    setDividendsClaimed((prev) => ({ ...prev, [asset.ticker]: true }));
+    safeHaptic('success');
     Alert.alert(
-      '🎉 Dividends Claimed!',
-      `You earned ${currencySymbol}${roundedDividend.toLocaleString(undefined, { minimumFractionDigits: 2 })} in passive dividends from your ${ownedUnits.toFixed(4)} shares of ${asset.ticker}! (+5 XP)\n\n💡 Dividends are a share of the company's profits paid out to shareholders just for holding the stock. This simulates a realistic ~3.5% annual dividend yield.`
+      '🎉 Dividends Collected!',
+      `You received ${currencySymbol}${roundedDividend.toLocaleString(undefined, { minimumFractionDigits: 2 })} in passive yield from your ${ownedUnits.toFixed(4)} shares of ${asset.ticker}! (+5 XP)`
     );
   };
 
-  // Range percentage position for Low/High bar widget
-  const high52Percent = ((asset.price - asset.low52) / (asset.high52 - asset.low52)) * 100;
-  const currentPos = Math.min(Math.max(high52Percent, 0), 100);
+  // 52-Week Range position percentage
+  const rangeSpan = asset.high52 - asset.low52 || 1;
+  const currentPos = Math.min(Math.max(((asset.price - asset.low52) / rangeSpan) * 100, 0), 100);
 
   return (
-    <YStack flex={1} backgroundColor={theme.background}>
-      <BackgroundSystem mode="tabs" height={340} />
+    <View style={styles.screenContainer}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
-        
-        {/* Navigation Header */}
-        <XStack justifyContent="space-between" alignItems="center" paddingHorizontal={16} paddingVertical={12} borderBottomWidth={1} borderBottomColor={theme.border}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <XStack gap={4} alignItems="center" backgroundColor={theme.backgroundElement} paddingHorizontal={12} paddingVertical={6} borderRadius={100} borderWidth={1} borderColor={theme.border}>
-              <PhosphorIcon
-                name="CaretLeft"
-                size={16}
-                color={theme.text}
-              />
-              <Text color={theme.text} fontWeight="700" fontSize={13}>Back</Text>
+        {/* ==================== EXECUTIVE HEADER ==================== */}
+        <XStack
+          justifyContent="space-between"
+          alignItems="center"
+          paddingHorizontal={16}
+          paddingVertical={12}
+          borderBottomWidth={1}
+          borderBottomColor="rgba(255, 255, 255, 0.08)"
+        >
+          <TouchableOpacity
+            onPress={() => {
+              safeHaptic('light');
+              router.back();
+            }}
+            activeOpacity={0.7}
+          >
+            <XStack
+              gap={6}
+              alignItems="center"
+              backgroundColor="rgba(255, 255, 255, 0.06)"
+              paddingHorizontal={14}
+              paddingVertical={8}
+              borderRadius={999}
+              borderWidth={1}
+              borderColor="rgba(255, 255, 255, 0.1)"
+            >
+              <PhosphorIcon name="CaretLeft" size={15} color="#FFFFFF" weight="bold" />
+              <Text color="#FFFFFF" fontSize={12} fontFamily={Fonts.bold}>
+                Back
+              </Text>
             </XStack>
           </TouchableOpacity>
 
           <View
             backgroundColor={market.isLive ? 'rgba(16, 185, 129, 0.12)' : 'rgba(56, 189, 248, 0.12)'}
-            paddingHorizontal={10}
-            paddingVertical={4}
-            borderRadius={100}
+            paddingHorizontal={12}
+            paddingVertical={6}
+            borderRadius={999}
             borderWidth={1}
-            borderColor={market.isLive ? 'rgba(16, 185, 129, 0.3)' : 'rgba(56, 189, 248, 0.3)'}
+            borderColor={market.isLive ? 'rgba(16, 185, 129, 0.28)' : 'rgba(56, 189, 248, 0.28)'}
+            flexDirection="row"
+            alignItems="center"
+            gap={6}
           >
+            <View
+              width={6}
+              height={6}
+              borderRadius={3}
+              backgroundColor={market.isLive ? '#10B981' : '#38BDF8'}
+            />
             <Text
               color={market.isLive ? '#10B981' : '#38BDF8'}
-              fontSize={10}
-              style={{ fontFamily: 'Inter_700Bold' }}
-              letterSpacing={0.5}
+              fontSize={10.5}
+              fontFamily={Fonts.bold}
+              letterSpacing={0.6}
             >
-              {market.isLive ? '🟢 LIVE QUOTE' : 'SANDBOX SIM'}
+              {market.isLive ? 'LIVE QUOTE' : 'SANDBOX SIM'}
             </Text>
           </View>
-          
-          <TouchableOpacity onPress={() => setShowJargonModal(true)}>
-            <XStack gap={4} alignItems="center" backgroundColor="rgba(59, 130, 246, 0.12)" paddingHorizontal={10} paddingVertical={6} borderRadius={100} borderWidth={1} borderColor="rgba(59, 130, 246, 0.3)">
-              <Text color="#60A5FA" fontWeight="700" fontSize={11}>💡 Jargon</Text>
+
+          <TouchableOpacity
+            onPress={() => {
+              safeHaptic('light');
+              setShowJargonModal(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <XStack
+              gap={5}
+              alignItems="center"
+              backgroundColor="rgba(59, 130, 246, 0.12)"
+              paddingHorizontal={12}
+              paddingVertical={8}
+              borderRadius={999}
+              borderWidth={1}
+              borderColor="rgba(59, 130, 246, 0.28)"
+            >
+              <PhosphorIcon name="Lightbulb" size={14} color="#60A5FA" weight="fill" />
+              <Text color="#60A5FA" fontSize={11} fontFamily={Fonts.bold}>
+                Glossary
+              </Text>
             </XStack>
           </TouchableOpacity>
         </XStack>
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {/* Main Price / Info Header */}
-          <YStack gap={4} paddingHorizontal={8} marginBottom={16} marginTop={12}>
-            <XStack gap={12} alignItems="center" width="100%">
+          {/* ==================== HERO ASSET HEADER ==================== */}
+          <YStack gap={8} paddingHorizontal={4} marginBottom={18} marginTop={8}>
+            <XStack gap={14} alignItems="center" width="100%">
               <View
-                width={48}
-                height={48}
-                borderRadius={14}
-                style={{ backgroundColor: `${asset.color}10`, borderColor: `${asset.color}20` }}
+                width={52}
+                height={52}
+                borderRadius={16}
+                style={{
+                  backgroundColor: `${asset.color}15`,
+                  borderColor: `${asset.color}35`,
+                  borderWidth: 1.5,
+                }}
                 alignItems="center"
                 justifyContent="center"
-                borderWidth={1.5}
               >
-                <PhosphorIcon name={asset.icon} size={22} color={asset.color} weight="fill" />
+                <PhosphorIcon name={asset.icon} size={26} color={asset.color} weight="fill" />
               </View>
-              <YStack gap={6} flex={1}>
-                <Text color={theme.text} fontSize={18} style={{ fontFamily: "Inter_700Bold" }} letterSpacing={-0.4} numberOfLines={1}>
-                  {asset.name}
-                </Text>
+              <YStack gap={4} flex={1}>
+                <XStack alignItems="center" gap={8} flexWrap="wrap">
+                  <Text color="#FFFFFF" fontSize={20} fontFamily={Fonts.bold} letterSpacing={-0.3} numberOfLines={1}>
+                    {asset.name}
+                  </Text>
+                  <View
+                    backgroundColor="rgba(255, 255, 255, 0.08)"
+                    paddingHorizontal={7}
+                    paddingVertical={2.5}
+                    borderRadius={6}
+                    borderWidth={1}
+                    borderColor="rgba(255, 255, 255, 0.12)"
+                  >
+                    <Text color="rgba(255, 255, 255, 0.85)" fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                      {asset.ticker}
+                    </Text>
+                  </View>
+                </XStack>
+
                 <XStack gap={6} flexWrap="wrap" alignItems="center">
-                  <View backgroundColor={theme.backgroundElement} paddingHorizontal={8} paddingVertical={4} borderRadius={6} borderWidth={1} borderColor={theme.border}>
-                    <Text color={theme.textSecondary} fontSize={11} style={{ fontFamily: "Inter_700Bold" }}>
+                  <View
+                    backgroundColor="rgba(255, 255, 255, 0.04)"
+                    paddingHorizontal={8}
+                    paddingVertical={3}
+                    borderRadius={6}
+                    borderWidth={1}
+                    borderColor="rgba(255, 255, 255, 0.08)"
+                  >
+                    <Text color="rgba(255, 255, 255, 0.6)" fontSize={11} fontFamily={Fonts.medium}>
                       {asset.partner}
                     </Text>
                   </View>
-                  <View 
+
+                  <View
                     backgroundColor={
                       asset.riskProfile === 'Conservative'
-                        ? 'rgba(16, 185, 129, 0.08)'
+                        ? 'rgba(16, 185, 129, 0.12)'
                         : asset.riskProfile === 'Moderate'
-                        ? 'rgba(245, 158, 11, 0.08)'
-                        : 'rgba(239, 68, 68, 0.08)'
+                        ? 'rgba(245, 158, 11, 0.12)'
+                        : 'rgba(239, 68, 68, 0.12)'
                     }
                     paddingHorizontal={8}
-                    paddingVertical={4}
+                    paddingVertical={3}
                     borderRadius={6}
                     borderWidth={1}
                     borderColor={
                       asset.riskProfile === 'Conservative'
-                        ? 'rgba(16, 185, 129, 0.15)'
+                        ? 'rgba(16, 185, 129, 0.28)'
                         : asset.riskProfile === 'Moderate'
-                        ? 'rgba(245, 158, 11, 0.15)'
-                        : 'rgba(239, 68, 68, 0.15)'
+                        ? 'rgba(245, 158, 11, 0.28)'
+                        : 'rgba(239, 68, 68, 0.28)'
                     }
                   >
-                    <Text 
+                    <Text
                       color={
                         asset.riskProfile === 'Conservative'
-                          ? '#10B981'
+                          ? '#34D399'
                           : asset.riskProfile === 'Moderate'
-                          ? '#F59E0B'
-                          : '#EF4444'
+                          ? '#FBBF24'
+                          : '#F87171'
                       }
-                      fontSize={11} 
-                      style={{ fontFamily: "Inter_700Bold" }}
+                      fontSize={11}
+                      fontFamily={Fonts.bold}
                     >
-                      {asset.riskProfile === 'Conservative' ? '🟢 Conservative' : asset.riskProfile === 'Moderate' ? '🟡 Moderate' : '🔥 High Growth'}
+                      {asset.riskProfile === 'Conservative'
+                        ? 'Conservative'
+                        : asset.riskProfile === 'Moderate'
+                        ? 'Moderate Risk'
+                        : 'High Growth'}
                     </Text>
                   </View>
                 </XStack>
               </YStack>
             </XStack>
 
-            <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={8} marginTop={12}>
-              <Text color={theme.text} fontSize={28} style={{ fontFamily: "Inter_700Bold" }} letterSpacing={-0.5} lineHeight={34}>
-                {currencySymbol}{(scrubbedPrice ? scrubbedPrice : asset.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </Text>
-              
+            {/* Price & Change Row */}
+            <XStack justifyContent="space-between" alignItems="baseline" flexWrap="wrap" gap={8} marginTop={12}>
+              <XStack alignItems="baseline" gap={4}>
+                <Text color="#FFFFFF" fontSize={34} fontFamily={Fonts.bold} letterSpacing={-0.8} lineHeight={40}>
+                  {currencySymbol}
+                  {(scrubbedPrice ? scrubbedPrice : asset.price).toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </Text>
+              </XStack>
+
               <XStack
-                backgroundColor={changeIsPositive ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)'}
+                backgroundColor={changeIsPositive ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.12)'}
                 borderRadius={8}
                 paddingHorizontal={10}
-                paddingVertical={4}
+                paddingVertical={5}
                 alignItems="center"
-                gap={4}
+                gap={5}
+                borderWidth={1}
+                borderColor={changeIsPositive ? 'rgba(34, 197, 94, 0.28)' : 'rgba(239, 68, 68, 0.28)'}
               >
                 <PhosphorIcon
                   name={changeIsPositive ? 'TrendUp' : 'TrendDown'}
-                  size={11}
-                  color={changeIsPositive ? '#22C55E' : '#EF4444'}
+                  size={13}
+                  color={changeIsPositive ? '#4ADE80' : '#F87171'}
                   weight="bold"
                 />
-                <Text color={changeIsPositive ? '#22C55E' : '#EF4444'} fontSize={11} style={{ fontFamily: "Inter_700Bold" }}>
+                <Text
+                  color={changeIsPositive ? '#4ADE80' : '#F87171'}
+                  fontSize={12}
+                  fontFamily={Fonts.bold}
+                >
                   {changeIsPositive ? '+' : ''}
                   {asset.change.toFixed(2)}%
                 </Text>
@@ -294,29 +420,39 @@ export default function InvestDetailsScreen() {
             </XStack>
           </YStack>
 
-          {/* Interactive Chart Card */}
-          <CbudgetCard padding={18} gap={14} marginBottom={20}>
-            <XStack justifyContent="space-between" alignItems="center">
-              <Text color={theme.text} fontSize={14} fontWeight="800" letterSpacing={-0.2}>
+          {/* ==================== PERFORMANCE CHART CARD ==================== */}
+          <View style={styles.fintechCard}>
+            <XStack justifyContent="space-between" alignItems="center" marginBottom={12}>
+              <Text color="#FFFFFF" fontSize={14} fontFamily={Fonts.bold} letterSpacing={-0.2}>
                 Performance History
               </Text>
-              <XStack gap={4} backgroundColor={theme.backgroundElement} borderRadius={10} padding={3} borderWidth={1} borderColor={theme.border}>
+              <XStack
+                gap={4}
+                backgroundColor="rgba(11, 19, 43, 0.8)"
+                borderRadius={10}
+                padding={3}
+                borderWidth={1}
+                borderColor="rgba(255, 255, 255, 0.08)"
+              >
                 {(['1D', '1W', '1M'] as const).map((tf) => (
                   <TouchableOpacity
                     key={tf}
                     onPress={() => {
+                      safeHaptic('light');
                       setChartTimeframe(tf);
                       setScrubbedPrice(null);
                     }}
                     style={[
                       styles.timeframeToggle,
-                      chartTimeframe === tf && { backgroundColor: theme.text },
+                      chartTimeframe === tf && {
+                        backgroundColor: '#10B981',
+                      },
                     ]}
                   >
                     <Text
-                      color={chartTimeframe === tf ? theme.background : theme.text}
-                      fontSize={10}
-                      fontWeight="900"
+                      color={chartTimeframe === tf ? '#FFFFFF' : 'rgba(255, 255, 255, 0.6)'}
+                      fontSize={10.5}
+                      fontFamily={Fonts.bold}
                     >
                       {tf}
                     </Text>
@@ -329,364 +465,242 @@ export default function InvestDetailsScreen() {
               data={activeHistory}
               color={asset.color}
               onChangePrice={setScrubbedPrice}
-              theme={theme}
+              theme={{ mode: 'dark' }}
+              forceDark={true}
             />
-          </CbudgetCard>
+          </View>
 
-          {/* Holdings summary and trading actions */}
-          {isTrading ? (
-            <Animated.View entering={FadeInDown.duration(300)}>
-              <CbudgetCard 
-                borderWidth={0} 
-                borderColor="transparent"
-                gap={14} 
-                marginBottom={20} 
-                padding={20}
-                borderRadius={12}
-                style={{
-                  backgroundColor: theme.surface,
-                  shadowOpacity: 0,
-                  shadowRadius: 0,
-                  elevation: 0,
-                }}
-              >
-                {/* Modal Title & Price Header */}
-                <XStack justifyContent="space-between" alignItems="center">
-                  <YStack gap={2}>
-                    <Text color={theme.text} fontSize={16} fontWeight="900" letterSpacing={-0.3}>
-                      {allocationType === 'buy' ? `Invest in ${asset.ticker}` : `Sell ${asset.ticker}`}
-                    </Text>
-                    <Text color={theme.textSecondary} fontSize={12} opacity={0.8}>
-                      Current Stock Price: {currencySymbol}{asset.price.toLocaleString()}
-                    </Text>
-                  </YStack>
-                  <TouchableOpacity onPress={() => setIsTrading(false)}>
-                    <PhosphorIcon name="XCircle" size={20} color={theme.textSecondary} weight="fill" />
-                  </TouchableOpacity>
-                </XStack>
+          {/* ==================== PORTFOLIO POSITION & ACTIONS ==================== */}
+          <View style={styles.fintechCard}>
+            <XStack justifyContent="space-between" alignItems="center" marginBottom={8}>
+              <Text color="rgba(255, 255, 255, 0.5)" fontSize={11} fontFamily={Fonts.bold} letterSpacing={0.8} textTransform="uppercase">
+                Portfolio Position
+              </Text>
+              <Text color="#FFFFFF" fontSize={14} fontFamily={Fonts.bold}>
+                {ownedUnits.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 })} units (~{currencySymbol}{assetTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+              </Text>
+            </XStack>
 
-                {/* Buy / Sell Segmented Switch */}
-                <XStack gap={6} backgroundColor={theme.backgroundElement} borderRadius={12} padding={4} width="100%" marginBottom={4}>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setAllocationType('buy');
-                      setUnitsAmount('');
-                    }}
-                    activeOpacity={0.8}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 8,
-                      borderRadius: 12,
-                      alignItems: 'center',
-                      backgroundColor: allocationType === 'buy' ? '#10B981' : 'transparent'
-                    }}
-                  >
-                    <Text color={allocationType === 'buy' ? '#FFFFFF' : theme.text} fontSize={11} style={{ fontFamily: "Inter_700Bold" }}>
-                      Buy
+            {ownedUnits > 0 && (
+              <YStack gap={8} marginTop={6}>
+                {/* Equity progress bar */}
+                <YStack gap={6} backgroundColor="rgba(11, 19, 43, 0.6)" padding={12} borderRadius={12} borderWidth={1} borderColor="rgba(255, 255, 255, 0.06)">
+                  <XStack justifyContent="space-between" alignItems="center">
+                    <Text color="rgba(255, 255, 255, 0.5)" fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                      EQUITY WEIGHT
                     </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setAllocationType('sell');
-                      setUnitsAmount('');
-                    }}
-                    activeOpacity={0.8}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 8,
-                      borderRadius: 12,
-                      alignItems: 'center',
-                      backgroundColor: allocationType === 'sell' ? '#EF4444' : 'transparent'
-                    }}
-                  >
-                    <Text color={allocationType === 'sell' ? '#FFFFFF' : theme.text} fontSize={11} style={{ fontFamily: "Inter_700Bold" }}>
-                      Sell
+                    <Text color="#FFFFFF" fontSize={11} fontFamily={Fonts.bold}>
+                      {ownedUnits < 1 ? `${(ownedUnits * 100).toFixed(1)}% of 1 Share` : `${ownedUnits.toFixed(4)} Shares`}
                     </Text>
-                  </TouchableOpacity>
-                </XStack>
-
-                <YStack gap={10}>
-                  {/* Segmented Mode Selector */}
-                  <XStack gap={6} backgroundColor={theme.backgroundElement} borderRadius={12} padding={4} width="100%" marginTop={4}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setTradeMode('pesos');
-                        setUnitsAmount('');
-                      }}
-                      activeOpacity={0.8}
-                      style={{
-                        flex: 1,
-                        paddingVertical: 8,
-                        borderRadius: 12,
-                        alignItems: 'center',
-                        backgroundColor: tradeMode === 'pesos' ? theme.primary : 'transparent'
-                      }}
-                    >
-                      <Text color={tradeMode === 'pesos' ? '#FFFFFF' : theme.text} fontSize={11} style={{ fontFamily: "Inter_700Bold" }}>
-                        Trade in Cash ({currencySymbol})
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setTradeMode('shares');
-                        setUnitsAmount('');
-                      }}
-                      activeOpacity={0.8}
-                      style={{
-                        flex: 1,
-                        paddingVertical: 8,
-                        borderRadius: 12,
-                        alignItems: 'center',
-                        backgroundColor: tradeMode === 'shares' ? theme.primary : 'transparent'
-                      }}
-                    >
-                      <Text color={tradeMode === 'shares' ? '#FFFFFF' : theme.text} fontSize={11} style={{ fontFamily: "Inter_700Bold" }}>
-                        Trade in Shares
-                      </Text>
-                    </TouchableOpacity>
                   </XStack>
-
-                  <FormInput
-                    label={tradeMode === 'pesos' ? (allocationType === 'buy' ? 'Amount to Invest' : 'Amount to Sell') : (allocationType === 'buy' ? 'Shares to Buy' : 'Shares to Sell')}
-                    placeholder={tradeMode === 'pesos' ? `${currencySymbol} 0.00` : '0.00'}
-                    keyboardType="numeric"
-                    value={unitsAmount}
-                    onChangeText={setUnitsAmount}
-                    leftIcon={tradeMode === 'pesos' ? 'Banknote' : 'Tag'}
-                  />
-
-                  {/* Live conversion helper text for teens */}
-                  {unitsAmount !== '' && parseFloat(unitsAmount) > 0 && (
-                    <Text color="#94A3B8" fontSize={11} style={{ fontFamily: "Inter_600SemiBold" }} textAlign="center" marginTop={-4}>
-                      {tradeMode === 'pesos' 
-                        ? `≈ ${typedUnits.toFixed(4)} shares of ${asset.ticker}`
-                        : `≈ ${currencySymbol}${estimatedCost.toLocaleString(undefined, { minimumFractionDigits: 2 })} cash value`}
-                    </Text>
-                  )}
-
-                  {/* Quick Preset Selector */}
-                  <XStack gap={8} justifyContent="center" marginTop={2}>
-                    <TouchableOpacity 
-                      onPress={() => handleQuickPercent(0.25)} 
-                      style={[styles.percentPresetBtn, { backgroundColor: theme.backgroundElement, borderWidth: 0, borderRadius: 12 }]}
-                    >
-                      <Text color={theme.text} fontSize={10} fontWeight="700">25%</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      onPress={() => handleQuickPercent(0.50)} 
-                      style={[styles.percentPresetBtn, { backgroundColor: theme.backgroundElement, borderWidth: 0, borderRadius: 12 }]}
-                    >
-                      <Text color={theme.text} fontSize={10} fontWeight="700">50%</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      onPress={() => handleQuickPercent(1.00)} 
-                      style={[styles.percentPresetBtn, { backgroundColor: theme.backgroundElement, borderWidth: 0, borderRadius: 12 }]}
-                    >
-                      <Text color={theme.text} fontSize={10} fontWeight="700">MAX</Text>
-                    </TouchableOpacity>
-                  </XStack>
-
-                  {/* Estimation subcard */}
-                  <YStack backgroundColor={theme.background} padding={12} borderRadius={12} gap={6} borderWidth={0}>
-                    <XStack justifyContent="space-between" alignItems="center" gap={8}>
-                      <Text color={theme.textSecondary} fontSize={12} flex={1}>
-                        {allocationType === 'buy' ? 'Estimated Shares to Receive' : 'Estimated Return Value'}
-                      </Text>
-                      <Text color={theme.text} fontSize={13} fontWeight="800" textAlign="right">
-                        {allocationType === 'buy' 
-                          ? `${typedUnits.toFixed(4)} units`
-                          : `${currencySymbol}${estimatedCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                      </Text>
-                    </XStack>
-                    <XStack justifyContent="space-between" alignItems="center" gap={8}>
-                      <Text color={theme.textSecondary} fontSize={12} flex={1}>
-                        {allocationType === 'buy' ? 'Available Sandbox Cash' : 'Owned Shares Available'}
-                      </Text>
-                      <Text color={theme.text} fontSize={13} fontWeight="800" textAlign="right">
-                        {allocationType === 'buy' 
-                          ? `${currencySymbol}${store.virtualBalance.toLocaleString()}` 
-                          : `${ownedUnits.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 })} units`}
-                      </Text>
-                    </XStack>
-                  </YStack>
+                  <View height={5} backgroundColor="rgba(255, 255, 255, 0.08)" borderRadius={3} overflow="hidden">
+                    <View
+                      width={`${Math.min(100, Math.max(4, ownedUnits * 100))}%`}
+                      height="100%"
+                      style={{ backgroundColor: asset.color }}
+                      borderRadius={3}
+                    />
+                  </View>
                 </YStack>
 
-                <FormButton
-                  variant="primary"
-                  height={46}
+                {/* Passive Dividends banner */}
+                <XStack
+                  justifyContent="space-between"
+                  alignItems="center"
+                  backgroundColor="rgba(16, 185, 129, 0.08)"
+                  padding={12}
                   borderRadius={12}
-                  leftIcon="CheckCircle"
-                  onPress={handleExecuteAllocation}
-                  disabled={typedUnits <= 0}
-                  style={{
-                    backgroundColor: typedUnits <= 0 ? 'rgba(255, 255, 255, 0.05)' : (allocationType === 'buy' ? '#10B981' : '#EF4444'),
-                    opacity: typedUnits <= 0 ? 0.5 : 1
-                  }}
+                  borderWidth={1}
+                  borderColor="rgba(16, 185, 129, 0.2)"
                 >
-                  {allocationType === 'buy' ? 'CONFIRM INVEST' : 'CONFIRM SELL'}
-                </FormButton>
-              </CbudgetCard>
-            </Animated.View>
-          ) : (
-            /* Quick trade shortcuts panel */
-            <CbudgetCard padding={16} gap={14} marginBottom={20}>
-              <YStack gap={12}>
-                <XStack justifyContent="space-between" alignItems="center">
-                  <Text color={theme.textSecondary} fontSize={11} fontWeight="700" letterSpacing={0.5} opacity={0.6}>
-                    YOUR HOLDINGS
-                  </Text>
-                  <Text color={theme.text} fontSize={15} fontWeight="800">
-                    {ownedUnits.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 })} units (~{currencySymbol}{assetTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
-                  </Text>
-                </XStack>
-
-                {ownedUnits > 0 && (
-                  <YStack gap={10} marginVertical={4}>
-                    {/* Share Slice Progress Visualizer */}
-                    <XStack gap={10} alignItems="center" backgroundColor={theme.backgroundElement} padding={10} borderRadius={8} borderWidth={1} borderColor={theme.border}>
-                      <Text fontSize={16}>🍰</Text>
-                      <YStack flex={1} gap={3}>
-                        <XStack justifyContent="space-between" alignItems="center">
-                          <Text color={theme.textSecondary} fontSize={9} fontWeight="700">
-                            SHARE SLICE METER
-                          </Text>
-                          <Text color={theme.text} fontSize={10} fontWeight="800">
-                            {ownedUnits < 1 ? `${(ownedUnits * 100).toFixed(1)}%` : '100%+' }
-                          </Text>
-                        </XStack>
-                        <View height={5} backgroundColor={theme.border} borderRadius={4} overflow="hidden" width="100%">
-                          <View width={`${Math.min(100, ownedUnits * 100)}%`} height="100%" style={{ backgroundColor: asset.color }} borderRadius={4} />
-                        </View>
-                        <Text color={theme.textSecondary} fontSize={9} style={{ fontFamily: "Inter_600SemiBold" }}>
-                          {ownedUnits < 1 
-                            ? `You own a ${(ownedUnits * 100).toFixed(1)}% slice of 1 full share!`
-                            : `You own ${Math.floor(ownedUnits)} whole share(s) + ${( (ownedUnits % 1) * 100 ).toFixed(1)}% slice!`
-                          }
-                        </Text>
-                      </YStack>
-                    </XStack>
-
-                    {/* Passive Dividends claim button */}
-                    <XStack justifyContent="space-between" alignItems="center" backgroundColor="rgba(16, 185, 129, 0.05)" padding={10} borderRadius={8} borderWidth={1} borderColor="rgba(16, 185, 129, 0.15)">
-                      <YStack gap={2} flex={1}>
-                        <Text color="#10B981" fontSize={10} style={{ fontFamily: "Inter_700Bold" }} letterSpacing={0.5}>
-                          🎁 PASSIVE DIVIDENDS (~3.5% ANNUAL)
-                        </Text>
-                        <Text color={theme.textSecondary} fontSize={9} lineHeight={12}>
-                          {dividendsClaimed[asset.ticker] 
-                            ? 'Dividends claimed for today!' 
-                            : `Tap to claim dividends for holding ${asset.ticker}`}
-                        </Text>
-                      </YStack>
-                      <TouchableOpacity
-                        onPress={handleClaimDividends}
-                        disabled={dividendsClaimed[asset.ticker]}
-                        activeOpacity={0.8}
-                        style={{
-                          backgroundColor: dividendsClaimed[asset.ticker] ? theme.backgroundElement : '#059669',
-                          borderWidth: dividendsClaimed[asset.ticker] ? 1 : 0,
-                          borderColor: theme.border,
-                          paddingHorizontal: 12,
-                          paddingVertical: 6,
-                          borderRadius: 6,
-                        }}
-                      >
-                        <Text color={dividendsClaimed[asset.ticker] ? theme.textSecondary : '#FFFFFF'} fontSize={9} style={{ fontFamily: "Inter_700Bold" }}>
-                          {dividendsClaimed[asset.ticker] ? 'CLAIMED' : 'CLAIM'}
-                        </Text>
-                      </TouchableOpacity>
-                    </XStack>
+                  <YStack gap={2} flex={1}>
+                    <Text color="#34D399" fontSize={11} fontFamily={Fonts.bold} letterSpacing={0.4}>
+                      EST. 3.5% ANNUAL DIVIDEND YIELD
+                    </Text>
+                    <Text color="rgba(255, 255, 255, 0.6)" fontSize={10.5} fontFamily={Fonts.medium}>
+                      {dividendsClaimed[asset.ticker]
+                        ? 'Daily dividends collected for today'
+                        : 'Daily dividend distribution ready to claim'}
+                    </Text>
                   </YStack>
-                )}
-                
-                <XStack gap={8} width="100%">
-                  <FormButton
-                    variant="outline"
-                    height={38}
-                    borderRadius={10}
-                    fullWidth={false}
-                    disabled={ownedUnits === 0}
-                    leftIcon="MinusCircle"
-                    onPress={() => {
-                      setAllocationType('sell');
-                      setIsTrading(true);
-                      setUnitsAmount('');
+                  <TouchableOpacity
+                    onPress={handleClaimDividends}
+                    disabled={dividendsClaimed[asset.ticker]}
+                    activeOpacity={0.8}
+                    style={{
+                      backgroundColor: dividendsClaimed[asset.ticker] ? 'rgba(255, 255, 255, 0.06)' : '#10B981',
+                      paddingHorizontal: 14,
+                      paddingVertical: 7,
+                      borderRadius: 8,
                     }}
-                    style={{ borderColor: theme.border, backgroundColor: 'transparent', flex: 1 }}
                   >
-                    Sell
-                  </FormButton>
-                  <FormButton
-                    variant="primary"
-                    height={38}
-                    borderRadius={10}
-                    fullWidth={false}
-                    leftIcon="PlusCircle"
-                    onPress={() => {
-                      setAllocationType('buy');
-                      setIsTrading(true);
-                      setUnitsAmount('');
-                    }}
-                    style={{ backgroundColor: theme.primary, flex: 1 }}
-                  >
-                    Invest
-                  </FormButton>
+                    <Text
+                      color={dividendsClaimed[asset.ticker] ? 'rgba(255, 255, 255, 0.4)' : '#FFFFFF'}
+                      fontSize={11}
+                      fontFamily={Fonts.bold}
+                    >
+                      {dividendsClaimed[asset.ticker] ? 'CLAIMED' : 'CLAIM'}
+                    </Text>
+                  </TouchableOpacity>
                 </XStack>
               </YStack>
-            </CbudgetCard>
-          )}
+            )}
 
-          {/* Teen Academy Educational Card */}
-          <CbudgetCard padding={18} gap={14} marginBottom={20} style={{ borderColor: `${asset.color}40` }} borderWidth={1.5}>
-            <XStack justifyContent="space-between" alignItems="center">
+            {/* Action Buttons */}
+            <XStack gap={10} marginTop={12}>
+              <TouchableOpacity
+                onPress={() => {
+                  safeHaptic('medium');
+                  setAllocationType('sell');
+                  setIsTrading(true);
+                  setUnitsAmount('');
+                }}
+                disabled={ownedUnits === 0}
+                activeOpacity={0.8}
+                style={[
+                  styles.actionBtnSecondary,
+                  ownedUnits === 0 && { opacity: 0.35 },
+                ]}
+              >
+                <XStack alignItems="center" justifyContent="center" gap={6}>
+                  <PhosphorIcon name="MinusCircle" size={15} color="#FFFFFF" weight="bold" />
+                  <Text color="#FFFFFF" fontSize={13} fontFamily={Fonts.bold}>
+                    Sell
+                  </Text>
+                </XStack>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  safeHaptic('medium');
+                  setAllocationType('buy');
+                  setIsTrading(true);
+                  setUnitsAmount('');
+                }}
+                activeOpacity={0.8}
+                style={styles.actionBtnPrimary}
+              >
+                <XStack alignItems="center" justifyContent="center" gap={6}>
+                  <PhosphorIcon name="PlusCircle" size={15} color="#FFFFFF" weight="bold" />
+                  <Text color="#FFFFFF" fontSize={13} fontFamily={Fonts.bold}>
+                    Invest
+                  </Text>
+                </XStack>
+              </TouchableOpacity>
+            </XStack>
+          </View>
+
+          {/* ==================== STRATEGIC THESIS & MARKET ANALYSIS ==================== */}
+          <View style={styles.fintechCard}>
+            <XStack justifyContent="space-between" alignItems="center" marginBottom={12}>
               <XStack gap={8} alignItems="center">
-                <PhosphorIcon
-                  name="Lightbulb"
-                  size={20}
-                  color="#F59E0B"
-                  weight="fill"
-                />
-                <Text color={theme.text} fontSize={16} style={{ fontFamily: "Inter_700Bold" }} letterSpacing={-0.2}>
-                  Teen Academy 🎓
+                <View
+                  width={28}
+                  height={28}
+                  borderRadius={8}
+                  backgroundColor="rgba(245, 158, 11, 0.15)"
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  <PhosphorIcon name="Lightbulb" size={16} color="#FBBF24" weight="fill" />
+                </View>
+                <Text color="#FFFFFF" fontSize={14} fontFamily={Fonts.bold} letterSpacing={-0.2}>
+                  Strategic Thesis & Outlook
                 </Text>
               </XStack>
-              <TouchableOpacity onPress={() => setShowTeenGuide(!showTeenGuide)}>
-                <View backgroundColor={showTeenGuide ? theme.primary : theme.backgroundElement} paddingHorizontal={12} paddingVertical={6} borderRadius={8}>
-                  <Text color={showTeenGuide ? '#FFFFFF' : theme.text} fontSize={11} style={{ fontFamily: "Inter_700Bold" }}>
-                    {showTeenGuide ? 'HIDE SIMPLE' : 'EXPLAIN IT SIMPLE'}
+
+              <TouchableOpacity
+                onPress={() => {
+                  safeHaptic('light');
+                  setThesisViewMode(thesisViewMode === 'thesis' ? 'simple' : 'thesis');
+                }}
+                activeOpacity={0.8}
+              >
+                <View
+                  backgroundColor="rgba(255, 255, 255, 0.08)"
+                  paddingHorizontal={10}
+                  paddingVertical={5}
+                  borderRadius={8}
+                  borderWidth={1}
+                  borderColor="rgba(255, 255, 255, 0.12)"
+                >
+                  <Text color="#FFFFFF" fontSize={10.5} fontFamily={Fonts.bold}>
+                    {thesisViewMode === 'thesis' ? 'SIMPLIFIED' : 'ANALYST'}
                   </Text>
                 </View>
               </TouchableOpacity>
             </XStack>
 
-            {showTeenGuide ? (
-              <YStack gap={12} marginTop={4}>
-                <Text color={theme.text} fontSize={15} lineHeight={22} style={{ fontFamily: "Inter_500Medium" }}>
-                  {teenGuides[asset.ticker].analogy}
-                </Text>
-                <View height={1} backgroundColor={theme.border} />
-                <XStack gap={10} alignItems="flex-start" backgroundColor={theme.backgroundElement} padding={12} borderRadius={10}>
-                  <PhosphorIcon name="Warning" size={16} color={asset.color} weight="fill" style={{ marginTop: 2 }} />
-                  <Text color={theme.textSecondary} fontSize={13} style={{ fontFamily: "Inter_500Medium", flex: 1, lineHeight: 19 }}>
-                    {teenGuides[asset.ticker].riskExplanation}
+            {thesisViewMode === 'thesis' ? (
+              <YStack gap={12}>
+                <YStack gap={4}>
+                  <Text color="#38BDF8" fontSize={11} fontFamily={Fonts.bold} letterSpacing={0.5} textTransform="uppercase">
+                    Core Business Model
+                  </Text>
+                  <Text color="rgba(255, 255, 255, 0.85)" fontSize={13} lineHeight={19} fontFamily={Fonts.medium}>
+                    {thesis.businessModel}
+                  </Text>
+                </YStack>
+
+                <View height={1} backgroundColor="rgba(255, 255, 255, 0.06)" />
+
+                <YStack gap={4}>
+                  <Text color="#34D399" fontSize={11} fontFamily={Fonts.bold} letterSpacing={0.5} textTransform="uppercase">
+                    Growth Catalysts
+                  </Text>
+                  <Text color="rgba(255, 255, 255, 0.85)" fontSize={13} lineHeight={19} fontFamily={Fonts.medium}>
+                    {thesis.catalysts}
+                  </Text>
+                </YStack>
+
+                <View height={1} backgroundColor="rgba(255, 255, 255, 0.06)" />
+
+                <XStack
+                  gap={10}
+                  alignItems="flex-start"
+                  backgroundColor="rgba(11, 19, 43, 0.6)"
+                  padding={12}
+                  borderRadius={10}
+                  borderWidth={1}
+                  borderColor="rgba(255, 255, 255, 0.06)"
+                >
+                  <PhosphorIcon name="Warning" size={16} color="#FBBF24" weight="fill" style={{ marginTop: 2 }} />
+                  <Text color="rgba(255, 255, 255, 0.75)" fontSize={12} lineHeight={18} fontFamily={Fonts.medium} flex={1}>
+                    {thesis.riskExplanation}
                   </Text>
                 </XStack>
               </YStack>
             ) : (
-              <Text color={theme.textSecondary} fontSize={13} lineHeight={18} style={{ fontFamily: "Inter_400Regular" }}>
-                Struggling with financial jargon? Tap the button to get a simplified explanation with gaming & school analogies!
-              </Text>
+              <YStack gap={10}>
+                <Text color="rgba(255, 255, 255, 0.85)" fontSize={13.5} lineHeight={20} fontFamily={Fonts.medium}>
+                  {simpleGuide.analogy}
+                </Text>
+                <XStack
+                  gap={10}
+                  alignItems="flex-start"
+                  backgroundColor="rgba(11, 19, 43, 0.6)"
+                  padding={12}
+                  borderRadius={10}
+                  borderWidth={1}
+                  borderColor="rgba(255, 255, 255, 0.06)"
+                >
+                  <PhosphorIcon name="Info" size={16} color="#38BDF8" weight="fill" style={{ marginTop: 2 }} />
+                  <Text color="rgba(255, 255, 255, 0.75)" fontSize={12} lineHeight={18} fontFamily={Fonts.medium} flex={1}>
+                    {simpleGuide.riskExplanation}
+                  </Text>
+                </XStack>
+              </YStack>
             )}
-          </CbudgetCard>
+          </View>
 
-          {/* 1-Year Range Bar Widget */}
-          <CbudgetCard padding={16} gap={10} marginBottom={20}>
-            <Text color={theme.text} fontSize={14} fontWeight="800" letterSpacing={-0.2}>
-              1-Year Price Range
+          {/* ==================== 52-WEEK PRICE RANGE GAUGE ==================== */}
+          <View style={styles.fintechCard}>
+            <Text color="#FFFFFF" fontSize={14} fontFamily={Fonts.bold} letterSpacing={-0.2} marginBottom={12}>
+              52-Week Price Range
             </Text>
-            
-            <YStack gap={8} marginTop={4}>
-              <View height={6} backgroundColor={theme.backgroundElement} borderRadius={10} position="relative" width="100%">
+
+            <YStack gap={10}>
+              <View height={8} backgroundColor="rgba(255, 255, 255, 0.08)" borderRadius={6} position="relative" width="100%">
                 <View
                   position="absolute"
                   top={0}
@@ -694,208 +708,598 @@ export default function InvestDetailsScreen() {
                   left={0}
                   width={`${currentPos}%`}
                   style={{ backgroundColor: asset.color }}
-                  borderRadius={10}
+                  borderRadius={6}
                 />
                 <View
                   position="absolute"
-                  top={-3}
+                  top={-4}
                   left={`${currentPos}%`}
-                  width={12}
-                  height={12}
-                  borderRadius={100}
-                  backgroundColor={theme.text}
-                  borderWidth={2}
-                  borderColor={theme.background}
-                  style={{ marginLeft: -6 } as any}
+                  width={16}
+                  height={16}
+                  borderRadius={8}
+                  backgroundColor="#FFFFFF"
+                  borderWidth={3}
+                  borderColor="#0B132B"
+                  style={{ marginLeft: -8 } as any}
                 />
               </View>
-              <XStack justifyContent="space-between">
-                <YStack gap={1}>
-                  <Text color={theme.textSecondary} fontSize={11} fontWeight="600" opacity={0.6}>LOWEST THIS YEAR</Text>
-                  <Text color={theme.text} fontSize={14} fontWeight="800">{currencySymbol}{asset.low52.toLocaleString()}</Text>
+
+              <XStack justifyContent="space-between" alignItems="center">
+                <YStack gap={2}>
+                  <Text color="rgba(255, 255, 255, 0.45)" fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                    52-WEEK LOW
+                  </Text>
+                  <Text color="#FFFFFF" fontSize={13.5} fontFamily={Fonts.bold}>
+                    {currencySymbol}{asset.low52.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </Text>
                 </YStack>
-                <YStack alignItems="flex-end" gap={1}>
-                  <Text color={theme.textSecondary} fontSize={11} fontWeight="600" opacity={0.6}>HIGHEST THIS YEAR</Text>
-                  <Text color={theme.text} fontSize={14} fontWeight="800">{currencySymbol}{asset.high52.toLocaleString()}</Text>
+                <YStack alignItems="flex-end" gap={2}>
+                  <Text color="rgba(255, 255, 255, 0.45)" fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                    52-WEEK HIGH
+                  </Text>
+                  <Text color="#FFFFFF" fontSize={13.5} fontFamily={Fonts.bold}>
+                    {currencySymbol}{asset.high52.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </Text>
                 </YStack>
               </XStack>
             </YStack>
-          </CbudgetCard>
+          </View>
 
-          {/* Key Metrics Grid */}
-          <CbudgetCard padding={16} gap={14} marginBottom={20}>
-            <Text color={theme.text} fontSize={14} fontWeight="800" letterSpacing={-0.2}>
+          {/* ==================== KEY STATISTICS BENTO GRID ==================== */}
+          <View style={styles.fintechCard}>
+            <Text color="#FFFFFF" fontSize={14} fontFamily={Fonts.bold} letterSpacing={-0.2} marginBottom={12}>
               Key Statistics
             </Text>
-            
-            <XStack justifyContent="space-between" flexWrap="wrap" gap={12}>
-              <XStack width="47%" gap={10} alignItems="center" paddingVertical={4}>
-                <PhosphorIcon name="ChartBar" size={16} color={theme.primary} />
-                <YStack gap={1}>
-                  <Text color={theme.textSecondary} opacity={0.6} fontSize={11} fontWeight="700">COMPANY VALUE</Text>
-                  <Text color={theme.text} fontSize={15} fontWeight="800">{asset.marketCap}</Text>
-                </YStack>
-              </XStack>
-              <XStack width="47%" gap={10} alignItems="center" paddingVertical={4}>
-                <PhosphorIcon name="Waveform" size={16} color={theme.primary} />
-                <YStack gap={1}>
-                  <Text color={theme.textSecondary} opacity={0.6} fontSize={11} fontWeight="700">TRADED TODAY</Text>
-                  <Text color={theme.text} fontSize={15} fontWeight="800">{asset.volume}</Text>
-                </YStack>
-              </XStack>
-              <XStack width="47%" gap={10} alignItems="center" paddingVertical={4}>
-                <PhosphorIcon name="Tag" size={16} color={theme.primary} />
-                <YStack gap={1}>
-                  <Text color={theme.textSecondary} opacity={0.6} fontSize={11} fontWeight="700">P/E RATIO (LIVE)</Text>
-                  <XStack gap={6} alignItems="center">
-                    <Text color={theme.text} fontSize={15} fontWeight="800">{getLivePE(asset.price, asset.eps)}</Text>
-                    <View
-                      paddingHorizontal={5}
-                      paddingVertical={1.5}
-                      borderRadius={4}
-                      borderWidth={1}
-                      style={{
-                        backgroundColor: `${getValuationLabel(getLivePE(asset.price, asset.eps)).color}15`,
-                        borderColor: `${getValuationLabel(getLivePE(asset.price, asset.eps)).color}30`,
-                      }}
-                    >
-                      <Text
-                        style={{ color: getValuationLabel(getLivePE(asset.price, asset.eps)).color }}
-                        fontSize={9}
-                        fontWeight="700"
-                      >
-                        {getValuationLabel(getLivePE(asset.price, asset.eps)).label}
-                      </Text>
-                    </View>
-                  </XStack>
-                </YStack>
-              </XStack>
-              <XStack width="47%" gap={10} alignItems="center" paddingVertical={4}>
-                <PhosphorIcon name="Tag" size={16} color={theme.primary} weight="fill" />
-                <YStack gap={1}>
-                  <Text color={theme.textSecondary} opacity={0.6} fontSize={11} fontWeight="700">RISK CLASS</Text>
-                  <Text style={{ color: asset.color }} fontSize={15} fontWeight="800">{asset.riskProfile}</Text>
-                </YStack>
-              </XStack>
-            </XStack>
-          </CbudgetCard>
 
-          {/* Corporate Profile Card */}
-          <CbudgetCard padding={16} gap={10} marginBottom={24}>
-            <Text color={theme.text} fontSize={14} fontWeight="800" letterSpacing={-0.2}>
+            <XStack justifyContent="space-between" flexWrap="wrap" gap={10}>
+              {/* Stat 1: Market Cap */}
+              <View style={styles.statBox}>
+                <XStack gap={8} alignItems="center" marginBottom={4}>
+                  <View style={styles.statIconBadge}>
+                    <PhosphorIcon name="ChartBar" size={14} color="#38BDF8" weight="bold" />
+                  </View>
+                  <Text color="rgba(255, 255, 255, 0.5)" fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                    MARKET CAP
+                  </Text>
+                </XStack>
+                <Text color="#FFFFFF" fontSize={15} fontFamily={Fonts.bold}>
+                  {asset.marketCap}
+                </Text>
+              </View>
+
+              {/* Stat 2: Volume */}
+              <View style={styles.statBox}>
+                <XStack gap={8} alignItems="center" marginBottom={4}>
+                  <View style={styles.statIconBadge}>
+                    <PhosphorIcon name="Waveform" size={14} color="#34D399" weight="bold" />
+                  </View>
+                  <Text color="rgba(255, 255, 255, 0.5)" fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                    24H VOLUME
+                  </Text>
+                </XStack>
+                <Text color="#FFFFFF" fontSize={15} fontFamily={Fonts.bold}>
+                  {asset.volume}
+                </Text>
+              </View>
+
+              {/* Stat 3: P/E Ratio */}
+              <View style={styles.statBox}>
+                <XStack gap={8} alignItems="center" marginBottom={4}>
+                  <View style={styles.statIconBadge}>
+                    <PhosphorIcon name="Tag" size={14} color="#FBBF24" weight="bold" />
+                  </View>
+                  <Text color="rgba(255, 255, 255, 0.5)" fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                    P/E RATIO
+                  </Text>
+                </XStack>
+                <XStack gap={6} alignItems="center">
+                  <Text color="#FFFFFF" fontSize={15} fontFamily={Fonts.bold}>
+                    {getLivePE(asset.price, asset.eps)}
+                  </Text>
+                  <View
+                    paddingHorizontal={6}
+                    paddingVertical={2}
+                    borderRadius={4}
+                    style={{
+                      backgroundColor: `${getValuationLabel(getLivePE(asset.price, asset.eps)).color}20`,
+                      borderColor: `${getValuationLabel(getLivePE(asset.price, asset.eps)).color}40`,
+                      borderWidth: 1,
+                    }}
+                  >
+                    <Text
+                      style={{ color: getValuationLabel(getLivePE(asset.price, asset.eps)).color }}
+                      fontSize={9.5}
+                      fontFamily={Fonts.bold}
+                    >
+                      {getValuationLabel(getLivePE(asset.price, asset.eps)).label}
+                    </Text>
+                  </View>
+                </XStack>
+              </View>
+
+              {/* Stat 4: Risk Class */}
+              <View style={styles.statBox}>
+                <XStack gap={8} alignItems="center" marginBottom={4}>
+                  <View style={styles.statIconBadge}>
+                    <PhosphorIcon name="ShieldCheck" size={14} color={asset.color} weight="bold" />
+                  </View>
+                  <Text color="rgba(255, 255, 255, 0.5)" fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                    RISK CLASS
+                  </Text>
+                </XStack>
+                <Text style={{ color: asset.color }} fontSize={15} fontFamily={Fonts.bold}>
+                  {asset.riskProfile}
+                </Text>
+              </View>
+            </XStack>
+          </View>
+
+          {/* ==================== CORPORATE PROFILE CARD ==================== */}
+          <View style={styles.fintechCard}>
+            <Text color="#FFFFFF" fontSize={14} fontFamily={Fonts.bold} letterSpacing={-0.2} marginBottom={8}>
               Corporate Profile
             </Text>
-            <Text color={theme.textSecondary} fontSize={13} lineHeight={20} opacity={0.8}>
+            <Text color="rgba(255, 255, 255, 0.75)" fontSize={13} lineHeight={20} fontFamily={Fonts.regular}>
               {asset.description}
             </Text>
-          </CbudgetCard>
+          </View>
         </ScrollView>
 
-        {/* Jargon Explainer Modal */}
+        {/* ==================== TRADE ORDER MODAL ==================== */}
+        <Modal
+          visible={isTrading}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setIsTrading(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              style={styles.modalKeyboardAvoid}
+            >
+              <View style={styles.tradeModalCard}>
+                <XStack justifyContent="space-between" alignItems="center" marginBottom={14}>
+                  <YStack gap={2}>
+                    <Text color="#FFFFFF" fontSize={17} fontFamily={Fonts.bold} letterSpacing={-0.3}>
+                      {allocationType === 'buy' ? `Invest in ${asset.ticker}` : `Sell ${asset.ticker}`}
+                    </Text>
+                    <Text color="rgba(255, 255, 255, 0.6)" fontSize={12} fontFamily={Fonts.medium}>
+                      Current Market Price: {currencySymbol}{asset.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </Text>
+                  </YStack>
+                  <TouchableOpacity onPress={() => setIsTrading(false)}>
+                    <PhosphorIcon name="XCircle" size={22} color="rgba(255, 255, 255, 0.6)" weight="fill" />
+                  </TouchableOpacity>
+                </XStack>
+
+                {/* Buy / Sell Switch */}
+                <XStack
+                  gap={6}
+                  backgroundColor="rgba(11, 19, 43, 0.8)"
+                  borderRadius={12}
+                  padding={4}
+                  marginBottom={12}
+                  borderWidth={1}
+                  borderColor="rgba(255, 255, 255, 0.08)"
+                >
+                  <TouchableOpacity
+                    onPress={() => {
+                      safeHaptic('light');
+                      setAllocationType('buy');
+                      setUnitsAmount('');
+                    }}
+                    style={[
+                      styles.orderSwitchBtn,
+                      allocationType === 'buy' && { backgroundColor: '#10B981' },
+                    ]}
+                  >
+                    <Text
+                      color={allocationType === 'buy' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.6)'}
+                      fontSize={12}
+                      fontFamily={Fonts.bold}
+                    >
+                      Buy Order
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      safeHaptic('light');
+                      setAllocationType('sell');
+                      setUnitsAmount('');
+                    }}
+                    style={[
+                      styles.orderSwitchBtn,
+                      allocationType === 'sell' && { backgroundColor: '#EF4444' },
+                    ]}
+                  >
+                    <Text
+                      color={allocationType === 'sell' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.6)'}
+                      fontSize={12}
+                      fontFamily={Fonts.bold}
+                    >
+                      Sell Order
+                    </Text>
+                  </TouchableOpacity>
+                </XStack>
+
+                {/* Mode Selector */}
+                <XStack
+                  gap={6}
+                  backgroundColor="rgba(11, 19, 43, 0.8)"
+                  borderRadius={10}
+                  padding={3}
+                  marginBottom={14}
+                  borderWidth={1}
+                  borderColor="rgba(255, 255, 255, 0.08)"
+                >
+                  <TouchableOpacity
+                    onPress={() => {
+                      safeHaptic('light');
+                      setTradeMode('pesos');
+                      setUnitsAmount('');
+                    }}
+                    style={[
+                      styles.modeSwitchBtn,
+                      tradeMode === 'pesos' && { backgroundColor: 'rgba(255, 255, 255, 0.12)' },
+                    ]}
+                  >
+                    <Text
+                      color={tradeMode === 'pesos' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.5)'}
+                      fontSize={11}
+                      fontFamily={Fonts.bold}
+                    >
+                      In Cash ({currencySymbol})
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      safeHaptic('light');
+                      setTradeMode('shares');
+                      setUnitsAmount('');
+                    }}
+                    style={[
+                      styles.modeSwitchBtn,
+                      tradeMode === 'shares' && { backgroundColor: 'rgba(255, 255, 255, 0.12)' },
+                    ]}
+                  >
+                    <Text
+                      color={tradeMode === 'shares' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.5)'}
+                      fontSize={11}
+                      fontFamily={Fonts.bold}
+                    >
+                      In Shares
+                    </Text>
+                  </TouchableOpacity>
+                </XStack>
+
+                {/* Amount Input */}
+                <YStack gap={6} marginBottom={12}>
+                  <Text color="rgba(255, 255, 255, 0.6)" fontSize={11} fontFamily={Fonts.bold} letterSpacing={0.5} textTransform="uppercase">
+                    {tradeMode === 'pesos'
+                      ? allocationType === 'buy' ? 'Amount to Invest' : 'Amount to Liquidate'
+                      : allocationType === 'buy' ? 'Shares to Buy' : 'Shares to Sell'}
+                  </Text>
+                  <View style={styles.tradeInputRow}>
+                    <Text color="#10B981" fontSize={18} fontFamily={Fonts.bold} marginRight={8}>
+                      {tradeMode === 'pesos' ? currencySymbol : 'Qty'}
+                    </Text>
+                    <TextInput
+                      value={unitsAmount}
+                      onChangeText={(val) => {
+                        if (tradeMode === 'pesos') {
+                          setUnitsAmount(formatNumberMask(val));
+                        } else {
+                          setUnitsAmount(val);
+                        }
+                      }}
+                      placeholder="0.00"
+                      placeholderTextColor="rgba(255, 255, 255, 0.3)"
+                      keyboardType="numeric"
+                      style={styles.tradeTextInput}
+                    />
+                  </View>
+                </YStack>
+
+                {/* Preset Chips */}
+                <XStack gap={8} justifyContent="space-between" marginBottom={14}>
+                  {[0.25, 0.5, 0.75, 1.0].map((pct) => (
+                    <TouchableOpacity
+                      key={pct}
+                      onPress={() => handleQuickPercent(pct)}
+                      style={styles.percentChip}
+                    >
+                      <Text color="#FFFFFF" fontSize={11} fontFamily={Fonts.bold}>
+                        {pct === 1.0 ? 'MAX' : `${pct * 100}%`}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </XStack>
+
+                {/* Order Summary */}
+                <YStack backgroundColor="rgba(11, 19, 43, 0.8)" padding={12} borderRadius={12} gap={8} marginBottom={16} borderWidth={1} borderColor="rgba(255, 255, 255, 0.06)">
+                  <XStack justifyContent="space-between">
+                    <Text color="rgba(255, 255, 255, 0.5)" fontSize={11.5} fontFamily={Fonts.medium}>
+                      {allocationType === 'buy' ? 'Estimated Shares' : 'Gross Proceeds'}
+                    </Text>
+                    <Text color="#FFFFFF" fontSize={12.5} fontFamily={Fonts.bold}>
+                      {allocationType === 'buy'
+                        ? `${typedUnits.toFixed(4)} units`
+                        : `${currencySymbol}${estimatedCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                    </Text>
+                  </XStack>
+                  <XStack justifyContent="space-between">
+                    <Text color="rgba(255, 255, 255, 0.5)" fontSize={11.5} fontFamily={Fonts.medium}>
+                      {allocationType === 'buy' ? 'Available Buying Power' : 'Units in Portfolio'}
+                    </Text>
+                    <Text color="#FFFFFF" fontSize={12.5} fontFamily={Fonts.bold}>
+                      {allocationType === 'buy'
+                        ? `${currencySymbol}${store.virtualBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                        : `${ownedUnits.toFixed(4)} units`}
+                    </Text>
+                  </XStack>
+                </YStack>
+
+                <TouchableOpacity
+                  onPress={handleExecuteAllocation}
+                  disabled={typedUnits <= 0}
+                  activeOpacity={0.8}
+                  style={[
+                    styles.confirmTradeBtn,
+                    {
+                      backgroundColor:
+                        typedUnits <= 0
+                          ? 'rgba(255, 255, 255, 0.08)'
+                          : allocationType === 'buy'
+                          ? '#10B981'
+                          : '#EF4444',
+                    },
+                  ]}
+                >
+                  <Text
+                    color={typedUnits <= 0 ? 'rgba(255, 255, 255, 0.3)' : '#FFFFFF'}
+                    fontSize={14}
+                    fontFamily={Fonts.bold}
+                  >
+                    {allocationType === 'buy' ? 'Confirm Purchase' : 'Confirm Sale'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </KeyboardAvoidingView>
+          </View>
+        </Modal>
+
+        {/* ==================== FINANCIAL GLOSSARY MODAL ==================== */}
         <Modal
           visible={showJargonModal}
           transparent={true}
           animationType="fade"
           onRequestClose={() => setShowJargonModal(false)}
         >
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: 'rgba(15, 23, 42, 0.75)',
-              justifyContent: 'center',
-              alignItems: 'center',
-              padding: 20,
-            }}
-          >
-            <CbudgetCard
-              padding={20}
-              gap={16}
-              width="100%"
-              maxWidth={360}
-              borderRadius={16}
-            >
-              <XStack justifyContent="space-between" alignItems="center">
-                <Text color={theme.text} fontSize={16} fontWeight="800">
-                  💡 Finance Jargon Explainer
-                </Text>
+          <View style={styles.modalOverlay}>
+            <View style={styles.jargonModalCard}>
+              <XStack justifyContent="space-between" alignItems="center" marginBottom={14}>
+                <XStack gap={8} alignItems="center">
+                  <PhosphorIcon name="Lightbulb" size={18} color="#60A5FA" weight="fill" />
+                  <Text color="#FFFFFF" fontSize={16} fontFamily={Fonts.bold}>
+                    Financial Insights Glossary
+                  </Text>
+                </XStack>
                 <TouchableOpacity onPress={() => setShowJargonModal(false)}>
-                  <PhosphorIcon
-                    name="XCircle"
-                    size={20}
-                    color={theme.textSecondary}
-                    weight="fill"
-                  />
+                  <PhosphorIcon name="XCircle" size={20} color="rgba(255, 255, 255, 0.6)" weight="fill" />
                 </TouchableOpacity>
               </XStack>
 
-              <YStack gap={14} marginTop={4}>
-                <YStack gap={4}>
-                  <Text color={theme.primary} fontSize={13} fontWeight="800">
-                    🍕 What is a Fractional Share?
-                  </Text>
-                  <Text color={theme.textSecondary} fontSize={12} lineHeight={17}>
-                    Think of a share of stock like a whole pizza. If a full pizza costs {currencySymbol}500, but you only have {currencySymbol}50, you can buy exactly a single slice (10%). That slice is your <Text fontWeight="700" color={theme.text}>fractional share</Text>! It lets you invest in big companies with whatever cash you have.
-                  </Text>
+              <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+                <YStack gap={12}>
+                  <YStack gap={3}>
+                    <Text color="#38BDF8" fontSize={12} fontFamily={Fonts.bold}>
+                      Fractional Shares
+                    </Text>
+                    <Text color="rgba(255, 255, 255, 0.75)" fontSize={11.5} lineHeight={16.5} fontFamily={Fonts.regular}>
+                      Allows you to purchase an exact slice of a share for as little as {currencySymbol}10. You do not need to afford a full share to participate in price growth.
+                    </Text>
+                  </YStack>
+
+                  <View height={1} backgroundColor="rgba(255, 255, 255, 0.08)" />
+
+                  <YStack gap={3}>
+                    <Text color="#34D399" fontSize={12} fontFamily={Fonts.bold}>
+                      Dividend Yield
+                    </Text>
+                    <Text color="rgba(255, 255, 255, 0.75)" fontSize={11.5} lineHeight={16.5} fontFamily={Fonts.regular}>
+                      Periodic cash payments distributed to shareholders directly from corporate profits, providing passive income simply by holding ownership.
+                    </Text>
+                  </YStack>
+
+                  <View height={1} backgroundColor="rgba(255, 255, 255, 0.08)" />
+
+                  <YStack gap={3}>
+                    <Text color="#FBBF24" fontSize={12} fontFamily={Fonts.bold}>
+                      P/E Ratio (Price-to-Earnings)
+                    </Text>
+                    <Text color="rgba(255, 255, 255, 0.75)" fontSize={11.5} lineHeight={16.5} fontFamily={Fonts.regular}>
+                      Compares the share price against annual earnings per share. A lower ratio often suggests undervalued assets, while higher ratios reflect strong anticipated future growth.
+                    </Text>
+                  </YStack>
+
+                  <View height={1} backgroundColor="rgba(255, 255, 255, 0.08)" />
+
+                  <YStack gap={3}>
+                    <Text color="#A855F7" fontSize={12} fontFamily={Fonts.bold}>
+                      Market Capitalization
+                    </Text>
+                    <Text color="rgba(255, 255, 255, 0.75)" fontSize={11.5} lineHeight={16.5} fontFamily={Fonts.regular}>
+                      The total market valuation of all circulating corporate shares combined, indicating company size and overall stability.
+                    </Text>
+                  </YStack>
                 </YStack>
+              </ScrollView>
 
-                <View height={1} backgroundColor={theme.border} opacity={0.6} />
-
-                <YStack gap={4}>
-                  <Text color={theme.primary} fontSize={13} fontWeight="800">
-                    🎁 What are Dividends?
-                  </Text>
-                  <Text color={theme.textSecondary} fontSize={12} lineHeight={17}>
-                    When a company earns a profit, they sometimes choose to distribute a portion of that cash back to their shareholders. It is like a shop sharing some weekend profits with you because you helped fund them! You earn passive money <Text fontWeight="700" color={theme.text}>just by owning the stock</Text>.
-                  </Text>
-                </YStack>
-
-                <View height={1} backgroundColor={theme.border} opacity={0.6} />
-
-                <YStack gap={4}>
-                  <Text color={theme.primary} fontSize={13} fontWeight="800">
-                    📊 What is P/E Ratio?
-                  </Text>
-                  <Text color={theme.textSecondary} fontSize={12} lineHeight={17}>
-                    P/E stands for <Text fontWeight="700" color={theme.text}>Price-to-Earnings</Text>. Imagine you're buying a pizza shop for {currencySymbol}100,000 that earns {currencySymbol}10,000/year in profit — your P/E is 10 (it'd take 10 years of profit to pay back the price). A <Text fontWeight="700" color="#10B981">low P/E</Text> means the stock is a bargain. A <Text fontWeight="700" color="#EF4444">high P/E</Text> means investors are paying a premium, betting on massive future growth.
-                  </Text>
-                </YStack>
-              </YStack>
-
-              <FormButton
-                variant="primary"
-                height={40}
-                borderRadius={10}
-                marginTop={10}
+              <TouchableOpacity
                 onPress={() => setShowJargonModal(false)}
+                style={styles.closeJargonBtn}
               >
-                Got It!
-              </FormButton>
-            </CbudgetCard>
+                <Text color="#FFFFFF" fontSize={13} fontFamily={Fonts.bold}>
+                  Understood
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </Modal>
       </SafeAreaView>
-    </YStack>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screenContainer: {
+    flex: 1,
+    backgroundColor: '#0B132B',
+  },
   safeArea: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 32,
+    paddingBottom: 40,
+  },
+  fintechCard: {
+    backgroundColor: '#111C35',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    marginBottom: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.35,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   timeframeToggle: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
   },
-  percentPresetBtn: {
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  actionBtnPrimary: {
+    flex: 1,
+    backgroundColor: '#10B981',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionBtnSecondary: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statBox: {
+    width: '48%',
+    backgroundColor: 'rgba(11, 19, 43, 0.65)',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  statIconBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 18,
+  },
+  modalKeyboardAvoid: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  tradeModalCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#111C35',
+    borderRadius: 22,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  orderSwitchBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modeSwitchBtn: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  tradeInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(11, 19, 43, 0.8)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  tradeTextInput: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontFamily: Fonts.bold,
+    padding: 0,
+  },
+  percentChip: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  confirmTradeBtn: {
+    paddingVertical: 13,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  jargonModalCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#111C35',
+    borderRadius: 22,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  closeJargonBtn: {
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    paddingVertical: 11,
+    alignItems: 'center',
+    marginTop: 14,
   },
 });

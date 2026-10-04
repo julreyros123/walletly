@@ -50,34 +50,78 @@ export interface TeenGuide {
   riskExplanation: string;
 }
 
-export const TEEN_GUIDES: Record<string, TeenGuide> = {
+export interface AssetThesis {
+  businessModel: string;
+  catalysts: string;
+  riskExplanation: string;
+}
+
+export const ASSET_THESIS: Record<string, AssetThesis> = {
   NOVA: {
-    analogy: "🎮 Think of NOVA like buying a piece of the factory that makes the ultimate graphics cards (GPUs) for playing GTA 6 or running AI tools like ChatGPT. Since AI is blowing up, NOVA grows super fast!",
-    riskExplanation: "⚡ Aggressive Risk: It's like riding a roller coaster. If gamers find a cooler chip brand tomorrow, the price could drop fast. High risk, high reward!"
+    businessModel: "Designs high-bandwidth GPU architectures and tensor accelerator silicon for hyperscale artificial intelligence models and high-performance computing clusters.",
+    catalysts: "Surging global enterprise demand for LLM training infrastructure, sovereign data center initiatives, and high gross margin silicon IP.",
+    riskExplanation: "Aggressive Growth Profile: High beta asset sensitive to cyclical semiconductor capital expenditure cycles and rapid competitor architecture advancements."
   },
   VOLT: {
-    analogy: "⚡ Imagine VOLT like owning a piece of a high-tech electric car company. They build supercars and smart solar batteries. It's clean energy, which is super popular with your generation.",
-    riskExplanation: "🚗 Aggressive Risk: Car companies spend billions building factories. If they have a delay launching a new car, the stock drops. Only allocate cash you don't need soon!"
+    businessModel: "Engineers advanced electric powertrains, structural lithium battery cells, and integrated renewable commercial storage networks.",
+    catalysts: "Accelerating global EV market transition, megawatt commercial grid deployments, and recurring autonomous software licensing revenue.",
+    riskExplanation: "Aggressive Growth Profile: Substantial capital intensity for gigafactory scaling and commodity supply chain exposure (lithium & nickel)."
   },
   BREW: {
-    analogy: "☕ Think of BREW like owning your favorite local coffee shop right outside school. Students will always buy caffeinated iced lattes and bubble tea to stay awake during tests. It's super stable.",
-    riskExplanation: "📈 Moderate Risk: Coffee is always popular, but if coffee bean prices rise globally, their profit dips slightly. It grows steadily whenever they open new outlets."
+    businessModel: "Operates an international network of premium automated roasteries and rapid-order specialty beverage kiosks with high customer repeat frequency.",
+    catalysts: "High gross margins, predictable daily cash conversion, and rapid franchise footprint expansion across high-density commercial hubs.",
+    riskExplanation: "Moderate Defensive Profile: Resilient daily demand, but exposed to green coffee commodity price inflation and discretionary spending trends."
   },
   APEX: {
-    analogy: "📦 Think of APEX like the drone-delivery service that drops off your online shopping orders at your doorstep 15 minutes after you tap buy. They run the biggest shopping warehouses.",
-    riskExplanation: "🛡️ Conservative Risk: Everyone shops online constantly, making APEX very safe. It doesn't double overnight, but it is a solid safe-haven for your savings."
+    businessModel: "Dominant omnichannel e-commerce retail infrastructure, automated logistics sorting facilities, and merchant cloud fulfillment services.",
+    catalysts: "Essential consumer staples retail dominance, high-margin marketplace services, and high customer retention via membership subscriptions.",
+    riskExplanation: "Conservative Core Profile: Stable free cash flow generator, though sensitive to regional freight shipping costs and warehouse operating overhead."
   },
   SOLR: {
-    analogy: "☀️ Imagine SOLR like the power company, but they harvest orbital space beams. Everyone has to charge their phones, laptops, and consoles, so they pay SOLR for power every single month.",
-    riskExplanation: "🛡️ Conservative Risk: Since electricity is a basic need, SOLR is extremely safe. It is like putting money in a premium piggy bank with a guaranteed slow climb."
+    businessModel: "Generates utility-scale solar and clean energy secured by multi-decade power purchase agreements (PPAs) with tier-1 utilities.",
+    catalysts: "Guaranteed contract cash flows, long-term regulatory clean energy credits, and burgeoning industrial base-load demand from data facilities.",
+    riskExplanation: "Conservative Income Profile: Highly defensive with consistent dividend distributions, sensitive primarily to macro interest rate shifts."
   },
   PEAR: {
-    analogy: "📱 Think of PEAR like the company that makes your favorite expensive smartphone and wireless earbuds. Every time a new model drops, millions line up to buy it.",
-    riskExplanation: "🛡️ Conservative Risk: Extremely popular and generates massive cash, making it very stable. It's a foundational stock for most portfolios."
+    businessModel: "Premier consumer technology ecosystem integrating proprietary hardware, custom silicon, and high-margin recurring digital services.",
+    catalysts: "Massive global active device base, virtually frictionless ecosystem lock-in, and aggressive capital return through dividend growth and share repurchases.",
+    riskExplanation: "Conservative Core Profile: Generates unmatched cash flow, but subject to consumer upgrade cycles and global supply chain concentration."
   },
   NEXS: {
-    analogy: "🌐 Imagine NEXS as the company that controls the entire internet's search engine and biggest video sharing app. Whenever someone looks up answers for homework or watches shorts, NEXS makes money.",
-    riskExplanation: "📈 Moderate Risk: Very strong and dominant, but constantly facing new tech competition (like AI chatbots). Generally a solid long-term bet."
+    businessModel: "Global digital advertising distribution network, enterprise search infrastructure, and high-performance cloud server hosting.",
+    catalysts: "Pervasive global reach with billions of daily active queries, strong enterprise cloud migrations, and generative AI search monetization.",
+    riskExplanation: "Moderate Growth Profile: Dominant competitive moat with high operating margins, but navigates digital ad spending cycles and regulatory oversight."
+  }
+};
+
+export const TEEN_GUIDES: Record<string, TeenGuide> = {
+  NOVA: {
+    analogy: "Think of NOVA as the foundational engine of the modern AI revolution. Leading technology companies and research labs require NOVA's specialized silicon to run generative AI and deep learning workloads.",
+    riskExplanation: "⚡ High Growth / Volatile: Fast growth with massive potential, but chip demand moves in cycles. Recommended for long-term growth horizons."
+  },
+  VOLT: {
+    analogy: "VOLT captures the transition from traditional combustion vehicles to smart electric mobility and grid-scale solar battery networks.",
+    riskExplanation: "⚡ High Growth / Volatile: Building high-tech factories requires heavy capital. High upside as clean energy adoption expands worldwide."
+  },
+  BREW: {
+    analogy: "BREW is a cash-generative consumer staples powerhouse. Thousands of customers purchase high-margin daily beverages every morning, delivering steady, compounding cash flow.",
+    riskExplanation: "📈 Moderate Risk: Coffee has exceptionally steady demand year-round. Profit margins remain stable even during broader market slowdowns."
+  },
+  APEX: {
+    analogy: "APEX is the digital backbone of consumer trade. Whether buying groceries or essentials, APEX captures revenue from online ordering, automated fulfillment, and delivery.",
+    riskExplanation: "🛡️ Conservative / Defensive: E-commerce essentials provide recession-resistant revenue and steady fundamental growth."
+  },
+  SOLR: {
+    analogy: "SOLR generates clean solar power for cities and industrial data hubs through long-term contracts, functioning as a defensive, dividend-yielding utility.",
+    riskExplanation: "🛡️ Conservative / Defensive: Electricity is a non-negotiable everyday necessity, producing dependable income and capital preservation."
+  },
+  PEAR: {
+    analogy: "PEAR combines premium consumer hardware with recurring subscription services (cloud, app ecosystem, media). High customer loyalty gives it exceptional pricing power.",
+    riskExplanation: "🛡️ Conservative Core: Extremely strong balance sheet with massive cash reserves, making it a portfolio anchor."
+  },
+  NEXS: {
+    analogy: "NEXS commands global digital discovery. Every web search and video view monetizes through targeted advertising, supplemented by enterprise cloud infrastructure.",
+    riskExplanation: "📈 Moderate Risk: Unmatched digital network effects and market leadership with consistent double-digit operating margins."
   }
 };
 

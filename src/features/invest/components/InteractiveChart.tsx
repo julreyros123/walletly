@@ -12,6 +12,7 @@ interface InteractiveChartProps {
   color: string;
   onChangePrice: (val: number | null) => void;
   theme: any;
+  forceDark?: boolean;
 }
 
 // Catmull-Rom spline converted to cubic bezier curves
@@ -49,7 +50,9 @@ export function InteractiveChart({
   color,
   onChangePrice,
   theme,
+  forceDark = false,
 }: InteractiveChartProps) {
+  const isDark = forceDark || theme.mode === 'dark';
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [chartWidth, setChartWidth] = useState(320);
   const { symbol: currencySymbol } = useCurrency();
@@ -120,7 +123,7 @@ export function InteractiveChart({
             y1={chartHeight * 0.25}
             x2={chartWidth - 10}
             y2={chartHeight * 0.25}
-            stroke={theme.border || 'rgba(150, 150, 150, 0.1)'}
+            stroke={isDark ? 'rgba(255, 255, 255, 0.08)' : (theme.border || 'rgba(150, 150, 150, 0.1)')}
             strokeDasharray="4 4"
             strokeWidth={1}
           />
@@ -129,7 +132,7 @@ export function InteractiveChart({
             y1={chartHeight * 0.5}
             x2={chartWidth - 10}
             y2={chartHeight * 0.5}
-            stroke={theme.border || 'rgba(150, 150, 150, 0.1)'}
+            stroke={isDark ? 'rgba(255, 255, 255, 0.08)' : (theme.border || 'rgba(150, 150, 150, 0.1)')}
             strokeDasharray="4 4"
             strokeWidth={1}
           />
@@ -138,7 +141,7 @@ export function InteractiveChart({
             y1={chartHeight * 0.75}
             x2={chartWidth - 10}
             y2={chartHeight * 0.75}
-            stroke={theme.border || 'rgba(150, 150, 150, 0.1)'}
+            stroke={isDark ? 'rgba(255, 255, 255, 0.08)' : (theme.border || 'rgba(150, 150, 150, 0.1)')}
             strokeDasharray="4 4"
             strokeWidth={1}
           />
@@ -173,7 +176,7 @@ export function InteractiveChart({
                 cy={lastPoint.y}
                 r={4.5}
                 fill={color}
-                stroke={theme.surface || '#FFFFFF'}
+                stroke={isDark ? '#111C35' : (theme.surface || '#FFFFFF')}
                 strokeWidth={1.5}
               />
             </>
@@ -187,7 +190,7 @@ export function InteractiveChart({
                 y1={10}
                 x2={activePoint.x}
                 y2={chartHeight - 8}
-                stroke={theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.3)'}
+                stroke={isDark ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.3)'}
                 strokeDasharray="3 3"
                 strokeWidth={1.5}
               />
@@ -203,7 +206,7 @@ export function InteractiveChart({
                 cy={activePoint.y}
                 r={5.5}
                 fill={color}
-                stroke={theme.surface || '#FFFFFF'}
+                stroke={isDark ? '#111C35' : (theme.surface || '#FFFFFF')}
                 strokeWidth={2}
               />
             </>
@@ -218,12 +221,12 @@ export function InteractiveChart({
               {
                 left: Math.max(12, Math.min(chartWidth - 90, activePoint.x - 45)),
                 top: Math.max(6, activePoint.y - 42),
-                backgroundColor: theme.mode === 'dark' ? '#0F172A' : '#FFFFFF',
+                backgroundColor: isDark ? '#0A0F1D' : '#FFFFFF',
                 borderColor: color,
               },
             ]}
           >
-            <Text color={theme.text} fontSize={12} fontFamily={Fonts.bold}>
+            <Text color={isDark ? '#FFFFFF' : theme.text} fontSize={12} fontFamily={Fonts.bold}>
               {currencySymbol}{activePoint.val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Text>
           </View>
@@ -256,19 +259,19 @@ export function InteractiveChart({
       {/* High/Low Markers and Timeline Helper */}
       <YStack gap={6} width="100%" marginTop={4}>
         <XStack justifyContent="space-between" width="100%" paddingHorizontal={4} alignItems="center">
-          <Text color={theme.textSecondary} fontSize={10} fontFamily={Fonts.bold} opacity={0.65}>
+          <Text color={isDark ? 'rgba(255, 255, 255, 0.7)' : theme.textSecondary} fontSize={10} fontFamily={Fonts.bold}>
             LOW: {currencySymbol}{min.toLocaleString()}
           </Text>
-          <Text color={theme.textSecondary} opacity={0.7} fontSize={10} fontFamily={Fonts.medium} textAlign="center" flex={1} numberOfLines={1} paddingHorizontal={6}>
+          <Text color={isDark ? 'rgba(255, 255, 255, 0.45)' : theme.textSecondary} fontSize={10} fontFamily={Fonts.medium} textAlign="center" flex={1} numberOfLines={1} paddingHorizontal={6}>
             💡 Touch & drag to scrub
           </Text>
-          <Text color={theme.textSecondary} fontSize={10} fontFamily={Fonts.bold} opacity={0.65}>
+          <Text color={isDark ? 'rgba(255, 255, 255, 0.7)' : theme.textSecondary} fontSize={10} fontFamily={Fonts.bold}>
             HIGH: {currencySymbol}{max.toLocaleString()}
           </Text>
         </XStack>
 
         <XStack justifyContent="space-between" width="100%" paddingHorizontal={4} alignItems="center">
-          <Text color={theme.textSecondary} fontSize={10} fontFamily={Fonts.bold} opacity={0.5}>
+          <Text color={isDark ? 'rgba(255, 255, 255, 0.45)' : theme.textSecondary} fontSize={10} fontFamily={Fonts.bold}>
             PAST TIMEFRAME
           </Text>
           <XStack alignItems="center" gap={5}>
