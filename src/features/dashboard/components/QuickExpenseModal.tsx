@@ -8,6 +8,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
+  Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
@@ -15,7 +17,7 @@ import { Fonts } from '@/constants/theme';
 import { InteractivePressable } from '@/components/ui/InteractivePressable';
 import { toast } from '@/store/toastStore';
 import { useGamificationStore } from '@/store/gamificationStore';
-import { useCurrency } from '@/utils/currency';
+import { useCurrency, formatNumberMask, parseMaskedNumber } from '@/utils/currency';
 import { useTheme } from '@/hooks/use-theme';
 
 interface QuickExpenseModalProps {
@@ -55,7 +57,7 @@ export function QuickExpenseModal({
   const [category, setCategory] = useState(categories[0] || 'Food');
 
   const handleConfirm = () => {
-    const num = parseFloat(amount.replace(/[^0-9.]/g, ''));
+    const num = parseMaskedNumber(amount);
     if (isNaN(num) || num <= 0) {
       toast.warning('Invalid Amount', 'Please enter a valid expense amount.');
       return;
@@ -80,19 +82,23 @@ export function QuickExpenseModal({
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.overlay}
       >
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={() => {
+            Keyboard.dismiss();
+            onClose();
+          }}
+        />
         <View
           style={[
             styles.sheetContainer,
             {
               backgroundColor: theme.surface,
               borderColor: theme.border,
-              paddingBottom: Math.max(insets.bottom, 24) + 24,
-              marginBottom:
-                Platform.OS === 'android' ? Math.max(insets.bottom, 16) : 0,
+              paddingBottom: Math.max(insets.bottom, 16) + 12,
             },
           ]}
         >
@@ -108,7 +114,10 @@ export function QuickExpenseModal({
           <View style={styles.headerRow}>
             <Text style={[styles.sheetTitle, { color: theme.text }]}>Quick Log Expense</Text>
             <InteractivePressable
-              onPress={onClose}
+              onPress={() => {
+                Keyboard.dismiss();
+                onClose();
+              }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <PhosphorIcon
@@ -120,91 +129,96 @@ export function QuickExpenseModal({
             </InteractivePressable>
           </View>
 
-          {/* Amount Input */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Amount ({currencyCode})</Text>
-            <View
-              style={[
-                styles.amountInputRow,
-                {
-                  backgroundColor: isDark ? '#0F172A' : '#F8FAFC',
-                  borderColor: theme.border,
-                },
-              ]}
-            >
-              <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+          <ScrollView
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Amount Input */}
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Amount ({currencyCode})</Text>
+              <View
+                style={[
+                  styles.amountInputRow,
+                  {
+                    backgroundColor: isDark ? '#0F172A' : '#F8FAFC',
+                    borderColor: theme.border,
+                  },
+                ]}
+              >
+                <Text style={styles.currencySymbol}>{currencySymbol}</Text>
+                <TextInput
+                  value={amount}
+                  onChangeText={(val) => setAmount(formatNumberMask(val))}
+                  placeholder="0.00"
+                  placeholderTextColor={theme.textSecondary}
+                  keyboardType="decimal-pad"
+                  style={[styles.amountInput, { color: theme.text }]}
+                />
+              </View>
+            </View>
+
+            {/* Description Input */}
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Description</Text>
               <TextInput
-                value={amount}
-                onChangeText={setAmount}
-                placeholder="0.00"
+                value={name}
+                onChangeText={setName}
+                placeholder="e.g. Lunch, Grab Ride, Books"
                 placeholderTextColor={theme.textSecondary}
-                keyboardType="decimal-pad"
-                style={[styles.amountInput, { color: theme.text }]}
-                autoFocus={true}
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: isDark ? '#0F172A' : '#F8FAFC',
+                    borderColor: theme.border,
+                    color: theme.text,
+                  },
+                ]}
               />
             </View>
-          </View>
 
-          {/* Description Input */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Description</Text>
-            <TextInput
-              value={name}
-              onChangeText={setName}
-              placeholder="e.g. Lunch, Grab Ride, Books"
-              placeholderTextColor={theme.textSecondary}
-              style={[
-                styles.textInput,
-                {
-                  backgroundColor: isDark ? '#0F172A' : '#F8FAFC',
-                  borderColor: theme.border,
-                  color: theme.text,
-                },
-              ]}
-            />
-          </View>
-
-          {/* Category Chips */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Category</Text>
-            <View style={styles.categoriesWrap}>
-              {categories.map((cat) => {
-                const isSelected = category === cat;
-                return (
-                  <InteractivePressable
-                    key={cat}
-                    onPress={() => setCategory(cat)}
-                    style={[
-                      styles.categoryChip,
-                      {
-                        backgroundColor: isDark ? '#0F172A' : '#F5F5F5',
-                        borderColor: theme.border,
-                      },
-                      isSelected && styles.categoryChipSelected,
-                    ]}
-                  >
-                    <Text
+            {/* Category Chips */}
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Category</Text>
+              <View style={styles.categoriesWrap}>
+                {categories.map((cat) => {
+                  const isSelected = category === cat;
+                  return (
+                    <InteractivePressable
+                      key={cat}
+                      onPress={() => setCategory(cat)}
                       style={[
-                        styles.categoryChipText,
-                        { color: theme.textSecondary },
-                        isSelected && styles.categoryChipTextSelected,
+                        styles.categoryChip,
+                        {
+                          backgroundColor: isDark ? '#0F172A' : '#F5F5F5',
+                          borderColor: theme.border,
+                        },
+                        isSelected && styles.categoryChipSelected,
                       ]}
                     >
-                      {cat}
-                    </Text>
-                  </InteractivePressable>
-                );
-              })}
+                      <Text
+                        style={[
+                          styles.categoryChipText,
+                          { color: theme.textSecondary },
+                          isSelected && styles.categoryChipTextSelected,
+                        ]}
+                      >
+                        {cat}
+                      </Text>
+                    </InteractivePressable>
+                  );
+                })}
+              </View>
             </View>
-          </View>
 
-          {/* Confirm Button */}
-          <InteractivePressable
-            onPress={handleConfirm}
-            style={styles.confirmBtn}
-          >
-            <Text style={styles.confirmBtnText}>Confirm & Log Expense</Text>
-          </InteractivePressable>
+            {/* Confirm Button */}
+            <InteractivePressable
+              onPress={handleConfirm}
+              style={styles.confirmBtn}
+            >
+              <Text style={styles.confirmBtnText}>Confirm & Log Expense</Text>
+            </InteractivePressable>
+          </ScrollView>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -225,6 +239,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderWidth: 1,
     borderColor: '#334155',
+    maxHeight: '85%',
   },
   sheetHandle: {
     width: 36,
