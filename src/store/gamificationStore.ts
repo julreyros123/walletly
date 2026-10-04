@@ -382,6 +382,10 @@ interface GamificationState {
 
   // Savings Actions
   addSavingsGoal: (name: string, targetAmount: number, targetDate: string, category: string) => void;
+  updateSavingsGoal: (
+    goalId: string,
+    updates: { name?: string; targetAmount?: number; category?: string; targetDate?: string }
+  ) => void;
   contributeToSavingsGoal: (goalId: string, amount: number) => boolean;
   withdrawSavingsGoal: (goalId: string, amount: number) => boolean;
   deleteSavingsGoal: (goalId: string) => void;
@@ -1329,6 +1333,59 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       return next;
     });
     return success;
+  },
+
+  updateSavingsGoal: (goalId, updates) => {
+    set((state) => {
+      let updatedGoal: SavingsGoal | undefined;
+      const updatedGoals = state.savingsGoals.map((g) => {
+        if (g.id === goalId) {
+          const newTarget = updates.targetAmount !== undefined ? Math.max(0, updates.targetAmount) : g.targetAmount;
+          updatedGoal = {
+            ...g,
+            name: updates.name !== undefined && updates.name.trim() ? updates.name.trim() : g.name,
+            targetAmount: newTarget,
+            category: updates.category !== undefined ? updates.category : g.category,
+            targetDate: updates.targetDate !== undefined ? updates.targetDate : g.targetDate,
+          };
+          return updatedGoal;
+        }
+        return g;
+      });
+
+      const totalTarget = updatedGoals.reduce((sum, g) => sum + g.targetAmount, 0);
+      const totalCurrent = updatedGoals.reduce((sum, g) => sum + g.currentSavings, 0);
+      const savingsRatio = totalTarget > 0 ? totalCurrent / totalTarget : 0;
+      const nextSavingScore = Math.round(40 + savingsRatio * 60);
+
+      const next = {
+        savingsGoals: updatedGoals,
+        savingScore: Math.min(100, nextSavingScore),
+      };
+      persistState({ ...state, ...next });
+
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (session?.user?.id && session.user.id !== 'guest' && updatedGoal) {
+            await syncQueue.enqueue({
+              table: 'saving_challenges',
+              action: 'update',
+              payload: {
+                title: updatedGoal.name,
+                target_amount: updatedGoal.targetAmount,
+                updated_at: new Date().toISOString(),
+              },
+              match: { challenge_id: goalId, user_id: session.user.id },
+            });
+          }
+        } catch (err) {
+          console.warn('[GamificationStore] update saving_challenge sync enqueue error:', err);
+        }
+      })();
+
+      return next;
+    });
   },
 
   deleteSavingsGoal: (goalId) => {

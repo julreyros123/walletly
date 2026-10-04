@@ -20,7 +20,7 @@ import { setStatusBarStyle } from 'expo-status-bar';
 import Svg, { Circle, G, Defs, LinearGradient, Stop, Path, Rect } from 'react-native-svg';
 import { safeHaptic } from '@/utils/haptics';
 import { PhosphorCategoryIcon } from '@/components/ui/PhosphorCategoryIcon';
-import { useCurrency } from '@/utils/currency';
+import { useCurrency, formatNumberMask, parseMaskedNumber } from '@/utils/currency';
 import { SetBudgetModal } from '@/features/budget/components/SetBudgetModal';
 
 // Map categories to Phosphor Icon Names
@@ -129,11 +129,12 @@ export default function BudgetScreen() {
     handleRouteParams();
   }, [handleRouteParams]);
 
-  // Contribute & Withdraw Savings Modal states
+  // Contribute & Edit Savings Modal states
   const [contributeGoalId, setContributeGoalId] = useState<string | null>(null);
   const [contributeAmount, setContributeAmount] = useState('');
-  const [withdrawGoalId, setWithdrawGoalId] = useState<string | null>(null);
-  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [editGoalId, setEditGoalId] = useState<string | null>(null);
+  const [editGoalName, setEditGoalName] = useState('');
+  const [editGoalTargetAmount, setEditGoalTargetAmount] = useState('');
   const [selectedCategoryBreakdown, setSelectedCategoryBreakdown] = useState<string | null>(null);
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [analyticsView, setAnalyticsView] = useState<'category' | 'trend'>('category');
@@ -410,7 +411,7 @@ export default function BudgetScreen() {
 
   const handleAddGoal = () => {
     safeHaptic('medium');
-    const target = parseFloat(goalTargetAmount);
+    const target = parseMaskedNumber(goalTargetAmount);
     if (!goalName.trim()) {
       Alert.alert('Missing Field', 'Please enter a goal name.');
       return;
@@ -430,7 +431,7 @@ export default function BudgetScreen() {
 
   const handleContributeSavings = () => {
     safeHaptic('success');
-    const amt = parseFloat((contributeAmount || '').replace(/[^0-9.]/g, ''));
+    const amt = parseMaskedNumber(contributeAmount);
     if (isNaN(amt) || amt <= 0) {
       Alert.alert('Invalid Amount', 'Please enter a valid contribution amount.');
       return;
@@ -454,22 +455,27 @@ export default function BudgetScreen() {
     }
   };
 
-  const handleWithdrawSavings = () => {
+  const handleSaveEditGoal = () => {
     safeHaptic('medium');
-    const amt = parseFloat((withdrawAmount || '').replace(/[^0-9.]/g, ''));
-    if (isNaN(amt) || amt <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter a valid withdrawal amount.');
+    const target = parseMaskedNumber(editGoalTargetAmount);
+    if (!editGoalName.trim()) {
+      Alert.alert('Missing Field', 'Please enter a goal name.');
       return;
     }
-    if (withdrawGoalId) {
-      const success = store.withdrawSavingsGoal(withdrawGoalId, amt);
-      if (success) {
-        setWithdrawGoalId(null);
-        setWithdrawAmount('');
-        Alert.alert('Withdrawn', `${currencySymbol}${amt.toLocaleString()} withdrawn from savings goal.`);
-      } else {
-        Alert.alert('Error', 'Insufficient savings in this goal to withdraw that amount.');
-      }
+    if (isNaN(target) || target <= 0) {
+      Alert.alert('Invalid Target', 'Please enter a valid target amount.');
+      return;
+    }
+
+    if (editGoalId) {
+      store.updateSavingsGoal(editGoalId, {
+        name: editGoalName.trim(),
+        targetAmount: target,
+      });
+      setEditGoalId(null);
+      setEditGoalName('');
+      setEditGoalTargetAmount('');
+      Alert.alert('Goal Updated!', `Savings goal "${editGoalName.trim()}" updated successfully.`);
     }
   };
 
@@ -1690,20 +1696,30 @@ export default function BudgetScreen() {
                               </Text>
                             </TouchableOpacity>
                           )}
-                          {g.currentSavings > 0 && (
-                            <TouchableOpacity
-                              onPress={() => {
-                                setWithdrawGoalId(g.id);
-                                setWithdrawAmount('');
-                              }}
-                              style={[styles.contributeBtn, { flex: 1, backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}
-                              activeOpacity={0.8}
-                            >
-                              <Text color="#EF4444" fontSize={12} fontFamily={Fonts.bold}>
-                                Withdraw
+                          <TouchableOpacity
+                            onPress={() => {
+                              setEditGoalId(g.id);
+                              setEditGoalName(g.name);
+                              setEditGoalTargetAmount(formatNumberMask(g.targetAmount.toString()));
+                            }}
+                            style={[
+                              styles.contributeBtn,
+                              {
+                                flex: 1,
+                                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.04)',
+                                borderWidth: 1,
+                                borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(15, 23, 42, 0.08)',
+                              },
+                            ]}
+                            activeOpacity={0.8}
+                          >
+                            <XStack alignItems="center" justifyContent="center" gap={6}>
+                              <PhosphorIcon name="Pencil" size={13} color={theme.text} />
+                              <Text color={theme.text} fontSize={12} fontFamily={Fonts.bold}>
+                                Edit Goal
                               </Text>
-                            </TouchableOpacity>
-                          )}
+                            </XStack>
+                          </TouchableOpacity>
                         </XStack>
                       </View>
                     );
@@ -1901,25 +1917,25 @@ export default function BudgetScreen() {
         </View>
       </Modal>
 
-      {/* ==================== MODAL: WITHDRAW SAVINGS ==================== */}
-      <Modal visible={withdrawGoalId !== null} transparent animationType="slide" onRequestClose={() => setWithdrawGoalId(null)}>
+      {/* ==================== MODAL: EDIT SAVINGS GOAL ==================== */}
+      <Modal visible={editGoalId !== null} transparent animationType="slide" onRequestClose={() => setEditGoalId(null)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#E2E8F0' }]}>
             <XStack justifyContent="space-between" alignItems="center" borderBottomWidth={1} borderBottomColor={isDark ? '#334155' : '#E2E8F0'} paddingBottom={12}>
               <XStack alignItems="center" gap={8}>
-                <PhosphorCategoryIcon name="emergency" size={20} primaryColor={isDark ? '#0F172A' : '#FFFFFF'} accentColor="#EF4444" style={{ width: 28, height: 28, borderRadius: 6 }} />
+                <PhosphorCategoryIcon name="savings" size={20} primaryColor={isDark ? '#0F172A' : '#FFFFFF'} accentColor="#10B981" style={{ width: 28, height: 28, borderRadius: 6 }} />
                 <Text color={isDark ? '#FFFFFF' : '#0F172A'} fontSize={16} fontFamily={Fonts.bold}>
-                  Withdraw from Goal
+                  Edit Savings Goal
                 </Text>
               </XStack>
-              <TouchableOpacity onPress={() => setWithdrawGoalId(null)}>
+              <TouchableOpacity onPress={() => setEditGoalId(null)}>
                 <PhosphorIcon name="XCircle" size={20} color={isDark ? '#94A3B8' : '#64748B'} weight="fill" />
               </TouchableOpacity>
             </XStack>
 
             <YStack gap={14} paddingTop={12}>
               {(() => {
-                const goal = store.savingsGoals.find((g) => g.id === withdrawGoalId);
+                const goal = store.savingsGoals.find((g) => g.id === editGoalId);
                 return (
                   <Text color={isDark ? '#94A3B8' : '#64748B'} fontSize={12} fontFamily={Fonts.medium}>
                     Currently saved: <Text color="#10B981" fontFamily={Fonts.bold}>{currencySymbol}{(goal?.currentSavings || 0).toLocaleString()}</Text>
@@ -1928,18 +1944,25 @@ export default function BudgetScreen() {
               })()}
               <FormInput
                 variant="default"
-                label={`Withdraw Amount (${currencySymbol})`}
-                placeholder="e.g. 500"
+                label="Goal Name"
+                placeholder="e.g. Laptop"
+                value={editGoalName}
+                onChangeText={setEditGoalName}
+              />
+              <FormInput
+                variant="default"
+                label={`Target Amount (${currencySymbol})`}
+                placeholder="e.g. 25,000"
                 keyboardType="numeric"
-                value={withdrawAmount}
-                onChangeText={setWithdrawAmount}
+                value={editGoalTargetAmount}
+                onChangeText={(val) => setEditGoalTargetAmount(formatNumberMask(val))}
               />
               <XStack gap={10} marginTop={8}>
-                <TouchableOpacity onPress={() => setWithdrawGoalId(null)} style={[styles.modalCancelBtn, { backgroundColor: isDark ? '#0F172A' : '#F5F5F5' }]}>
+                <TouchableOpacity onPress={() => setEditGoalId(null)} style={[styles.modalCancelBtn, { backgroundColor: isDark ? '#0F172A' : '#F5F5F5' }]}>
                   <Text color={isDark ? '#94A3B8' : '#64748B'} fontSize={13} fontFamily={Fonts.bold}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handleWithdrawSavings} style={[styles.modalSubmitBtn, { backgroundColor: '#EF4444' }]}>
-                  <Text color="#FFFFFF" fontSize={13} fontFamily={Fonts.bold}>Withdraw</Text>
+                <TouchableOpacity onPress={handleSaveEditGoal} style={styles.modalSubmitBtn}>
+                  <Text color="#FFFFFF" fontSize={13} fontFamily={Fonts.bold}>Save Changes</Text>
                 </TouchableOpacity>
               </XStack>
             </YStack>
@@ -1965,7 +1988,14 @@ export default function BudgetScreen() {
 
             <ScrollView contentContainerStyle={{ gap: 14, paddingTop: 12 }}>
               <FormInput variant="default" label="Goal Name" placeholder="e.g. Emergency Fund" value={goalName} onChangeText={setGoalName} />
-              <FormInput variant="default" label={`Target Amount (${currencySymbol})`} placeholder="e.g. 5000" keyboardType="numeric" value={goalTargetAmount} onChangeText={setGoalTargetAmount} />
+              <FormInput
+                variant="default"
+                label={`Target Amount (${currencySymbol})`}
+                placeholder="e.g. 5,000"
+                keyboardType="numeric"
+                value={goalTargetAmount}
+                onChangeText={(val) => setGoalTargetAmount(formatNumberMask(val))}
+              />
 
               <XStack gap={10} marginTop={8}>
                 <TouchableOpacity onPress={() => setShowAddGoalModal(false)} style={[styles.modalCancelBtn, { backgroundColor: isDark ? '#0F172A' : '#F5F5F5' }]}>
@@ -2000,7 +2030,14 @@ export default function BudgetScreen() {
               <Text color={isDark ? '#94A3B8' : '#64748B'} fontSize={12} fontFamily={Fonts.medium}>
                 Available {cycleMetrics.cycleName.toLowerCase()} balance: <Text color="#10B981" fontFamily={Fonts.bold}>{currencySymbol}{cycleMetrics.balance.toLocaleString()}</Text>
               </Text>
-              <FormInput variant="default" label={`Contribution Amount (${currencySymbol})`} placeholder="e.g. 500" keyboardType="numeric" value={contributeAmount} onChangeText={setContributeAmount} />
+              <FormInput
+                variant="default"
+                label={`Contribution Amount (${currencySymbol})`}
+                placeholder="e.g. 500"
+                keyboardType="numeric"
+                value={contributeAmount}
+                onChangeText={(val) => setContributeAmount(formatNumberMask(val))}
+              />
 
               <XStack gap={10} marginTop={8}>
                 <TouchableOpacity onPress={() => setContributeGoalId(null)} style={[styles.modalCancelBtn, { backgroundColor: isDark ? '#0F172A' : '#F5F5F5' }]}>
