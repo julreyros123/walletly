@@ -11,10 +11,15 @@ export default function AuthCallbackScreen() {
   const incomingUrl = Linking.useURL();
   const hydrate = useAuthStore((state) => state.hydrate);
 
+  const handledRef = React.useRef(false);
+
   useEffect(() => {
     let isMounted = true;
 
     async function handleAuthCallback() {
+      if (handledRef.current) return;
+      handledRef.current = true;
+
       try {
         const url = incomingUrl || (await Linking.getInitialURL());
 
@@ -60,9 +65,32 @@ export default function AuthCallbackScreen() {
         await hydrate();
 
         if (isMounted) {
-          const currentUser = useAuthStore.getState().user;
-          const isNewAccount = !currentUser?.isOnboarded || !currentUser?.name || currentUser.name === 'User' || !currentUser?.age;
-          if (isNewAccount && currentUser?.id !== 'guest') {
+          // Check session & profile directly to ensure we don't prematurely route to onboarding
+          const { data: { session } } = await supabase.auth.getSession();
+          const userId = session?.user?.id;
+          let isOnboarded = false;
+
+          if (userId && userId !== 'guest') {
+            const meta = session.user.user_metadata || {};
+            if (meta.is_onboarded) {
+              isOnboarded = true;
+            } else {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('is_onboarded, name, age')
+                .eq('id', userId)
+                .maybeSingle();
+
+              if (profile) {
+                const profileAny = profile as Record<string, unknown>;
+                isOnboarded = profileAny.is_onboarded !== undefined
+                  ? Boolean(profileAny.is_onboarded)
+                  : Boolean(profile.name && profile.name !== 'User' && profile.age);
+              }
+            }
+          }
+
+          if (!isOnboarded && userId && userId !== 'guest') {
             router.replace('/(onboarding)' as Href);
           } else {
             router.replace('/(tabs)' as Href);

@@ -39,6 +39,8 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   expoPushToken: null,
 };
 
+let isPreferencesHydrated = false;
+
 interface PreferencesState extends UserPreferences {
   setSoundEffectsEnabled: (enabled: boolean) => Promise<void>;
   setHapticsEnabled: (enabled: boolean) => Promise<void>;
@@ -108,8 +110,8 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
           })
           .eq('id', session.user.id);
       }
-    } catch {
-      // Local storage remains persistent fallback if offline or table schema differs
+    } catch (err) {
+      console.warn('[PreferencesStore] Failed to sync guardian details to Supabase:', err);
     }
   },
 
@@ -119,6 +121,9 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   },
 
   setExpoPushToken: async (token: string | null) => {
+    if (!isPreferencesHydrated) {
+      await get().hydrate();
+    }
     set({ expoPushToken: token });
     await savePreferences(get());
   },
@@ -156,9 +161,11 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       } else {
         set({ currency: 'PHP', currencyMigratedToPhp: true });
       }
+      isPreferencesHydrated = true;
     } catch (e) {
       console.error('Failed to hydrate preferences store:', e);
       set({ currency: 'PHP' });
+      isPreferencesHydrated = true;
     }
   },
 }));

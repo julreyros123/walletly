@@ -242,6 +242,19 @@ export default function InvestScreen() {
     return store.portfolioAllocations[ticker] || 0;
   };
 
+  /** Formats fractional shares cleanly without floating-point visual artifacts */
+  const formatShares = (units: number): string => {
+    if (!units || units <= 0) return '0';
+    if (units >= 1000) {
+      return units.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    }
+    const rounded = Number(units.toFixed(4));
+    return rounded.toLocaleString(undefined, {
+      minimumFractionDigits: rounded % 1 === 0 ? 0 : 2,
+      maximumFractionDigits: 4,
+    });
+  };
+
   const holdingsValue = assets.reduce((sum, a) => sum + getAssetOwnedUnits(a.ticker) * a.price, 0);
   const totalPortfolioValue = holdingsValue + store.virtualBalance;
 
@@ -590,14 +603,41 @@ export default function InvestScreen() {
             }}
             activeOpacity={0.7}
           >
-            <XStack style={styles.statusBadge} alignItems="center" gap={6} flexShrink={0}>
+            <XStack
+              alignItems="center"
+              gap={6}
+              flexShrink={0}
+              paddingVertical={4.5}
+              paddingHorizontal={11}
+              borderRadius={999}
+              backgroundColor={
+                market.isSyncing
+                  ? 'rgba(245, 158, 11, 0.12)'
+                  : market.isLive
+                  ? 'rgba(16, 185, 129, 0.12)'
+                  : 'rgba(56, 189, 248, 0.12)'
+              }
+              borderWidth={1}
+              borderColor={
+                market.isSyncing
+                  ? 'rgba(245, 158, 11, 0.28)'
+                  : market.isLive
+                  ? 'rgba(16, 185, 129, 0.28)'
+                  : 'rgba(56, 189, 248, 0.28)'
+              }
+            >
               <View
                 width={6}
                 height={6}
                 borderRadius={3}
                 backgroundColor={market.isSyncing ? '#F59E0B' : market.isLive ? '#10B981' : '#38BDF8'}
               />
-              <Text style={styles.statusText} textTransform="uppercase">
+              <Text
+                color={market.isSyncing ? '#F59E0B' : market.isLive ? '#10B981' : '#38BDF8'}
+                fontSize={10.5}
+                style={{ fontFamily: Fonts.bold, letterSpacing: 0.6 }}
+                textTransform="uppercase"
+              >
                 {market.isSyncing ? 'Syncing...' : market.isLive ? 'Live Market' : 'Sim Mode'}
               </Text>
             </XStack>
@@ -1637,116 +1677,142 @@ export default function InvestScreen() {
                         const changeIsPositive = asset.change >= 0;
                         const ownedUnits = getAssetOwnedUnits(asset.ticker);
                         const assetTotalValue = ownedUnits * asset.price;
+                        const riskColor =
+                          asset.riskProfile === 'Conservative'
+                            ? '#10B981'
+                            : asset.riskProfile === 'Moderate'
+                            ? '#F59E0B'
+                            : '#F43F5E';
 
                         return (
                           <TouchableOpacity
                             key={asset.ticker}
                             onPress={() => navigateToDetails(asset.ticker)}
-                            activeOpacity={0.8}
+                            activeOpacity={0.82}
                             style={{
                               flex: 1,
-                              backgroundColor: '#1C2541',
-                              borderRadius: 14,
-                              padding: 12,
+                              backgroundColor: '#131D33',
+                              borderRadius: 18,
+                              padding: 13,
                               borderWidth: 1,
                               borderColor: 'rgba(255, 255, 255, 0.08)',
-                              gap: 10,
+                              gap: 12,
                               justifyContent: 'space-between',
                             }}
                           >
-                            {/* Grid Item Header */}
+                            {/* Grid Item Header: Modern Squircle Emblem + Sleek Pill Risk Badge */}
                             <XStack justifyContent="space-between" alignItems="center">
                               <View
-                                width={34}
-                                height={34}
-                                borderRadius={8}
-                                backgroundColor="rgba(255, 255, 255, 0.04)"
-                                alignItems="center"
-                                justifyContent="center"
-                                borderWidth={1}
-                                borderColor="rgba(255, 255, 255, 0.08)"
+                                style={{
+                                  width: 38,
+                                  height: 38,
+                                  borderRadius: 12,
+                                  backgroundColor: `${asset.color}15`,
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  borderWidth: 1,
+                                  borderColor: `${asset.color}35`,
+                                }}
                               >
                                 <PhosphorIcon
                                   name={asset.icon}
-                                  size={17}
+                                  size={19}
                                   color={asset.color}
                                   weight="fill"
                                 />
                               </View>
 
                               <View
-                                backgroundColor={
-                                  asset.riskProfile === 'Conservative'
-                                    ? 'rgba(16, 185, 129, 0.12)'
-                                    : asset.riskProfile === 'Moderate'
-                                    ? 'rgba(245, 158, 11, 0.12)'
-                                    : 'rgba(239, 68, 68, 0.12)'
-                                }
-                                paddingHorizontal={5}
-                                paddingVertical={1.5}
-                                borderRadius={4}
-                                borderWidth={1}
-                                borderColor={
-                                  asset.riskProfile === 'Conservative'
-                                    ? 'rgba(16, 185, 129, 0.25)'
-                                    : asset.riskProfile === 'Moderate'
-                                    ? 'rgba(245, 158, 11, 0.25)'
-                                    : 'rgba(239, 68, 68, 0.25)'
-                                }
+                                style={{
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  backgroundColor: `${riskColor}12`,
+                                  paddingHorizontal: 7,
+                                  paddingVertical: 2.5,
+                                  borderRadius: 999,
+                                  borderWidth: 1,
+                                  borderColor: `${riskColor}28`,
+                                }}
                               >
+                                <View width={4} height={4} borderRadius={2} backgroundColor={riskColor} />
                                 <Text
-                                  color={
-                                    asset.riskProfile === 'Conservative'
-                                      ? '#10B981'
-                                      : asset.riskProfile === 'Moderate'
-                                      ? '#F59E0B'
-                                      : '#EF4444'
-                                  }
-                                  fontSize={9}
-                                  style={{ fontFamily: Fonts.semiBold }}
+                                  color={riskColor}
+                                  fontSize={9.5}
+                                  style={{ fontFamily: Fonts.bold, letterSpacing: 0.2 }}
                                 >
                                   {asset.riskProfile}
                                 </Text>
                               </View>
                             </XStack>
 
-                            {/* Grid Ticker & Name */}
-                            <YStack gap={1}>
-                              <Text color="#FFFFFF" fontSize={15} style={{ fontFamily: Fonts.bold }}>
+                            {/* Grid Ticker, Name & Sector */}
+                            <YStack gap={2}>
+                              <Text color="#FFFFFF" fontSize={16} style={{ fontFamily: Fonts.bold, letterSpacing: -0.3 }}>
                                 {asset.ticker}
                               </Text>
-                              <Text color="#8D99AE" fontSize={11} numberOfLines={1} style={{ fontFamily: Fonts.regular }}>
+                              <Text color="#94A3B8" fontSize={11.5} numberOfLines={1} style={{ fontFamily: Fonts.medium }}>
                                 {asset.name}
                               </Text>
-                              <Text color="rgba(255, 255, 255, 0.4)" fontSize={9.5} numberOfLines={1} style={{ fontFamily: Fonts.medium }}>
+                              <Text color="rgba(148, 163, 184, 0.65)" fontSize={10} numberOfLines={1} style={{ fontFamily: Fonts.regular }}>
                                 {asset.partner}
                               </Text>
                             </YStack>
 
-                            {/* Price & Change */}
-                            <YStack gap={3}>
-                              <Text color="#FFFFFF" fontSize={15} style={{ fontFamily: Fonts.bold }}>
+                            {/* Price & Real-Time Change Pill with Indicator Arrow */}
+                            <YStack gap={4}>
+                              <Text color="#FFFFFF" fontSize={17} style={{ fontFamily: Fonts.bold, letterSpacing: -0.4 }}>
                                 {currencySymbol}{asset.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                               </Text>
                               <View 
-                                backgroundColor={changeIsPositive ? 'rgba(5, 150, 105, 0.15)' : 'rgba(239, 68, 68, 0.12)'} 
-                                paddingHorizontal={6} 
-                                paddingVertical={2} 
-                                borderRadius={4}
-                                alignSelf="flex-start"
+                                style={{
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  alignSelf: 'flex-start',
+                                  gap: 3,
+                                  backgroundColor: changeIsPositive ? 'rgba(16, 185, 129, 0.14)' : 'rgba(239, 68, 68, 0.14)',
+                                  paddingHorizontal: 7,
+                                  paddingVertical: 2.5,
+                                  borderRadius: 999,
+                                  borderWidth: 1,
+                                  borderColor: changeIsPositive ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)',
+                                }}
                               >
-                                <Text color={changeIsPositive ? '#059669' : '#EF4444'} fontSize={10.5} style={{ fontFamily: Fonts.bold }}>
+                                <PhosphorIcon
+                                  name={changeIsPositive ? 'TrendUp' : 'TrendDown'}
+                                  size={11}
+                                  color={changeIsPositive ? '#10B981' : '#F87171'}
+                                  weight="bold"
+                                />
+                                <Text color={changeIsPositive ? '#10B981' : '#F87171'} fontSize={11} style={{ fontFamily: Fonts.bold }}>
                                   {changeIsPositive ? '+' : ''}{asset.change.toFixed(2)}%
                                 </Text>
                               </View>
                             </YStack>
 
-                            {/* Owned Units Badge */}
+                            {/* Owned Units Badge (Cleanly Rounded Off) */}
                             {ownedUnits > 0 && (
-                              <View backgroundColor="rgba(5, 150, 105, 0.15)" padding={6} borderRadius={6} borderWidth={1} borderColor="rgba(5, 150, 105, 0.25)">
-                                <Text color="#10B981" fontSize={10} style={{ fontFamily: Fonts.bold }}>
-                                  Own: {ownedUnits} shares ({currencySymbol}{Math.round(assetTotalValue).toLocaleString()})
-                                </Text>
+                              <View
+                                style={{
+                                  backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 5,
+                                  borderRadius: 9,
+                                  borderWidth: 1,
+                                  borderColor: 'rgba(16, 185, 129, 0.22)',
+                                }}
+                              >
+                                <XStack alignItems="center" justifyContent="space-between" width="100%">
+                                  <XStack alignItems="center" gap={4}>
+                                    <View width={4} height={4} borderRadius={2} backgroundColor="#10B981" />
+                                    <Text color="#A7F3D0" fontSize={10} style={{ fontFamily: Fonts.semiBold }}>
+                                      Own: {formatShares(ownedUnits)} sh
+                                    </Text>
+                                  </XStack>
+                                  <Text color="#10B981" fontSize={10} style={{ fontFamily: Fonts.bold }}>
+                                    {currencySymbol}{Math.round(assetTotalValue).toLocaleString()}
+                                  </Text>
+                                </XStack>
                               </View>
                             )}
                           </TouchableOpacity>
@@ -1784,6 +1850,12 @@ export default function InvestScreen() {
                       const ownedUnits = getAssetOwnedUnits(asset.ticker);
                       const assetTotalValue = ownedUnits * asset.price;
                       const isLast = index === filteredAssets.length - 1;
+                      const riskColor =
+                        asset.riskProfile === 'Conservative'
+                          ? '#10B981'
+                          : asset.riskProfile === 'Moderate'
+                          ? '#F59E0B'
+                          : '#F43F5E';
 
                       return (
                         <View key={asset.ticker}>
@@ -1793,21 +1865,23 @@ export default function InvestScreen() {
                             style={{ padding: 14 }}
                           >
                             <XStack justifyContent="space-between" alignItems="center">
-                              <XStack gap={10} alignItems="center" flex={1} marginRight={10}>
+                              <XStack gap={12} alignItems="center" flex={1} marginRight={10}>
                                 <View
-                                  width={38}
-                                  height={38}
-                                  borderRadius={10}
-                                  backgroundColor="rgba(255, 255, 255, 0.04)"
-                                  alignItems="center"
-                                  justifyContent="center"
-                                  borderWidth={1}
-                                  borderColor="rgba(255, 255, 255, 0.08)"
-                                  flexShrink={0}
+                                  style={{
+                                    width: 40,
+                                    height: 40,
+                                    borderRadius: 12,
+                                    backgroundColor: `${asset.color}15`,
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderWidth: 1,
+                                    borderColor: `${asset.color}35`,
+                                    flexShrink: 0,
+                                  }}
                                 >
                                   <PhosphorIcon
                                     name={asset.icon}
-                                    size={18}
+                                    size={20}
                                     color={asset.color}
                                     weight="fill"
                                   />
@@ -1815,48 +1889,62 @@ export default function InvestScreen() {
 
                                 <YStack gap={2} flex={1}>
                                   <XStack gap={6} alignItems="center">
-                                    <Text color="#FFFFFF" fontSize={15} style={{ fontFamily: Fonts.bold }}>
+                                    <Text color="#FFFFFF" fontSize={15.5} style={{ fontFamily: Fonts.bold, letterSpacing: -0.3 }}>
                                       {asset.ticker}
                                     </Text>
                                     <View
-                                      backgroundColor={
-                                        asset.riskProfile === 'Conservative'
-                                          ? 'rgba(16, 185, 129, 0.12)'
-                                          : asset.riskProfile === 'Moderate'
-                                          ? 'rgba(245, 158, 11, 0.12)'
-                                          : 'rgba(239, 68, 68, 0.12)'
-                                      }
-                                      paddingHorizontal={6}
-                                      paddingVertical={1.5}
-                                      borderRadius={4}
+                                      style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 3.5,
+                                        backgroundColor: `${riskColor}12`,
+                                        paddingHorizontal: 6,
+                                        paddingVertical: 2,
+                                        borderRadius: 999,
+                                        borderWidth: 1,
+                                        borderColor: `${riskColor}28`,
+                                      }}
                                     >
+                                      <View width={4} height={4} borderRadius={2} backgroundColor={riskColor} />
                                       <Text
-                                        color={
-                                          asset.riskProfile === 'Conservative'
-                                            ? '#10B981'
-                                            : asset.riskProfile === 'Moderate'
-                                            ? '#F59E0B'
-                                            : '#EF4444'
-                                        }
-                                        fontSize={10}
+                                        color={riskColor}
+                                        fontSize={9.5}
                                         style={{ fontFamily: Fonts.semiBold }}
                                       >
                                         {asset.riskProfile}
                                       </Text>
                                     </View>
                                   </XStack>
-                                  <Text color="#8D99AE" fontSize={12} numberOfLines={1} style={{ fontFamily: Fonts.regular }}>
+                                  <Text color="#94A3B8" fontSize={11.5} numberOfLines={1} style={{ fontFamily: Fonts.regular }}>
                                     {asset.name} • {asset.partner}
                                   </Text>
                                 </YStack>
                               </XStack>
 
-                              <YStack alignItems="flex-end" gap={2} minWidth={75}>
-                                <Text color="#FFFFFF" fontSize={15} style={{ fontFamily: Fonts.bold }}>
+                              <YStack alignItems="flex-end" gap={3} minWidth={85}>
+                                <Text color="#FFFFFF" fontSize={16} style={{ fontFamily: Fonts.bold, letterSpacing: -0.3 }}>
                                   {currencySymbol}{asset.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                 </Text>
-                                <View backgroundColor={changeIsPositive ? 'rgba(5, 150, 105, 0.15)' : 'rgba(239, 68, 68, 0.12)'} paddingHorizontal={7} paddingVertical={2} borderRadius={4}>
-                                  <Text color={changeIsPositive ? '#059669' : '#EF4444'} fontSize={10.5} style={{ fontFamily: Fonts.bold }}>
+                                <View
+                                  style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 3,
+                                    backgroundColor: changeIsPositive ? 'rgba(16, 185, 129, 0.14)' : 'rgba(239, 68, 68, 0.14)',
+                                    paddingHorizontal: 7,
+                                    paddingVertical: 2.5,
+                                    borderRadius: 999,
+                                    borderWidth: 1,
+                                    borderColor: changeIsPositive ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)',
+                                  }}
+                                >
+                                  <PhosphorIcon
+                                    name={changeIsPositive ? 'TrendUp' : 'TrendDown'}
+                                    size={10.5}
+                                    color={changeIsPositive ? '#10B981' : '#F87171'}
+                                    weight="bold"
+                                  />
+                                  <Text color={changeIsPositive ? '#10B981' : '#F87171'} fontSize={10.5} style={{ fontFamily: Fonts.bold }}>
                                     {changeIsPositive ? '+' : ''}{asset.change.toFixed(2)}%
                                   </Text>
                                 </View>
@@ -1864,9 +1952,28 @@ export default function InvestScreen() {
                             </XStack>
 
                             {ownedUnits > 0 && (
-                              <View marginTop={8} backgroundColor="rgba(5, 150, 105, 0.1)" padding={8} borderRadius={6} borderWidth={1} borderColor="rgba(5, 150, 105, 0.25)">
-                                <Text color="#F8FAFC" fontSize={11} style={{ fontFamily: Fonts.medium }}>
-                                  You own: <Text color="#059669" style={{ fontFamily: Fonts.bold }}>{ownedUnits} units ({currencySymbol}{assetTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</Text>
+                              <View
+                                style={{
+                                  marginTop: 8,
+                                  backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                                  paddingHorizontal: 9,
+                                  paddingVertical: 5,
+                                  borderRadius: 8,
+                                  borderWidth: 1,
+                                  borderColor: 'rgba(16, 185, 129, 0.2)',
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                }}
+                              >
+                                <XStack alignItems="center" gap={4}>
+                                  <View width={4} height={4} borderRadius={2} backgroundColor="#10B981" />
+                                  <Text color="#A7F3D0" fontSize={10.5} style={{ fontFamily: Fonts.medium }}>
+                                    You own: <Text color="#10B981" style={{ fontFamily: Fonts.bold }}>{formatShares(ownedUnits)} shares</Text>
+                                  </Text>
+                                </XStack>
+                                <Text color="#10B981" fontSize={10.5} style={{ fontFamily: Fonts.bold }}>
+                                  {currencySymbol}{assetTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </Text>
                               </View>
                             )}

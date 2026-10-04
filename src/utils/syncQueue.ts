@@ -95,25 +95,31 @@ export const syncQueue = {
     if (isProcessing) return;
     if (!isSupabaseConfigured) return;
 
-    await loadQueue();
-    if (memoryQueue.length === 0) return;
-
+    // Claim the lock before any await so concurrent callers can't run in parallel
     isProcessing = true;
 
     try {
+      await loadQueue();
+      if (memoryQueue.length === 0) return;
+
       const {
         data: { session },
-      } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+      } = await supabase.auth.getSession().catch((err) => {
+        console.warn('[SyncQueue] Failed to read session:', err);
+        return { data: { session: null } };
+      });
 
       // Do not sync guest sessions to Supabase
       if (!session?.user?.id || session.user.id === 'guest') {
-        isProcessing = false;
         return;
       }
 
-      const remainingItems: SyncQueueItem[] = [];
+      // Work on a snapshot; items enqueued during processing stay in memoryQueue untouched
+      const snapshot = [...memoryQueue];
+      const completedIds = new Set<string>();
+      const retriedItems = new Map<string, SyncQueueItem>();
 
-      for (const item of memoryQueue) {
+      for (const item of snapshot) {
         try {
           let error = null;
 
@@ -149,28 +155,37 @@ export const syncQueue = {
               error.message?.includes('schema cache');
 
             if (!isSchemaMismatch && item.retryCount < MAX_RETRIES) {
-              remainingItems.push({
+              retriedItems.set(item.id, {
                 ...item,
                 retryCount: item.retryCount + 1,
               });
-            } else if (isSchemaMismatch) {
-              console.warn(`[SyncQueue] Dropping un-retryable schema mismatch item for ${item.table}.${item.action}`);
             } else {
-              console.error(`[SyncQueue] Item exceeded max retries (${MAX_RETRIES}), dropping:`, item);
+              if (isSchemaMismatch) {
+                console.warn(`[SyncQueue] Dropping un-retryable schema mismatch item for ${item.table}.${item.action}`);
+              } else {
+                console.error(`[SyncQueue] Item exceeded max retries (${MAX_RETRIES}), dropping:`, item);
+              }
+              completedIds.add(item.id);
             }
+          } else {
+            completedIds.add(item.id);
           }
         } catch (execErr) {
           console.warn('[SyncQueue] Network/execution error during sync, preserving in queue:', execErr);
-          remainingItems.push({
+          retriedItems.set(item.id, {
             ...item,
             retryCount: item.retryCount + 1,
           });
-          // Stop queue iteration on network drop so we don't spam failed requests
+          // Stop queue iteration on network drop so we don't spam failed requests.
+          // Unprocessed items remain in memoryQueue because we only remove completed ids.
           break;
         }
       }
 
-      memoryQueue = remainingItems;
+      // Reconcile against the live queue so items enqueued mid-sync are never lost
+      memoryQueue = memoryQueue
+        .filter((q) => !completedIds.has(q.id))
+        .map((q) => retriedItems.get(q.id) ?? q);
       await persistQueue();
     } finally {
       isProcessing = false;

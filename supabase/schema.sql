@@ -325,3 +325,23 @@ BEGIN
     DELETE FROM auth.users WHERE id = auth.uid();
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 10. FULL APP STATE BACKUP (see supabase/user_app_state.sql)
+CREATE TABLE IF NOT EXISTS public.user_app_state (
+    user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    state JSONB NOT NULL DEFAULT '{}'::jsonb,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.user_app_state ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'user_app_state' AND policyname = 'Users can manage their own app state') THEN
+        CREATE POLICY "Users can manage their own app state"
+            ON public.user_app_state FOR ALL
+            USING (auth.uid() = user_id)
+            WITH CHECK (auth.uid() = user_id);
+    END IF;
+END $$;
+
+ALTER TABLE public.transactions ALTER COLUMN category_id DROP NOT NULL;

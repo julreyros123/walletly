@@ -62,22 +62,12 @@ export default function RootLayout() {
   }, [isAuthLoading, user?.id, hydrateGamification]);
 
   const setExpoPushToken = usePreferencesStore((state) => state.setExpoPushToken);
+  const expoPushToken = usePreferencesStore((state) => state.expoPushToken);
 
   useEffect(() => {
-    registerForPushNotificationsAsync().then(async (token) => {
+    registerForPushNotificationsAsync().then((token) => {
       if (token) {
         setExpoPushToken(token);
-        const currentUser = useAuthStore.getState().user;
-        if (currentUser && currentUser.id !== 'guest' && isSupabaseConfigured) {
-          try {
-            await supabase
-              .from('profiles')
-              .update({ push_token: token, updated_at: new Date().toISOString() })
-              .eq('id', currentUser.id);
-          } catch (e) {
-            console.warn('[Notifications] Failed to sync push token to server profile:', e);
-          }
-        }
       }
     });
 
@@ -94,6 +84,25 @@ export default function RootLayout() {
       responseListener.remove();
     };
   }, [setExpoPushToken]);
+
+  // Sync push token to Supabase profile whenever user logs in or token is registered
+  useEffect(() => {
+    if (expoPushToken && user?.id && user.id !== 'guest' && isSupabaseConfigured) {
+      (async () => {
+        try {
+          const { error } = await supabase
+            .from('profiles')
+            .update({ push_token: expoPushToken, updated_at: new Date().toISOString() })
+            .eq('id', user.id);
+          if (error) {
+            console.warn('[Notifications] Failed to sync push token to server profile:', error.message);
+          }
+        } catch (e: unknown) {
+          console.warn('[Notifications] Push token profile sync error:', e);
+        }
+      })();
+    }
+  }, [expoPushToken, user?.id]);
 
   // Ensure transparent status bar on Android
   useEffect(() => {

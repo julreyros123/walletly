@@ -23,3 +23,16 @@ allprojects {
 
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
+
+subprojects { subproject ->
+    subproject.plugins.withId("com.android.library") {
+        subproject.android {
+            ndkVersion = "27.1.12297006"
+        }
+    }
+    subproject.plugins.withId("com.android.application") {
+        subproject.android {
+            ndkVersion = "27.1.12297006"
+        }
+    }
+}

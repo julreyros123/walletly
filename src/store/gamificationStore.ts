@@ -10,10 +10,13 @@ const BASE_GAMIFICATION_KEY = 'cbudget_gamification_state';
 // Track the current authenticated user ID for state scoping
 let currentActiveUserId: string | null = null;
 let lastHydratedTarget: string | null | undefined = undefined;
+let hydrationGeneration = 0;
+let isHydrationComplete = false;
 
 export function setActiveGamificationUser(userId: string | null) {
   currentActiveUserId = userId;
   lastHydratedTarget = undefined;
+  cloudReadyUserId = null;
 }
 
 export function getUserStorageKey(userId?: string | null): string {
@@ -23,6 +26,81 @@ export function getUserStorageKey(userId?: string | null): string {
   return `${BASE_GAMIFICATION_KEY}_guest`;
 }
 
+// ── Cloud snapshot backup (public.user_app_state) ─────────────────────
+// Only transactions / budgets / saving goals have dedicated tables. Everything else
+// (XP, level, budget type, savings vault, lessons, portfolio...) lived only on-device,
+// so a reinstall / new device looked like a full account reset. We mirror the full
+// persisted state to a single JSONB row per user.
+const CLOUD_STATE_TABLE = 'user_app_state';
+const CLOUD_SNAPSHOT_DEBOUNCE_MS = 1500;
+let cloudSnapshotTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingCloudSnapshot: { userId: string; data: Record<string, unknown> } | null = null;
+let cloudSnapshotDisabled = false;
+// Uploads are blocked until the user's cloud state has been read, so a fresh/empty
+// device can never overwrite the real cloud backup with default values.
+let cloudReadyUserId: string | null = null;
+
+function isMissingTableError(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  return (
+    error.code === 'PGRST205' ||
+    error.code === '42P01' ||
+    Boolean(error.message?.includes('does not exist')) ||
+    Boolean(error.message?.includes('schema cache'))
+  );
+}
+
+async function uploadCloudSnapshot(userId: string, data: Record<string, unknown>): Promise<void> {
+  if (cloudSnapshotDisabled) return;
+  try {
+    const { error } = await supabase.from(CLOUD_STATE_TABLE).upsert({
+      user_id: userId,
+      state: data,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) {
+      if (isMissingTableError(error)) {
+        cloudSnapshotDisabled = true;
+        console.warn('[GamificationStore] user_app_state table missing. Run supabase/user_app_state.sql to enable cloud backup.');
+      } else {
+        console.warn('[GamificationStore] Cloud snapshot upload failed:', error.message);
+      }
+    }
+  } catch (e) {
+    console.warn('[GamificationStore] Cloud snapshot upload error:', e);
+  }
+}
+
+function scheduleCloudSnapshot(userId: string, data: Record<string, unknown>): void {
+  if (cloudSnapshotDisabled || cloudReadyUserId !== userId) return;
+  pendingCloudSnapshot = { userId, data };
+  if (cloudSnapshotTimer) clearTimeout(cloudSnapshotTimer);
+  cloudSnapshotTimer = setTimeout(() => {
+    flushCloudSnapshot().catch((err) => console.warn('[GamificationStore] Snapshot flush error:', err));
+  }, CLOUD_SNAPSHOT_DEBOUNCE_MS);
+}
+
+/** Immediately uploads any pending cloud snapshot (call before sign-out / on background). */
+export async function flushCloudSnapshot(): Promise<void> {
+  if (cloudSnapshotTimer) {
+    clearTimeout(cloudSnapshotTimer);
+    cloudSnapshotTimer = null;
+  }
+  const pending = pendingCloudSnapshot;
+  pendingCloudSnapshot = null;
+  if (pending) await uploadCloudSnapshot(pending.userId, pending.data);
+}
+
+/** Drops any pending snapshot without uploading (used on account deletion). */
+export function cancelCloudSnapshot(): void {
+  if (cloudSnapshotTimer) {
+    clearTimeout(cloudSnapshotTimer);
+    cloudSnapshotTimer = null;
+  }
+  pendingCloudSnapshot = null;
+  cloudReadyUserId = null;
+}
+
 /**
  * Standard RFC4122 v4 UUID generator compatible with PostgreSQL UUID primary keys
  */
@@ -30,7 +108,9 @@ export function generateUUID(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     try {
       return crypto.randomUUID();
-    } catch {}
+    } catch (e) {
+      console.warn('[UUID] crypto.randomUUID fallback:', e);
+    }
   }
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
@@ -419,6 +499,10 @@ export const ALL_ACHIEVEMENTS: Achievement[] = [
 
 async function persistState(state: GamificationState, specificUserId?: string | null) {
   try {
+    if (!isHydrationComplete && specificUserId === undefined) {
+      // Ignore premature persist calls while store is loading from cache
+      return;
+    }
     const targetUserId = specificUserId !== undefined ? specificUserId : currentActiveUserId;
     const storageKey = getUserStorageKey(targetUserId);
 
@@ -451,8 +535,13 @@ async function persistState(state: GamificationState, specificUserId?: string | 
       completedLessonIds: state.completedLessonIds,
       lastDividendClaimDates: state.lastDividendClaimDates,
       guestSessionDate: state.guestSessionDate,
+      _savedAt: Date.now(),
     };
     await storage.setItem(storageKey, JSON.stringify(dataToSave));
+
+    if (targetUserId && targetUserId !== 'guest') {
+      scheduleCloudSnapshot(targetUserId, dataToSave);
+    }
   } catch (e) {
     console.warn('[GamificationStore] Failed to persist state:', e);
   }
@@ -1033,6 +1122,8 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
               payload: {
                 challenge_id: goalId,
                 user_id: session.user.id,
+                title: name,
+                icon: category,
                 target_amount: targetAmount,
                 current_amount: 0,
                 end_date: targetDate.includes('-') ? targetDate : null,
@@ -1722,10 +1813,14 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
 
   hydrate: async (targetUserId?: string | null) => {
     try {
+      const generation = ++hydrationGeneration;
       let resolvedUserId = targetUserId;
       if (resolvedUserId === undefined) {
         // Probe Supabase session
-        const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+        const { data: { session } } = await supabase.auth.getSession().catch((err) => {
+          console.warn('[GamificationStore] Probe session warning:', err);
+          return { data: { session: null } };
+        });
         resolvedUserId = session?.user?.id || null;
       }
 
@@ -1733,14 +1828,10 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         return;
       }
       lastHydratedTarget = resolvedUserId;
-
       currentActiveUserId = resolvedUserId;
+      isHydrationComplete = false;
+
       const userKey = getUserStorageKey(resolvedUserId);
-
-      // Immediately reset in-memory Zustand store to clean default state
-      // This strictly prevents state leakage between guests, alter accounts, and new accounts.
-      set({ ...DEFAULT_GAMIFICATION_DATA });
-
       const isGuestMode = resolvedUserId === null || resolvedUserId === 'guest';
       const todayISO = getLocalDateString();
 
@@ -1751,80 +1842,39 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         stored = await storage.getItem(BASE_GAMIFICATION_KEY);
       }
 
+      if (generation !== hydrationGeneration) {
+        return;
+      }
+
+      let localSavedAt = 0;
+      let hasLocalCache = false;
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
-          const version = parsed._version || 1;
-
-          // Schema migrations for older versions
-          if (version < CURRENT_GAMIFICATION_VERSION) {
-            if (!Array.isArray(parsed.loggedExpenses)) parsed.loggedExpenses = [];
-            if (!Array.isArray(parsed.savingsGoals)) parsed.savingsGoals = [];
-            if (!Array.isArray(parsed.savingsRecords)) parsed.savingsRecords = [];
-            if (!Array.isArray(parsed.achievements)) parsed.achievements = [];
-            if (!Array.isArray(parsed.completedLessonIds)) parsed.completedLessonIds = [];
-            if (typeof parsed.unspentSavingsVault !== 'number') parsed.unspentSavingsVault = 0;
-            if (typeof parsed.virtualBalance !== 'number') parsed.virtualBalance = 0;
-            if (!parsed.portfolioAllocations || typeof parsed.portfolioAllocations !== 'object') {
-              parsed.portfolioAllocations = {};
-            }
-            if (!parsed.categoryLimits || typeof parsed.categoryLimits !== 'object') {
-              parsed.categoryLimits = {};
-            }
-          }
-
-          let effectiveExpenses: Expense[] = parsed.loggedExpenses ?? [];
-          let guestSessionDate = parsed.guestSessionDate || parsed.lastActiveDate || todayISO;
-
-          // Midnight reset for Guest Mode: if date changed, clear guest transactions
-          if (isGuestMode) {
-            if (guestSessionDate !== todayISO) {
-              effectiveExpenses = [];
-              guestSessionDate = todayISO;
-            }
-          }
-
-          set({
-            xp: parsed.xp ?? 45,
-            level: parsed.level ?? 1,
-            streakDays: parsed.streakDays ?? 1,
-            lastActiveDate: parsed.lastActiveDate ?? null,
-            lastClaimedRewardDate: parsed.lastClaimedRewardDate ?? null,
-            achievements: parsed.achievements ?? [],
-            budgetingScore: parsed.budgetingScore ?? 0,
-            learningScore: parsed.learningScore ?? 0,
-            savingScore: parsed.savingScore ?? 0,
-            investingScore: parsed.investingScore ?? 0,
-            customAvatar: parsed.customAvatar ?? 'Budget Beginner',
-            isBudgetSetupComplete: parsed.isBudgetSetupComplete ?? false,
-            budgetType: parsed.budgetType ?? null,
-            totalBudget: parsed.totalBudget ?? 0,
-            selectedCategories: parsed.selectedCategories ?? [],
-            categoryLimits: parsed.categoryLimits ?? {},
-            loggedExpenses: effectiveExpenses,
-            savingsGoals: parsed.savingsGoals ?? [],
-            unspentSavingsVault: parsed.unspentSavingsVault ?? 0,
-            savingsRecords: parsed.savingsRecords ?? [],
-            virtualBalance: parsed.virtualBalance ?? 0,
-            portfolioAllocations: parsed.portfolioAllocations ?? {},
-            riskProfile: parsed.riskProfile ?? null,
-            spareChangeAccumulated: parsed.spareChangeAccumulated ?? 0,
-            completedLessonIds: parsed.completedLessonIds ?? [],
-            lastDividendClaimDates: parsed.lastDividendClaimDates ?? {},
-            guestSessionDate,
-          });
+          localSavedAt = Number(parsed._savedAt) || 0;
+          hasLocalCache = true;
+          set(buildStateFromSnapshot(parsed, isGuestMode, todayISO));
         } catch (parseErr) {
           console.warn('[GamificationStore] Error parsing cached state:', parseErr);
         }
+      } else {
+        set({ ...DEFAULT_GAMIFICATION_DATA });
       }
+
+      isHydrationComplete = true;
 
       // 2. If authenticated with Supabase, pull cloud records and sync permanently
       if (resolvedUserId && resolvedUserId !== 'guest') {
         const userId = resolvedUserId;
 
-        // Concurrent fetch of transactions, budgets, and saving challenges
+        // Concurrent fetch of full-state backup, transactions, budgets, and saving challenges
         // Uses .or(owner_id, user_id) so no transactions are ever omitted
-        const [txRes, budgetRes, goalsRes] = await Promise.allSettled([
+        const [snapshotRes, txRes, budgetRes, goalsRes] = await Promise.allSettled([
+          supabase
+            .from(CLOUD_STATE_TABLE)
+            .select('state, updated_at')
+            .eq('user_id', userId)
+            .maybeSingle(),
           supabase
             .from('transactions')
             .select('*')
@@ -1840,27 +1890,63 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
             .eq('user_id', userId),
         ]);
 
-        const nextUpdates: Partial<GamificationState> = {};
+        if (generation !== hydrationGeneration) {
+          return;
+        }
 
-        // Transactions / Activity history sync
-        if (txRes.status === 'fulfilled' && txRes.value.data) {
-          const remoteTxs = txRes.value.data;
-          if (remoteTxs.length > 0) {
-            const mappedExpenses: Expense[] = remoteTxs.map((t: any) => ({
-              id: t.transaction_id || t.id,
-              name: t.description || t.category_id || t.category,
-              category: t.category_id || t.category,
-              amount: Number(t.amount) || 0,
-              date: t.transaction_date || getLocalDateString(),
-              time: t.created_at ? format12HourTime(new Date(t.created_at)) : undefined,
-              type: (t.type === 'income' ? 'income' : 'expense') as 'expense' | 'income',
-            }));
-            nextUpdates.loggedExpenses = mappedExpenses;
+        // Full-state backup: restore it when this device has no cache or an older one
+        let snapshotRead = false;
+        let restoredFromSnapshot = false;
+        if (snapshotRes.status === 'fulfilled') {
+          const { data: snapRow, error: snapErr } = snapshotRes.value;
+          if (!snapErr) {
+            snapshotRead = true;
+            const remoteState = snapRow?.state as Record<string, unknown> | undefined;
+            if (remoteState && typeof remoteState === 'object') {
+              const remoteSavedAt = Number(remoteState._savedAt) || 0;
+              if (!hasLocalCache || remoteSavedAt > localSavedAt) {
+                set(buildStateFromSnapshot(remoteState, false, todayISO));
+                restoredFromSnapshot = true;
+              }
+            }
+          } else if (isMissingTableError(snapErr)) {
+            cloudSnapshotDisabled = true;
+            snapshotRead = true;
+            console.warn('[GamificationStore] user_app_state table missing. Run supabase/user_app_state.sql to enable cloud backup.');
+          } else {
+            console.warn('[GamificationStore] Cloud snapshot read failed:', snapErr.message);
           }
         }
 
-        // Budgets / Allocation sync
-        if (budgetRes.status === 'fulfilled' && budgetRes.value.data) {
+        const nextUpdates: Partial<GamificationState> = {};
+
+        // Transactions / Activity history sync (merge remote with offline local items)
+        if (txRes.status === 'fulfilled' && txRes.value.data) {
+          const remoteTxs = txRes.value.data;
+          if (remoteTxs.length > 0) {
+            const localById = new Map((get().loggedExpenses || []).map((e) => [e.id, e]));
+            const mappedExpenses: Expense[] = remoteTxs.map((t: any) => {
+              const id = t.transaction_id || t.id;
+              const local = localById.get(id);
+              return {
+                id,
+                name: local?.name || t.description || t.category || t.category_id,
+                category: t.category || t.category_id,
+                amount: Number(t.amount) || 0,
+                date: t.transaction_date || getLocalDateString(),
+                time: local?.time || (t.created_at ? format12HourTime(new Date(t.created_at)) : undefined),
+                notes: local?.notes,
+                type: (t.type === 'income' ? 'income' : 'expense') as 'expense' | 'income',
+              };
+            });
+            const remoteIds = new Set(mappedExpenses.map((e) => e.id));
+            const localOnly = (get().loggedExpenses || []).filter((e) => !remoteIds.has(e.id));
+            nextUpdates.loggedExpenses = [...mappedExpenses, ...localOnly];
+          }
+        }
+
+        // Budgets / Allocation sync (the full-state backup already carries budget data)
+        if (!restoredFromSnapshot && budgetRes.status === 'fulfilled' && budgetRes.value.data) {
           const budgetRows = budgetRes.value.data;
           if (budgetRows.length > 0) {
             let total = 0;
@@ -1868,7 +1954,8 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
             const categories: string[] = [];
 
             for (const b of budgetRows) {
-              const cat = b.category_id || b.category;
+              // Prefer `category`: older rows got category_id = '__total__' from the column default
+              const cat = b.category || b.category_id;
               const limit = Number(b.limit_amount ?? b.allocated_amount) || 0;
               if (cat === '__total__') {
                 total = limit;
@@ -1886,26 +1973,44 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
             nextUpdates.totalBudget = total;
             nextUpdates.categoryLimits = categoryLimits;
             nextUpdates.selectedCategories = categories;
+            if (!get().budgetType) nextUpdates.budgetType = 'monthly';
           }
         }
 
-        // Savings Goals sync (saving_challenges in Supabase)
+        // Savings Goals sync (saving_challenges in Supabase, merged with local goals)
         if (goalsRes.status === 'fulfilled' && goalsRes.value.data) {
           const goalsRows = goalsRes.value.data;
           if (goalsRows.length > 0) {
-            nextUpdates.savingsGoals = goalsRows.map((g: any) => ({
-              id: g.challenge_id || g.id,
-              name: g.title || 'Savings Goal',
-              targetAmount: Number(g.target_amount) || 0,
-              currentSavings: Number(g.current_amount) || 0,
-              targetDate: g.end_date || g.deadline || '120',
-              category: g.icon || 'Emergency Fund',
-            }));
+            const localGoalsById = new Map((get().savingsGoals || []).map((g) => [g.id, g]));
+            const mappedGoals = goalsRows.map((g: any) => {
+              const id = g.challenge_id || g.id;
+              const local = localGoalsById.get(id);
+              return {
+                id,
+                name: local?.name || g.title || 'Savings Goal',
+                targetAmount: Number(g.target_amount) || 0,
+                currentSavings: Number(g.current_amount) || 0,
+                targetDate: local?.targetDate || g.end_date || g.deadline || '120',
+                category: local?.category || g.icon || 'Emergency Fund',
+              };
+            });
+            const remoteGoalIds = new Set(mappedGoals.map((g) => g.id));
+            const localOnlyGoals = (get().savingsGoals || []).filter((g) => !remoteGoalIds.has(g.id));
+            nextUpdates.savingsGoals = [...mappedGoals, ...localOnlyGoals];
           }
         }
 
         if (Object.keys(nextUpdates).length > 0) {
           set(nextUpdates);
+        }
+
+        // Allow cloud backups only once we know we won't clobber real cloud data:
+        // either the cloud row was read, or this device already had its own cache.
+        if (snapshotRead || hasLocalCache) {
+          cloudReadyUserId = userId;
+        }
+
+        if (restoredFromSnapshot || Object.keys(nextUpdates).length > 0 || cloudReadyUserId === userId) {
           persistState(get(), userId);
         }
 
@@ -1919,6 +2024,77 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
     }
   },
 }));
+
+/**
+ * Converts a persisted snapshot (local cache or cloud backup) into store data,
+ * applying schema migrations and the guest midnight reset.
+ */
+function buildStateFromSnapshot(
+  raw: Record<string, any>,
+  isGuestMode: boolean,
+  todayISO: string
+): GamificationDataState {
+  const parsed = { ...raw };
+  const version = parsed._version || 1;
+
+  // Schema migrations for older versions
+  if (version < CURRENT_GAMIFICATION_VERSION) {
+    if (!Array.isArray(parsed.loggedExpenses)) parsed.loggedExpenses = [];
+    if (!Array.isArray(parsed.savingsGoals)) parsed.savingsGoals = [];
+    if (!Array.isArray(parsed.savingsRecords)) parsed.savingsRecords = [];
+    if (!Array.isArray(parsed.achievements)) parsed.achievements = [];
+    if (!Array.isArray(parsed.completedLessonIds)) parsed.completedLessonIds = [];
+    if (typeof parsed.unspentSavingsVault !== 'number') parsed.unspentSavingsVault = 0;
+    if (typeof parsed.virtualBalance !== 'number') parsed.virtualBalance = 0;
+    if (!parsed.portfolioAllocations || typeof parsed.portfolioAllocations !== 'object') {
+      parsed.portfolioAllocations = {};
+    }
+    if (!parsed.categoryLimits || typeof parsed.categoryLimits !== 'object') {
+      parsed.categoryLimits = {};
+    }
+  }
+
+  let effectiveExpenses: Expense[] = parsed.loggedExpenses ?? [];
+  let guestSessionDate = parsed.guestSessionDate || parsed.lastActiveDate || todayISO;
+
+  // Midnight reset for Guest Mode: if date changed, clear guest transactions
+  if (isGuestMode) {
+    if (guestSessionDate !== todayISO) {
+      effectiveExpenses = [];
+      guestSessionDate = todayISO;
+    }
+  }
+
+  return {
+    xp: parsed.xp ?? 45,
+    level: parsed.level ?? 1,
+    streakDays: parsed.streakDays ?? 1,
+    lastActiveDate: parsed.lastActiveDate ?? null,
+    lastClaimedRewardDate: parsed.lastClaimedRewardDate ?? null,
+    achievements: parsed.achievements ?? [],
+    budgetingScore: parsed.budgetingScore ?? 0,
+    learningScore: parsed.learningScore ?? 0,
+    savingScore: parsed.savingScore ?? 0,
+    investingScore: parsed.investingScore ?? 0,
+    customAvatar: parsed.customAvatar ?? 'Budget Beginner',
+    isBudgetSetupComplete: parsed.isBudgetSetupComplete ?? false,
+    budgetType: parsed.budgetType ?? null,
+    totalBudget: parsed.totalBudget ?? 0,
+    selectedCategories: parsed.selectedCategories ?? [],
+    categoryLimits: parsed.categoryLimits ?? {},
+    loggedExpenses: effectiveExpenses,
+    savingsGoals: parsed.savingsGoals ?? [],
+    unspentSavingsVault: parsed.unspentSavingsVault ?? 0,
+    savingsRecords: parsed.savingsRecords ?? [],
+    virtualBalance: parsed.virtualBalance ?? 0,
+    portfolioAllocations: parsed.portfolioAllocations ?? {},
+    riskProfile: parsed.riskProfile ?? null,
+    spareChangeAccumulated: parsed.spareChangeAccumulated ?? 0,
+    completedLessonIds: parsed.completedLessonIds ?? [],
+    lastDividendClaimDates: parsed.lastDividendClaimDates ?? {},
+    guestSessionDate,
+  };
+}
 
 // ── Automatic 12 Midnight Guest Reset Scheduler ──────────────────────
 let midnightTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1940,10 +2116,13 @@ function scheduleMidnightCheck() {
 
 scheduleMidnightCheck();
 
-// Listen to foreground resume so if device slept through midnight, guest resets immediately
+// Listen to foreground resume so if device slept through midnight, guest resets immediately.
+// On background, push any pending cloud backup so it isn't lost if the app is killed.
 AppState.addEventListener('change', (nextAppState) => {
   if (nextAppState === 'active') {
     useGamificationStore.getState().checkMidnightGuestReset();
+  } else if (nextAppState === 'background') {
+    flushCloudSnapshot().catch((err) => console.warn('[GamificationStore] Background snapshot flush error:', err));
   }
 });
 

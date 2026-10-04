@@ -1,19 +1,19 @@
 {
   "expo": {
-    "name": "cbudget",
+    "name": "Cbudget",
     "slug": "cbudget",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/walletly-logo.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "cbudget",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/walletly-logo.png"
+      "icon": "./assets/images/icon.png"
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#0A2540",
-        "foregroundImage": "./assets/images/walletly-logo.png"
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": true,
       "package": "com.julreyros123.cbudget",
@@ -36,7 +36,7 @@
         {
           "backgroundColor": "#0A2540",
           "android": {
-            "image": "./assets/images/walletly-logo.png",
+            "image": "./assets/images/android-icon-foreground.png",
             "imageWidth": 160
           }
         }
@@ -45,7 +45,8 @@
       "expo-localization",
       "@react-native-google-signin/google-signin",
       "expo-audio",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,

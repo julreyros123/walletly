@@ -67,8 +67,8 @@ export const useMarketStore = create<MarketState>((set, get) => ({
           });
         }
       }
-    } catch {
-      // Fallback to default ASSET_DATA on storage read failure
+    } catch (err) {
+      console.warn('[MarketStore] Error loading cached market state:', err);
     }
 
     // After loading cached state, pull fresh anchor if online
@@ -104,11 +104,10 @@ export const useMarketStore = create<MarketState>((set, get) => ({
           const current = currentAssets[alias];
 
           // Use real percent change from Wall Street (quote.dp)
-          // to scale the asset's educational base price realistically
-          const realChangePercent = quote.dp;
-          const basePrice = current.price;
-          const nextPrice = Number((basePrice * (1 + realChangePercent / 100)).toFixed(2));
-          const changeValue = Number((nextPrice - basePrice).toFixed(2));
+          // scaled against baseline educational price to avoid compounding drift
+          const realChangePercent = typeof quote.dp === 'number' && !isNaN(quote.dp) ? quote.dp : 0;
+          const basePrice = ASSET_DATA[alias]?.price ?? current.price;
+          const nextPrice = Math.max(1, Number((basePrice * (1 + realChangePercent / 100)).toFixed(2)));
 
           currentAssets[alias] = {
             ...current,

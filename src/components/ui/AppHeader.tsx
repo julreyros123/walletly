@@ -47,18 +47,8 @@ export function AppHeader() {
           text: 'Reset',
           style: 'destructive',
           onPress: () => {
-            // Reset state
-            useGamificationStore.setState({
-              xp: 45,
-              level: 1,
-              streakDays: 3,
-              budgetingScore: 75,
-              learningScore: 60,
-              savingScore: 80,
-              investingScore: 65,
-              achievements: [],
-              customAvatar: 'Budget Beginner',
-            });
+            // Reset state properly using store action that persists to storage
+            useGamificationStore.getState().resetAllData(10000);
             setShowDrawer(false);
             Alert.alert('Data Reset', 'All simulated sandbox data has been reset to defaults.');
           },
@@ -81,7 +71,7 @@ export function AppHeader() {
         {/* Left: Brand logo & name */}
         <XStack alignItems="center">
           <Image
-            source={require('../../../assets/images/walletly-logo.png')}
+            source={require('../../../assets/images/cbudget-mark.png')}
             style={{ width: 34, height: 34, transform: [{ translateY: 1 }] }}
             contentFit="contain"
           />

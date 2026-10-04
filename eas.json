@@ -14,6 +14,20 @@
         "buildType": "apk"
       },
       "env": {
+        "EAS_SKIP_AUTO_FINGERPRINT": "1",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://gvridjyyjcvdniwqyjnu.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_E_4-xqYEWuDSCte27X9dIw_L7g6TvJA",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "463871121355-j9cha6sh3tcerqdc2jip52ng36c4c6o6.apps.googleusercontent.com",
+        "EXPO_PUBLIC_FINNHUB_API_KEY": "dap1531r01qj9mnrei6gdap1531r01qj9mnrei70"
+      }
+    },
+    "preview-bundle": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EAS_SKIP_AUTO_FINGERPRINT": "1",
         "EXPO_PUBLIC_SUPABASE_URL": "https://gvridjyyjcvdniwqyjnu.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_E_4-xqYEWuDSCte27X9dIw_L7g6TvJA",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "463871121355-j9cha6sh3tcerqdc2jip52ng36c4c6o6.apps.googleusercontent.com",
@@ -23,6 +37,7 @@
     "production": {
       "autoIncrement": true,
       "env": {
+        "EAS_SKIP_AUTO_FINGERPRINT": "1",
         "EXPO_PUBLIC_SUPABASE_URL": "https://gvridjyyjcvdniwqyjnu.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_E_4-xqYEWuDSCte27X9dIw_L7g6TvJA",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "463871121355-j9cha6sh3tcerqdc2jip52ng36c4c6o6.apps.googleusercontent.com",

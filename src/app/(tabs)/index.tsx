@@ -26,6 +26,7 @@ import { QuickActionsGrid } from '@/features/dashboard/components/QuickActionsGr
 import { BentoGoalsAndPortfolio } from '@/features/dashboard/components/BentoGoalsAndPortfolio';
 import { QuickExpenseModal } from '@/features/dashboard/components/QuickExpenseModal';
 import { ASSET_DATA } from '@/constants/assets';
+import { useMarketStore } from '@/store/marketStore';
 import { useCurrency } from '@/utils/currency';
 
 export const getMasteryAvatarDetails = (title: string) => {
@@ -75,6 +76,7 @@ export default function DashboardScreen() {
   const store = useGamificationStore();
   const user = useAuthStore((state) => state.user);
   const isAuthLoading = useAuthStore((state) => state.isLoading);
+  const marketAssets = useMarketStore((state) => state.assets);
   const { symbol: currencySymbol } = useCurrency();
 
   useFocusEffect(
@@ -122,9 +124,9 @@ export default function DashboardScreen() {
     toast.success('Expense Logged! ✨', `Logged ${currencySymbol}${num.toLocaleString()} for ${name} (+15 XP)`);
   };
 
-  // Investment calculation using verified ASSET_DATA
+  // Investment calculation using dynamic market store assets (fallback to ASSET_DATA)
   const holdingsValue = Object.entries(store.portfolioAllocations).reduce(
-    (acc, [ticker, qty]) => acc + (qty || 0) * (ASSET_DATA[ticker]?.price || 0),
+    (acc, [ticker, qty]) => acc + (qty || 0) * (marketAssets[ticker]?.price ?? ASSET_DATA[ticker]?.price ?? 0),
     0
   );
   const totalSimValue = store.virtualBalance + holdingsValue;

@@ -4,7 +4,12 @@ import * as Linking from 'expo-linking';
 import { create } from 'zustand';
 import { storage } from '@/utils/storage';
 import { supabase } from '@/utils/supabase';
-import { useGamificationStore, setActiveGamificationUser } from '@/store/gamificationStore';
+import {
+  useGamificationStore,
+  setActiveGamificationUser,
+  flushCloudSnapshot,
+  cancelCloudSnapshot,
+} from '@/store/gamificationStore';
 import { syncQueue } from '@/utils/syncQueue';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -63,6 +68,14 @@ function generateGuestToken(): string {
 // Track the Supabase auth subscription so we can unsubscribe before re-registering
 let authSubscription: { unsubscribe: () => void } | null = null;
 
+/** Removes locally stored session keys and any pending (guest) sync items. */
+async function clearLocalSessionData(): Promise<void> {
+  await storage.deleteItem(AUTH_TOKEN_KEY);
+  await storage.deleteItem(USER_KEY);
+  await storage.deleteItem(PREMIUM_KEY);
+  await syncQueue.clear();
+}
+
 export interface User {
   id: string;
   name: string;
@@ -114,29 +127,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isPremium: false,
 
   login: async (email, password) => {
-    // Clear any local guest state and pending sync items before logging in
-    await storage.deleteItem(AUTH_TOKEN_KEY);
-    await storage.deleteItem(USER_KEY);
-    await storage.deleteItem(PREMIUM_KEY);
-    await syncQueue.clear();
-
-    setActiveGamificationUser(null);
-    useGamificationStore.getState().resetAllData(0);
-
+    // Local guest state is cleared by the auth listener only after sign-in succeeds,
+    // so a failed login never wipes guest data.
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
   },
 
   loginWithGoogle: async () => {
-    // Clear any local guest state and pending sync items before OAuth
-    await storage.deleteItem(AUTH_TOKEN_KEY);
-    await storage.deleteItem(USER_KEY);
-    await storage.deleteItem(PREMIUM_KEY);
-    await syncQueue.clear();
-
-    setActiveGamificationUser(null);
-    useGamificationStore.getState().resetAllData(0);
-
+    // Local guest state is cleared by the auth listener only after sign-in succeeds
     if (Platform.OS === 'web') {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -283,15 +281,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signUp: async (email, password) => {
-    // Clear any local guest state and sync queue before signing up
-    await storage.deleteItem(AUTH_TOKEN_KEY);
-    await storage.deleteItem(USER_KEY);
-    await storage.deleteItem(PREMIUM_KEY);
-    await syncQueue.clear();
-
-    setActiveGamificationUser(null);
-    useGamificationStore.getState().resetAllData(0);
-
+    // Local guest state is cleared by the auth listener once a session is issued
     const { error } = await supabase.auth.signUp({ email, password });
     if (error) throw error;
   },
@@ -324,7 +314,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     const currentUser = get().user;
 
-    // Clear local guest storage and flush pending sync items
+    // Push any unsynced changes to Supabase BEFORE dropping the session,
+    // otherwise pending items in the offline queue are lost forever.
+    if (currentUser && currentUser.id !== 'guest') {
+      try {
+        await flushCloudSnapshot();
+        await syncQueue.process();
+      } catch (err) {
+        console.warn('[Auth] Failed to flush pending data before logout:', err);
+      }
+    }
+
+    // Clear local session keys and remaining sync items
     await storage.deleteItem(AUTH_TOKEN_KEY);
     await storage.deleteItem(USER_KEY);
     await storage.deleteItem(PREMIUM_KEY);
@@ -353,6 +354,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   deleteAccount: async () => {
     const currentUser = get().user;
 
+    // Make sure no pending cloud backup re-creates data after deletion
+    cancelCloudSnapshot();
+
     // Clear local guest storage and flush pending sync items
     await storage.deleteItem(AUTH_TOKEN_KEY);
     await storage.deleteItem(USER_KEY);
@@ -377,6 +381,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         console.warn('[Auth] delete_user RPC call failed, falling back to direct profile delete:', error);
         // Fallback: delete profiles directly and sign out
         await supabase.from('profiles').delete().eq('id', currentUser.id);
+        await supabase.from('user_app_state').delete().eq('user_id', currentUser.id);
         await supabase.auth.signOut();
       } else {
         await supabase.auth.signOut();
@@ -420,7 +425,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           isLoading: false,
         });
         useGamificationStore.getState().hydrate('guest');
-        return;
+        // Fall through: guests still need the listener so a later sign-in is picked up
       }
 
       // Unsubscribe any previous listener to prevent leaks on re-hydration / hot-reload
@@ -432,6 +437,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Initialize Supabase session listener
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (session) {
+          const current = get();
+
+          // Token refreshes / repeat events for the same signed-in user: only update the token.
+          // Re-running the full sign-in path would reset isPremium and re-hydrate gamification.
+          if (current.isAuthenticated && current.user?.id === session.user.id) {
+            set({ token: session.access_token, isLoading: false });
+            return;
+          }
+
+          // A real sign-in just succeeded: now it's safe to drop any local guest session
+          if (isGuestToken(current.token)) {
+            try {
+              await clearLocalSessionData();
+            } catch (err) {
+              console.warn('[Auth] Failed to clear guest session after sign-in:', err);
+            }
+          }
+
           const meta = session.user.user_metadata || {};
           const initialUser: User = {
             id: session.user.id,
