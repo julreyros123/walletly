@@ -66,7 +66,7 @@ export default function BudgetScreen() {
   const { user } = useAuthStore();
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'budget' | 'calendar' | 'savings'>('budget');
+  const [activeTab, setActiveTab] = useState<'budget' | 'calendar' | 'savings' | 'goals'>('budget');
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'overspent' | 'inbudget'>('all');
   const [activityFilter, setActivityFilter] = useState<'all' | 'expenses' | 'income'>('all');
 
@@ -110,11 +110,15 @@ export default function BudgetScreen() {
 
     if (params.action === 'savings') {
       setActiveTab('savings');
+    } else if (params.action === 'goals') {
+      setActiveTab('goals');
       setShowAddGoalModal(true);
     } else if (params.action === 'log') {
       setShowExpenseForm(true);
     } else if (params.tab === 'savings' || params.action === 'savings_tab') {
       setActiveTab('savings');
+    } else if (params.tab === 'goals') {
+      setActiveTab('goals');
     }
   }, [params.action, params.tab, params.t]);
 
@@ -479,6 +483,59 @@ export default function BudgetScreen() {
     }
   };
 
+  // Smart Auto-Categorize Logic
+  const handleExpenseNameChange = (text: string) => {
+    setExpenseName(text);
+    if (transactionType === 'income') return;
+    
+    const lower = text.toLowerCase();
+    
+    const keywordMap: Record<string, string> = {
+      // Food
+      food: 'Food', mcdonald: 'Food', mcdonalds: 'Food', burger: 'Food', 
+      jollibee: 'Food', pizza: 'Food', lunch: 'Food', dinner: 'Food', 
+      breakfast: 'Food', coffee: 'Food', starbucks: 'Food', kfc: 'Food',
+      chowking: 'Food', manginasal: 'Food', snacks: 'Food', groceries: 'Food',
+      
+      // Transportation
+      gas: 'Transportation', uber: 'Transportation', taxi: 'Transportation', 
+      bus: 'Transportation', train: 'Transportation', jeep: 'Transportation', 
+      jeepney: 'Transportation', car: 'Transportation', grab: 'Transportation',
+      angkas: 'Transportation', joyride: 'Transportation', toll: 'Transportation',
+      fuel: 'Transportation',
+      
+      // School
+      school: 'School', tuition: 'School', books: 'School', supplies: 'School',
+      project: 'School', uniform: 'School', printing: 'School', photocopy: 'School',
+      
+      // Shopping
+      shopping: 'Shopping', mall: 'Shopping', clothes: 'Shopping', 
+      shoes: 'Shopping', lazada: 'Shopping', shopee: 'Shopping', 
+      shirt: 'Shopping', pants: 'Shopping',
+      
+      // Bills
+      bill: 'Bills', electricity: 'Bills', water: 'Bills', 
+      internet: 'Bills', phone: 'Bills', load: 'Bills', rent: 'Bills',
+      
+      // Entertainment
+      movie: 'Entertainment', netflix: 'Entertainment', game: 'Entertainment', 
+      spotify: 'Entertainment', cinema: 'Entertainment', arcade: 'Entertainment',
+      concert: 'Entertainment', ticket: 'Entertainment'
+    };
+
+    // Find the first matching keyword
+    for (const [key, categoryName] of Object.entries(keywordMap)) {
+      // Use word boundaries or simple includes. Includes is safer for partial matches like "mcdonalds"
+      if (lower.includes(key)) {
+        if (expenseCategory !== categoryName) {
+          setExpenseCategory(categoryName);
+          safeHaptic('success'); // gentle feedback that it auto-selected
+        }
+        break;
+      }
+    }
+  };
+
   // Radial Ring Dimensions
   const radius = 56;
   const strokeWidth = 10;
@@ -511,11 +568,12 @@ export default function BudgetScreen() {
 
         {/* ==================== SEGMENTED TOP SWITCHER (SINGLE CAPSULE TRACK) ==================== */}
         <View style={styles.capsuleTrackWrapper}>
-          <AnimatedSegmentSwitch<'budget' | 'calendar' | 'savings'>
+          <AnimatedSegmentSwitch<'budget' | 'calendar' | 'savings' | 'goals'>
             options={[
               { id: 'budget', label: 'Budget' },
               { id: 'calendar', label: 'Calendar' },
-              { id: 'savings', label: 'Goals' },
+              { id: 'savings', label: 'Savings' },
+              { id: 'goals', label: 'Goals' },
             ]}
             activeId={activeTab}
             onChange={(tab) => setActiveTab(tab)}
@@ -1594,9 +1652,76 @@ export default function BudgetScreen() {
           )}
 
           {/* ========================================================================= */}
-          {/* TAB 3: SAVINGS GOALS                                                      */}
+          {/* TAB 3: SAVINGS POT (UNSPENT TRACKER)                                      */}
           {/* ========================================================================= */}
           {activeTab === 'savings' && (
+            <YStack gap={16}>
+              {/* Savings Vault Hero Card */}
+              <View style={[styles.analyticsHeroCard, isDark && styles.analyticsHeroCardDark]}>
+                <YStack alignItems="center" gap={4} paddingVertical={12}>
+                  <Text color="#10B981" fontSize={11} fontFamily={Fonts.bold} letterSpacing={0.8} textTransform="uppercase">
+                    Total Unspent Savings
+                  </Text>
+                  <Text color={theme.text} fontSize={36} fontFamily={Fonts.extraBold}>
+                    {currencySymbol}{store.unspentSavingsVault.toLocaleString()}
+                  </Text>
+                  <Text color={theme.textSecondary} fontSize={12} fontFamily={Fonts.medium} textAlign="center" marginTop={4}>
+                    Money you successfully saved by staying under budget across cycles.
+                  </Text>
+                </YStack>
+              </View>
+
+              {/* Transactions / Savings Records */}
+              <View style={[styles.categoryCard, { backgroundColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#FFFFFF' : '#131D31' }]}>
+                <Text color={theme.text} fontSize={16} fontFamily={Fonts.bold} marginBottom={12}>
+                  Savings History
+                </Text>
+                {store.savingsRecords && store.savingsRecords.length > 0 ? (
+                  <YStack>
+                    {store.savingsRecords.map((record, i) => (
+                      <XStack
+                        key={record.id}
+                        justifyContent="space-between"
+                        alignItems="center"
+                        paddingVertical={12}
+                        borderBottomWidth={i === store.savingsRecords.length - 1 ? 0 : 1}
+                        borderBottomColor={theme.border}
+                      >
+                        <XStack alignItems="center" gap={12}>
+                          <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(16, 185, 129, 0.1)', alignItems: 'center', justifyContent: 'center' }}>
+                            <PhosphorIcon name="PiggyBank" size={20} color="#10B981" weight="duotone" />
+                          </View>
+                          <YStack>
+                            <Text color={theme.text} fontSize={14} fontFamily={Fonts.bold}>
+                              {record.cycle.charAt(0).toUpperCase() + record.cycle.slice(1)} Savings
+                            </Text>
+                            <Text color={theme.textSecondary} fontSize={11} fontFamily={Fonts.medium}>
+                              {record.date} • {record.time}
+                            </Text>
+                          </YStack>
+                        </XStack>
+                        <Text color="#10B981" fontSize={15} fontFamily={Fonts.bold}>
+                          +{currencySymbol}{record.amount.toLocaleString()}
+                        </Text>
+                      </XStack>
+                    ))}
+                  </YStack>
+                ) : (
+                  <YStack alignItems="center" paddingVertical={24} gap={8}>
+                    <PhosphorIcon name="Receipt" size={32} color={theme.textSecondary} opacity={0.5} />
+                    <Text color={theme.textSecondary} fontSize={13} fontFamily={Fonts.medium} textAlign="center">
+                      No savings history yet.{'\n'}Unspent money is added here at the end of your cycle!
+                    </Text>
+                  </YStack>
+                )}
+              </View>
+            </YStack>
+          )}
+
+          {/* ========================================================================= */}
+          {/* TAB 4: SAVINGS GOALS                                                      */}
+          {/* ========================================================================= */}
+          {activeTab === 'goals' && (
             <YStack gap={16}>
               {/* Smart Savings Coach Insights */}
               <View style={[styles.darkMetricCard, { backgroundColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#FFFFFF' : '#131D31' }]}>
@@ -1826,7 +1951,7 @@ export default function BudgetScreen() {
                 label={transactionType === 'income' ? 'Income Source' : 'Item Name / Merchant'}
                 placeholder={transactionType === 'income' ? 'e.g. Allowance, Freelance, Gift' : 'e.g. Jollibee, Jeepney'}
                 value={expenseName}
-                onChangeText={setExpenseName}
+                onChangeText={handleExpenseNameChange}
               />
               <FormInput
                 variant="default"

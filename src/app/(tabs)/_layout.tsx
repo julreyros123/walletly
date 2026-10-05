@@ -94,12 +94,15 @@ export default function TabsLayout() {
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: 52 }}>
                 <TouchableOpacity
                   onPress={() => {
-                    setActionModalVisible(true);
+                    router.push({
+                      pathname: '/(tabs)/budget',
+                      params: { action: 'log', t: Date.now().toString() },
+                    } as any);
                   }}
                   activeOpacity={0.85}
                   accessibilityRole="button"
-                  accessibilityLabel="Quick Actions menu"
-                  accessibilityHint="Opens quick actions like log expense or add savings"
+                  accessibilityLabel="Log Expense"
+                  accessibilityHint="Directly opens the log expense form"
                   style={{
                     width: 52,
                     height: 52,

@@ -299,7 +299,7 @@ export default function DashboardScreen() {
           onPressSetGoals={() =>
             router.push({
               pathname: '/(tabs)/budget',
-              params: { tab: 'savings', action: 'new_goal', t: Date.now().toString() },
+              params: { action: 'goals', t: Date.now().toString() },
             } as any)
           }
           onPressMiniGames={() => router.push('/arcade' as any)}
