@@ -290,11 +290,16 @@ export default function DashboardScreen() {
 
         {/* ==================== 4. BALANCED QUICK ACTIONS BAR ==================== */}
         <QuickActionsGrid
-          onPressLogExpense={() => setShowQuickExpense(true)}
-          onPressAddSavings={() =>
+          onPressSavings={() =>
             router.push({
               pathname: '/(tabs)/budget',
               params: { action: 'savings', t: Date.now().toString() },
+            } as any)
+          }
+          onPressSetGoals={() =>
+            router.push({
+              pathname: '/(tabs)/budget',
+              params: { tab: 'savings', action: 'new_goal', t: Date.now().toString() },
             } as any)
           }
           onPressMiniGames={() => router.push('/arcade' as any)}

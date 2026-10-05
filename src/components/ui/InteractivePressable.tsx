@@ -46,9 +46,9 @@ export function InteractivePressable({
     if (disabled) return;
     if (hapticStyle !== 'none') {
       try {
-        Haptics.impactAsync(hapticStyle);
+        Haptics.impactAsync(hapticStyle).catch(() => {});
       } catch (error) {
-        console.warn('Haptics failed in InteractivePressable:', error);
+        // Silently ignore haptic failures on unsupported platforms
       }
     }
     if (!reduceMotion) {

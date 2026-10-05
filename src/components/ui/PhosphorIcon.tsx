@@ -108,6 +108,9 @@ import {
   ChatCircle,
   Phone,
   MapPin,
+  Target,
+  Crosshair,
+  Flag,
 } from 'phosphor-react-native';
 import type { StyleProp, ViewStyle, ColorValue } from 'react-native';
 
@@ -211,6 +214,9 @@ const ICON_MAP = {
   Scales,
   Gear,
   GearSix,
+  Target,
+  Crosshair,
+  Flag,
 } as const;
 
 export type PhosphorIconName = keyof typeof ICON_MAP;

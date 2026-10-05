@@ -6,15 +6,15 @@ import { InteractivePressable } from '@/components/ui/InteractivePressable';
 import { useTheme } from '@/hooks/use-theme';
 
 interface QuickActionsGridProps {
-  onPressLogExpense: () => void;
-  onPressAddSavings: () => void;
+  onPressSavings: () => void;
+  onPressSetGoals: () => void;
   onPressMiniGames: () => void;
   onPressLearn: () => void;
 }
 
 export function QuickActionsGrid({
-  onPressLogExpense,
-  onPressAddSavings,
+  onPressSavings,
+  onPressSetGoals,
   onPressMiniGames,
   onPressLearn,
 }: QuickActionsGridProps) {
@@ -24,16 +24,16 @@ export function QuickActionsGrid({
 
   const actions: { id: string; title: string; icon: PhosphorIconName; onPress: () => void }[] = [
     {
-      id: 'log',
-      title: 'Log Expense',
-      icon: 'Plus',
-      onPress: onPressLogExpense,
+      id: 'savings',
+      title: 'Savings',
+      icon: 'PiggyBank',
+      onPress: onPressSavings,
     },
     {
-      id: 'savings',
-      title: 'Add Savings',
-      icon: 'PiggyBank',
-      onPress: onPressAddSavings,
+      id: 'set_goals',
+      title: 'Set Goals',
+      icon: 'Target',
+      onPress: onPressSetGoals,
     },
     {
       id: 'games',

@@ -20,10 +20,10 @@ export function DashboardMascot({ onPress, size = 114 }: DashboardMascotProps) {
   const [greetingIndex, setGreetingIndex] = useState(0);
   const [showBubble, setShowBubble] = useState(false);
   const [isWaving, setIsWaving] = useState(false);
+  const [isBlinking, setIsBlinking] = useState(false);
 
   // Animation drivers
   const waveAnim = useRef(new Animated.Value(0)).current; // Waving right arm
-  const eyeBlink = useRef(new Animated.Value(1)).current; // Gentle periodic blink
   const mascotBounce = useRef(new Animated.Value(0)).current; // Pop up jump
   const bubbleOpacity = useRef(new Animated.Value(0)).current;
   const bubbleScale = useRef(new Animated.Value(0.8)).current;
@@ -50,17 +50,19 @@ export function DashboardMascot({ onPress, size = 114 }: DashboardMascotProps) {
       triggerWave();
     }, 700);
 
-    // 2. Periodic quick eye blink every 4s (keeps eyes wide open 98% of the time)
+    // 2. Periodic quick eye blink every 4s
+    let blinkTimeout: ReturnType<typeof setTimeout> | null = null;
     const blinkInterval = setInterval(() => {
-      Animated.sequence([
-        Animated.timing(eyeBlink, { toValue: 0.15, duration: 60, useNativeDriver: true }),
-        Animated.timing(eyeBlink, { toValue: 1, duration: 70, useNativeDriver: true }),
-      ]).start();
+      setIsBlinking(true);
+      blinkTimeout = setTimeout(() => {
+        setIsBlinking(false);
+      }, 150);
     }, 4000);
 
     return () => {
       clearTimeout(initialTimer);
       clearInterval(blinkInterval);
+      if (blinkTimeout) clearTimeout(blinkTimeout);
     };
   }, []);
 
@@ -184,29 +186,42 @@ export function DashboardMascot({ onPress, size = 114 }: DashboardMascotProps) {
             <Circle cx={124} cy={54} r={2.5} fill="#FEF3C7" />
 
             {/* 3. WIDE OPEN, BEAUTIFUL EXPRESSIVE EYES */}
-            {/* Left Eye */}
-            <Animated.View style={{ transform: [{ scaleY: eyeBlink }] }}>
-              {/* Outer Deep Black Eye */}
-              <Circle cx={50} cy={54} r={9.5} fill="#051322" />
-              {/* Vibrant Green Eye Iris Glow */}
-              <Circle cx={50} cy={54} r={7.5} fill="#2ECC71" opacity={0.45} />
-              <Circle cx={50} cy={54} r={6} fill="#051322" />
-              {/* Dual Glossy White Light Reflections (Wide Open & Sparkling) */}
-              <Circle cx={47.5} cy={51} r={3.8} fill="#FFFFFF" />
-              <Circle cx={52.5} cy={56.5} r={1.8} fill="#FFFFFF" />
-            </Animated.View>
+            {isBlinking ? (
+              <G>
+                {/* Left Eye (blinking happy curve) */}
+                <Path
+                  d="M 43 54 Q 50 49 57 54"
+                  stroke="#051322"
+                  strokeWidth={2.8}
+                  strokeLinecap="round"
+                  fill="none"
+                />
+                {/* Right Eye (blinking happy curve) */}
+                <Path
+                  d="M 81 54 Q 88 49 95 54"
+                  stroke="#051322"
+                  strokeWidth={2.8}
+                  strokeLinecap="round"
+                  fill="none"
+                />
+              </G>
+            ) : (
+              <G>
+                {/* Left Eye */}
+                <Circle cx={50} cy={54} r={9.5} fill="#051322" />
+                <Circle cx={50} cy={54} r={7.5} fill="#2ECC71" opacity={0.45} />
+                <Circle cx={50} cy={54} r={6} fill="#051322" />
+                <Circle cx={47.5} cy={51} r={3.8} fill="#FFFFFF" />
+                <Circle cx={52.5} cy={56.5} r={1.8} fill="#FFFFFF" />
 
-            {/* Right Eye */}
-            <Animated.View style={{ transform: [{ scaleY: eyeBlink }] }}>
-              {/* Outer Deep Black Eye */}
-              <Circle cx={88} cy={54} r={9.5} fill="#051322" />
-              {/* Vibrant Green Eye Iris Glow */}
-              <Circle cx={88} cy={54} r={7.5} fill="#2ECC71" opacity={0.45} />
-              <Circle cx={88} cy={54} r={6} fill="#051322" />
-              {/* Dual Glossy White Light Reflections (Wide Open & Sparkling) */}
-              <Circle cx={85.5} cy={51} r={3.8} fill="#FFFFFF" />
-              <Circle cx={90.5} cy={56.5} r={1.8} fill="#FFFFFF" />
-            </Animated.View>
+                {/* Right Eye */}
+                <Circle cx={88} cy={54} r={9.5} fill="#051322" />
+                <Circle cx={88} cy={54} r={7.5} fill="#2ECC71" opacity={0.45} />
+                <Circle cx={88} cy={54} r={6} fill="#051322" />
+                <Circle cx={85.5} cy={51} r={3.8} fill="#FFFFFF" />
+                <Circle cx={90.5} cy={56.5} r={1.8} fill="#FFFFFF" />
+              </G>
+            )}
 
             {/* Cute Eyebrows */}
             <Path
