@@ -1708,7 +1708,9 @@ export default function BudgetScreen() {
                   </YStack>
                 ) : (
                   <YStack alignItems="center" paddingVertical={24} gap={8}>
-                    <PhosphorIcon name="Receipt" size={32} color={theme.textSecondary} opacity={0.5} />
+                    <View style={{ opacity: 0.5 }}>
+                      <PhosphorIcon name="Receipt" size={32} color={theme.textSecondary} />
+                    </View>
                     <Text color={theme.textSecondary} fontSize={13} fontFamily={Fonts.medium} textAlign="center">
                       No savings history yet.{'\n'}Unspent money is added here at the end of your cycle!
                     </Text>
