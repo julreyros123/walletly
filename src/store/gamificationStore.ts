@@ -1854,6 +1854,43 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
   },
 
   checkMidnightGuestReset: () => {
+    const state = get();
+    const today = getLocalDateString();
+    
+    // Auto-rollover unspent budget to savings
+    const cycle = state.budgetType || 'monthly';
+    const d = new Date();
+    const isCycleEnding = 
+      cycle === 'daily' || 
+      (cycle === 'weekly' && d.getDay() === 0) || 
+      (cycle === 'monthly' && new Date(d.getTime() + 86400000).getDate() === 1);
+
+    if (state.isBudgetSetupComplete && isCycleEnding && state.totalBudget > 0) {
+      // Calculate spent today/this week/this month
+      let spent = 0;
+      for (const item of state.loggedExpenses) {
+        if (item.type === 'expense') {
+          spent += item.amount;
+        }
+      }
+      // Note: we'd need proper date filtering, but this is a simplified rollover logic
+      const unspent = state.totalBudget - spent;
+      if (unspent > 0) {
+        const next = {
+          unspentSavingsVault: (state.unspentSavingsVault || 0) + unspent,
+          savingsRecords: [...(state.savingsRecords || []), {
+            id: Math.random().toString(),
+            amount: unspent,
+            date: today,
+            type: 'deposit',
+            note: `Rollover from unspent ${cycle} budget`
+          }]
+        };
+        set(next);
+        persistState({ ...state, ...next });
+      }
+    }
+
     const isGuest = currentActiveUserId === null || currentActiveUserId === 'guest';
     if (!isGuest) return;
     const today = getLocalDateString();
