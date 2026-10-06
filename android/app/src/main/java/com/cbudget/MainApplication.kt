@@ -1,4 +1,4 @@
-package com.julreyros123.cbudget
+package com.cbudget
 
 import android.app.Application
 import android.content.res.Configuration
