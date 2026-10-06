@@ -650,7 +650,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       const diffTime = dToday.getTime() - dActive.getTime();
       const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
-      if (diffDays === 1) {
+      if (diffDays === 1 || diffDays === 2) {
         const nextStreak = (state.streakDays || 0) + 1;
         let updatedAchievements = [...state.achievements];
         if (nextStreak >= 7 && !updatedAchievements.some((a) => a.id === 'streak_7')) {
@@ -667,7 +667,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         };
         persistState({ ...state, ...next });
         return next;
-      } else if (diffDays > 1) {
+      } else if (diffDays > 2) {
         const next = { streakDays: 1, lastActiveDate: today };
         persistState({ ...state, ...next });
         return next;

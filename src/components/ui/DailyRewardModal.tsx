@@ -5,6 +5,7 @@ const Text = (props: any) => <TamaguiText {...props} />;
 import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
 import Svg, { Path, Circle, Rect, G, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { safeHaptic } from '@/utils/haptics';
+import { useTheme } from '@/hooks/use-theme';
 import { useGamificationStore, getLocalDateString } from '@/store/gamificationStore';
 import { useCurrency } from '@/utils/currency';
 import { Fonts } from '@/constants/theme';
@@ -47,6 +48,7 @@ function CheckedInCelebrationModal({
   day: number;
   onDismiss: () => void;
 }) {
+  const theme = useTheme();
   const rotateSunburst = useRef(new Animated.Value(0)).current;
   const checkScale = useRef(new Animated.Value(0)).current;
   const contentFade = useRef(new Animated.Value(0)).current;
@@ -101,9 +103,9 @@ function CheckedInCelebrationModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
-      <View style={styles.backdrop}>
-        <View style={styles.celebrationCardWrapper}>
-          <View style={styles.celebrationCard}>
+      <View style={getStyles(theme).backdrop}>
+        <View style={getStyles(theme).celebrationCardWrapper}>
+          <View style={getStyles(theme).celebrationCard}>
             {/* Top Glowing Header Accent */}
             <Svg width="100%" height={90} viewBox="0 0 320 90" fill="none" style={StyleSheet.absoluteFill}>
               <Defs>
@@ -119,18 +121,18 @@ function CheckedInCelebrationModal({
             {/* Close Button */}
             <TouchableOpacity
               onPress={onDismiss}
-              style={styles.closeBtn}
+              style={getStyles(theme).closeBtn}
               activeOpacity={0.7}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <PhosphorIcon name="X" size={14} color="#94A3B8" />
+              <PhosphorIcon name="X" size={14} color={theme.textSecondary} />
             </TouchableOpacity>
 
             <YStack padding={22} gap={14} alignItems="center" width="100%">
               {/* 1. Centered Sunburst + Centered Checkmark Hero Box */}
-              <View style={styles.sunburstHeroBox}>
+              <View style={getStyles(theme).sunburstHeroBox}>
                 {/* Background Rotating Shining Sunburst Rays */}
-                <View style={styles.sunburstContainer} pointerEvents="none">
+                <View style={getStyles(theme).sunburstContainer} pointerEvents="none">
                   <Animated.View style={{ transform: [{ rotate: spinInterpolation }] }}>
                     <Svg width={140} height={140} viewBox="0 0 140 140" fill="none">
                       <Defs>
@@ -155,7 +157,7 @@ function CheckedInCelebrationModal({
                 </View>
 
                 {/* Center Animated Checkmark Badge (Dead Center) */}
-                <Animated.View style={[styles.checkCircleBadge, { transform: [{ scale: checkScale }] }]}>
+                <Animated.View style={[getStyles(theme).checkCircleBadge, { transform: [{ scale: checkScale }] }]}>
                   <Svg width={56} height={56} viewBox="0 0 56 56" fill="none">
                     {/* Glowing Outer Ring */}
                     <Circle cx={28} cy={28} r={26} fill="#10B981" stroke="#34D399" strokeWidth={2.5} />
@@ -173,26 +175,26 @@ function CheckedInCelebrationModal({
               </View>
 
               {/* 2. Text & Earned Badges (Positioned Cleanly Below Shiny Graphic) */}
-              <Animated.View style={[styles.contentFadeBox, { opacity: contentFade }]}>
+              <Animated.View style={[getStyles(theme).contentFadeBox, { opacity: contentFade }]}>
                 <YStack alignItems="center" gap={4}>
-                  <Text color="#FFFFFF" fontSize={20} fontFamily={Fonts.bold} letterSpacing={-0.3}>
+                  <Text color={theme.text} fontSize={20} fontFamily={Fonts.bold} letterSpacing={-0.3}>
                     You're Checked In! ✨
                   </Text>
 
-                  <Text color="#94A3B8" fontSize={12} fontFamily={Fonts.medium} textAlign="center">
+                  <Text color={theme.textSecondary} fontSize={12} fontFamily={Fonts.medium} textAlign="center">
                     Day {day} reward successfully added to your wallet
                   </Text>
                 </YStack>
 
                 {/* Earned Reward Badges */}
                 <XStack alignItems="center" gap={8} marginTop={12}>
-                  <View style={styles.earnedPillXp}>
+                  <View style={getStyles(theme).earnedPillXp}>
                     <Text color="#FBBF24" fontSize={13} fontFamily={Fonts.bold}>
                       +{xp} XP
                     </Text>
                   </View>
                   {cash > 0 && (
-                    <View style={styles.earnedPillCash}>
+                    <View style={getStyles(theme).earnedPillCash}>
                       <Text color="#34D399" fontSize={13} fontFamily={Fonts.bold}>
                         +₱{cash} Sim Cash
                       </Text>
@@ -203,12 +205,12 @@ function CheckedInCelebrationModal({
                 {/* Awesome Button */}
                 <TouchableOpacity
                   onPress={onDismiss}
-                  style={styles.awesomeBtn}
+                  style={getStyles(theme).awesomeBtn}
                   activeOpacity={0.85}
                   accessibilityRole="button"
                   accessibilityLabel="Awesome, dismiss celebration"
                 >
-                  <Text color="#FFFFFF" fontSize={14} fontFamily={Fonts.bold}>
+                  <Text color={theme.text} fontSize={14} fontFamily={Fonts.bold}>
                     Awesome! ✨
                   </Text>
                 </TouchableOpacity>
@@ -222,6 +224,7 @@ function CheckedInCelebrationModal({
 }
 
 export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
+  const theme = useTheme();
   const store = useGamificationStore();
   const { symbol: currencySymbol } = useCurrency();
   const [claimedReward, setClaimedReward] = useState<{ xp: number; cash: number; day: number } | null>(null);
@@ -258,7 +261,7 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
   const renderRewardIcon = (item: DayRewardInfo, isPast: boolean, isCurrent: boolean) => {
     if (isPast) {
       return (
-        <View style={styles.iconCircleClaimed}>
+        <View style={getStyles(theme).iconCircleClaimed}>
           <PhosphorIcon
             name="CheckCircle"
             size={24}
@@ -320,9 +323,9 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
     <>
       {/* 1. SEVEN-DAY DAILY REWARD GRID MODAL */}
       <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-        <View style={styles.backdrop}>
-          <View style={styles.modalCardWrapper}>
-            <View style={styles.modalCard}>
+        <View style={getStyles(theme).backdrop}>
+          <View style={getStyles(theme).modalCardWrapper}>
+            <View style={getStyles(theme).modalCard}>
               {/* Top Glowing Header Accent */}
               <Svg width="100%" height={80} viewBox="0 0 340 80" fill="none" style={StyleSheet.absoluteFill}>
                 <Defs>
@@ -341,22 +344,22 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                   safeHaptic('light');
                   onClose();
                 }}
-                style={styles.closeBtn}
+                style={getStyles(theme).closeBtn}
                 activeOpacity={0.7}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel="Close daily reward modal"
               >
-                <PhosphorIcon name="X" size={14} color="#94A3B8" />
+                <PhosphorIcon name="X" size={14} color={theme.textSecondary} />
               </TouchableOpacity>
 
               <YStack padding={20} gap={16} alignItems="center">
                 {/* Clean Header Title */}
                 <YStack alignItems="center" gap={3} marginTop={4}>
-                  <Text color="#FFFFFF" fontSize={20} fontFamily={Fonts.bold} letterSpacing={-0.3}>
+                  <Text color={theme.text} fontSize={20} fontFamily={Fonts.bold} letterSpacing={-0.3}>
                     Daily Check-In
                   </Text>
-                  <Text color="#94A3B8" fontSize={12} fontFamily={Fonts.medium} textAlign="center">
+                  <Text color={theme.textSecondary} fontSize={12} fontFamily={Fonts.medium} textAlign="center">
                     Claim consecutive daily rewards to boost XP & Simulator Cash!
                   </Text>
                 </YStack>
@@ -375,29 +378,29 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                         <View
                           key={item.day}
                           style={[
-                            styles.day7Card,
-                            isCurrent && styles.day7CardCurrent,
-                            isPast && styles.dayCardPast,
-                            isFuture && styles.dayCardFuture,
+                            getStyles(theme).day7Card,
+                            isCurrent && getStyles(theme).day7CardCurrent,
+                            isPast && getStyles(theme).dayCardPast,
+                            isFuture && getStyles(theme).dayCardFuture,
                           ]}
                         >
                           <XStack alignItems="center" gap={10} flex={1}>
-                            <View style={styles.day7IconBox}>
+                            <View style={getStyles(theme).day7IconBox}>
                               {renderRewardIcon(item, isPast, isCurrent)}
                             </View>
                             <YStack gap={2}>
-                              <View style={styles.day7Badge}>
+                              <View style={getStyles(theme).day7Badge}>
                                 <Text color="#34D399" fontSize={8.5} fontFamily={Fonts.bold} letterSpacing={0.5}>
                                   DAY 7 • BONUS REWARD
                                 </Text>
                               </View>
-                              <Text color="#FFFFFF" fontSize={12.5} fontFamily={Fonts.bold}>
+                              <Text color={theme.text} fontSize={12.5} fontFamily={Fonts.bold}>
                                 +70 XP & <Text color="#34D399">+{currencySymbol}2,000 Cash</Text>
                               </Text>
                             </YStack>
                           </XStack>
                           {isPast && (
-                            <View style={styles.claimedBadgeMini}>
+                            <View style={getStyles(theme).claimedBadgeMini}>
                               <Text color="#10B981" fontSize={10} fontFamily={Fonts.bold}>
                                 Claimed ✓
                               </Text>
@@ -412,22 +415,22 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                       <View
                         key={item.day}
                         style={[
-                          styles.dayCard,
-                          isCurrent && styles.dayCardCurrent,
-                          isPast && styles.dayCardPast,
-                          isFuture && styles.dayCardFuture,
+                          getStyles(theme).dayCard,
+                          isCurrent && getStyles(theme).dayCardCurrent,
+                          isPast && getStyles(theme).dayCardPast,
+                          isFuture && getStyles(theme).dayCardFuture,
                         ]}
                       >
                         {/* Day Pill Tag */}
                         <View
                           style={[
-                            styles.dayTagPill,
-                            isCurrent && styles.dayTagPillCurrent,
-                            isPast && styles.dayTagPillPast,
+                            getStyles(theme).dayTagPill,
+                            isCurrent && getStyles(theme).dayTagPillCurrent,
+                            isPast && getStyles(theme).dayTagPillPast,
                           ]}
                         >
                           <Text
-                            color={isCurrent ? '#FFFFFF' : '#94A3B8'}
+                            color={isCurrent ? theme.text : theme.textSecondary}
                             fontSize={8.5}
                             fontFamily={Fonts.bold}
                           >
@@ -436,14 +439,14 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                         </View>
 
                         {/* Custom Polished Vector Icon */}
-                        <View style={styles.iconContainer}>
+                        <View style={getStyles(theme).iconContainer}>
                           {renderRewardIcon(item, isPast, isCurrent)}
                         </View>
 
                         {/* Reward Details Text */}
                         <YStack alignItems="center" gap={1}>
                           <Text
-                            color={isCurrent ? '#FFFFFF' : isPast ? '#64748B' : '#CBD5E1'}
+                            color={isCurrent ? theme.text : theme.textSecondary}
                             fontSize={11}
                             fontFamily={Fonts.bold}
                           >
@@ -464,13 +467,13 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                 <TouchableOpacity
                   onPress={handleClaim}
                   disabled={isAlreadyClaimedToday}
-                  style={[styles.claimButton, isAlreadyClaimedToday && styles.claimButtonChecked]}
+                  style={[getStyles(theme).claimButton, isAlreadyClaimedToday && getStyles(theme).claimButtonChecked]}
                   activeOpacity={0.85}
                   accessibilityRole="button"
                   accessibilityLabel={isAlreadyClaimedToday ? `Checked in today, Day ${currentDayInCycle}` : `Claim Day ${currentDayInCycle} Reward`}
                   accessibilityState={{ disabled: isAlreadyClaimedToday }}
                 >
-                  <Text color="#FFFFFF" fontSize={15} fontFamily={Fonts.bold}>
+                  <Text color={theme.text} fontSize={15} fontFamily={Fonts.bold}>
                     {isAlreadyClaimedToday ? `Checked In Today ✓ (Day ${currentDayInCycle})` : `Claim Day ${currentDayInCycle} Reward ✨`}
                   </Text>
                 </TouchableOpacity>
@@ -494,7 +497,7 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme: any) => StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
@@ -507,7 +510,7 @@ const styles = StyleSheet.create({
     maxWidth: 350,
   },
   modalCard: {
-    backgroundColor: '#1E293B',
+    backgroundColor: theme.surface,
     borderRadius: 24,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
@@ -530,7 +533,7 @@ const styles = StyleSheet.create({
     maxWidth: 320,
   },
   celebrationCard: {
-    backgroundColor: '#1E293B',
+    backgroundColor: theme.surface,
     borderRadius: 24,
     borderWidth: 1,
     borderColor: 'rgba(16, 185, 129, 0.3)',
@@ -562,18 +565,18 @@ const styles = StyleSheet.create({
   },
   dayCard: {
     width: '31%',
-    backgroundColor: '#0F172A',
+    backgroundColor: theme.background,
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 6,
     alignItems: 'center',
     gap: 4,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.border,
   },
   day7Card: {
     width: '100%',
-    backgroundColor: '#0F172A',
+    backgroundColor: theme.background,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -616,7 +619,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   dayCardPast: {
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    backgroundColor: theme.backgroundSelected,
     borderColor: '#1E293B',
     opacity: 0.85,
   },
