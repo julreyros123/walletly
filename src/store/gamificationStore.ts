@@ -1876,15 +1876,19 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       // Note: we'd need proper date filtering, but this is a simplified rollover logic
       const unspent = state.totalBudget - spent;
       if (unspent > 0) {
+        const now = new Date();
+        const rolloverRecord: SavingsRecord = {
+          id: Math.random().toString(),
+          amount: unspent,
+          date: today,
+          time: format12HourTime(now),
+          note: `Rollover from unspent ${cycle} budget`,
+          cycle: cycle as 'daily' | 'weekly' | 'monthly',
+          createdAtISO: now.toISOString(),
+        };
         const next = {
           unspentSavingsVault: (state.unspentSavingsVault || 0) + unspent,
-          savingsRecords: [...(state.savingsRecords || []), {
-            id: Math.random().toString(),
-            amount: unspent,
-            date: today,
-            type: 'deposit',
-            note: `Rollover from unspent ${cycle} budget`
-          }]
+          savingsRecords: [...(state.savingsRecords || []), rolloverRecord],
         };
         set(next);
         persistState({ ...state, ...next });
@@ -1893,15 +1897,15 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
 
     const isGuest = currentActiveUserId === null || currentActiveUserId === 'guest';
     if (!isGuest) return;
-    const today = getLocalDateString();
-    const state = get();
-    if (state.guestSessionDate && state.guestSessionDate !== today) {
+    // Re-read state in case the rollover block above mutated it
+    const latestState = get();
+    if (latestState.guestSessionDate && latestState.guestSessionDate !== today) {
       const next = {
         loggedExpenses: [] as Expense[],
         guestSessionDate: today,
       };
       set(next);
-      persistState({ ...state, ...next }, 'guest');
+      persistState({ ...latestState, ...next }, 'guest');
     }
   },
 
