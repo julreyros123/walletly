@@ -3,9 +3,7 @@
     "name": "Cbudget",
     "slug": "cbudget",
     "version": "1.0.0",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "updates": {
       "url": "https://u.expo.dev/9cdb044d-ef95-4b1a-9a6a-183275403052",
       "fallbackToCacheTimeout": 0
