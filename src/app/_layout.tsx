@@ -72,11 +72,11 @@ export default function RootLayout() {
     });
 
     const notificationListener = Notifications.addNotificationReceivedListener((notification) => {
-      console.log('Notification received:', notification);
+      if (__DEV__) console.log('Notification received:', notification);
     });
 
     const responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
-      console.log('Notification response:', response);
+      if (__DEV__) console.log('Notification response:', response);
     });
 
     return () => {

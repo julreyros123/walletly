@@ -161,7 +161,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         try {
           await GoogleSignin.signOut();
         } catch (signOutErr) {
-          console.log('[Auth] GoogleSignin.signOut before login notice:', signOutErr);
+          console.warn('[Auth] GoogleSignin.signOut before login notice:', signOutErr);
         }
 
         const response = await GoogleSignin.signIn();
@@ -180,18 +180,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           if (error) throw error;
           return;
         } else {
-          console.log('[Auth] Google sign in did not return success response:', response);
+          console.warn('[Auth] Google sign in did not return success response:', response);
           return;
         }
       } catch (error: unknown) {
         if (isErrorWithCode && isErrorWithCode(error)) {
           const errWithCode = error as { code: string };
           if (errWithCode.code === statusCodes.SIGN_IN_CANCELLED) {
-            console.log('[Auth] User cancelled Google sign in flow');
+            if (__DEV__) console.log('[Auth] User cancelled Google sign in flow');
             return;
           }
           if (errWithCode.code === statusCodes.IN_PROGRESS) {
-            console.log('[Auth] Google sign in operation in progress');
+            if (__DEV__) console.log('[Auth] Google sign in operation in progress');
             return;
           }
           if (errWithCode.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {

@@ -35,7 +35,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
     }
     
     if (finalStatus !== 'granted') {
-      console.log('Failed to get push token for push notification!');
+      console.warn('Failed to get push token for push notification!');
       return;
     }
     
@@ -54,12 +54,12 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
         })
       ).data;
       
-      console.log('Expo Push Token:', token);
+      if (__DEV__) console.log('Expo Push Token:', token);
     } catch (e) {
-      console.log('Error getting push token:', e);
+      console.warn('Error getting push token:', e);
     }
   } else {
-    console.log('Must use physical device for Push Notifications');
+    if (__DEV__) console.log('Must use physical device for Push Notifications');
   }
 
   return token;
