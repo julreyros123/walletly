@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { storage } from '@/utils/storage';
 import { supabase } from '@/utils/supabase';
+import { syncScheduledNotificationsAsync } from '@/utils/notifications';
 
 export const PREFERENCE_STORAGE_KEYS = {
   PREFERENCES: 'cbudget_user_preferences',
@@ -70,17 +71,23 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
 
   setNotificationsEnabled: async (enabled: boolean) => {
     set({ notificationsEnabled: enabled });
-    await savePreferences(get());
+    const current = get();
+    await savePreferences(current);
+    syncScheduledNotificationsAsync(current).catch(() => {});
   },
 
   setStreakRemindersEnabled: async (enabled: boolean) => {
     set({ streakRemindersEnabled: enabled });
-    await savePreferences(get());
+    const current = get();
+    await savePreferences(current);
+    syncScheduledNotificationsAsync(current).catch(() => {});
   },
 
   setWeeklyReportEnabled: async (enabled: boolean) => {
     set({ weeklyReportEnabled: enabled });
-    await savePreferences(get());
+    const current = get();
+    await savePreferences(current);
+    syncScheduledNotificationsAsync(current).catch(() => {});
   },
 
   setCurrency: async (currency: SupportedCurrency) => {
@@ -162,6 +169,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
         set({ currency: 'PHP', currencyMigratedToPhp: true });
       }
       isPreferencesHydrated = true;
+      syncScheduledNotificationsAsync(get()).catch(() => {});
     } catch (e) {
       console.error('Failed to hydrate preferences store:', e);
       set({ currency: 'PHP' });

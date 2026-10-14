@@ -22,10 +22,17 @@ import { CbudgetSplashScreen } from '@/components/CbudgetSplashScreen';
 import tamaguiConfig from '../../tamagui.config';
 import { CustomAlertProvider } from '@/components/ui/CustomAlert';
 import { ToastProvider } from '@/components/ui/Toast';
-import { registerForPushNotificationsAsync } from '@/utils/notifications';
+import { registerForPushNotificationsAsync, syncScheduledNotificationsAsync } from '@/utils/notifications';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { supabase, isSupabaseConfigured } from '@/utils/supabase';
-import * as Notifications from 'expo-notifications';
+
+// Safe lazy-load: expo-notifications crashes on web & Expo Go (SDK 53+)
+let Notifications: any = null;
+if (Platform.OS !== 'web') {
+  try {
+    Notifications = require('expo-notifications');
+  } catch (_) { /* unavailable in this environment */ }
+}
 
 SplashScreen.preventAutoHideAsync();
 
@@ -69,13 +76,16 @@ export default function RootLayout() {
       if (token) {
         setExpoPushToken(token);
       }
+      syncScheduledNotificationsAsync().catch(() => {});
     });
 
-    const notificationListener = Notifications.addNotificationReceivedListener((notification) => {
+    if (!Notifications) return;
+
+    const notificationListener = Notifications.addNotificationReceivedListener((notification: any) => {
       if (__DEV__) console.log('Notification received:', notification);
     });
 
-    const responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
+    const responseListener = Notifications.addNotificationResponseReceivedListener((response: any) => {
       if (__DEV__) console.log('Notification response:', response);
     });
 

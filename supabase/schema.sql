@@ -24,12 +24,14 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     avatar_emoji TEXT DEFAULT '💼',
     guardian_email TEXT,
     guardian_linked BOOLEAN DEFAULT FALSE,
+    push_token TEXT,
     is_premium BOOLEAN DEFAULT FALSE, -- Educational sandbox (100% free)
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 -- Profiles column migration safety (in case table already exists)
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS push_token TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS guardian_email TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS guardian_linked BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS age INTEGER;
@@ -292,7 +294,8 @@ DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'guardian_reports' AND policyname = 'Users can view and record their guardian reports') THEN
         CREATE POLICY "Users can view and record their guardian reports"
             ON public.guardian_reports FOR ALL
-            USING (auth.uid() = user_id);
+            USING (auth.uid() = user_id)
+            WITH CHECK (auth.uid() = user_id);
     END IF;
 END $$;
 

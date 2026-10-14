@@ -16,6 +16,7 @@ import { usePreferencesStore, SupportedCurrency } from '@/store/preferencesStore
 import { useAuthStore } from '@/store/authStore';
 import { useGamificationStore } from '@/store/gamificationStore';
 import { safeHaptic } from '@/utils/haptics';
+import { sendGuardianReport } from '@/utils/guardianReport';
 import { Fonts, Spacing } from '@/constants/theme';
 
 const Text = (props: any) => <TamaguiText {...props} />;
@@ -61,44 +62,7 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
 
 
   const handleSendGuardianReport = async (emailOverride?: string) => {
-    const targetEmail = (emailOverride || guardianEmail).trim();
-    if (!targetEmail) {
-      Alert.alert('No Email', 'Please enter a valid parent or guardian email address.');
-      return;
-    }
-    safeHaptic('light');
-
-    const score = getFinancialHealthScore();
-    const studentName = user?.name || user?.email?.split('@')[0] || 'Your Student';
-    const unlockedCount = achievements.filter((a: any) => a.unlocked).length || achievements.length;
-    const dateStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-
-    const subject = encodeURIComponent(`[CBudget] Financial Literacy Progress Report — ${studentName}`);
-    const body = encodeURIComponent(
-      `Hello Parent / Guardian,\n\nHere is the latest financial literacy progress update from CBudget for ${studentName} as of ${dateStr}:\n\n` +
-      `📊 Financial Literacy Score: ${score}/100\n` +
-      `🔥 Active Learning Streak: ${streakDays} day(s)\n` +
-      `🏆 Achievements & Milestones Unlocked: ${unlockedCount}\n\n` +
-      `About CBudget:\n` +
-      `CBudget is an educational sandbox designed to teach students budgeting, savings discipline, and financial literacy safely in a risk-free simulated environment.\n\n` +
-      `Thank you for encouraging financial responsibility!\n\n` +
-      `Best regards,\nThe CBudget Team`
-    );
-
-    const mailUrl = `mailto:${targetEmail}?subject=${subject}&body=${body}`;
-    try {
-      const canOpen = await Linking.canOpenURL(mailUrl);
-      if (canOpen) {
-        await Linking.openURL(mailUrl);
-      } else {
-        Alert.alert(
-          'Email App Not Found',
-          `Could not open default mail app. You can manually email this progress report to ${targetEmail}.`
-        );
-      }
-    } catch {
-      Alert.alert('Error', 'Unable to launch default email app.');
-    }
+    await sendGuardianReport(emailOverride || guardianEmail);
   };
 
   const handleGuardianSave = async () => {

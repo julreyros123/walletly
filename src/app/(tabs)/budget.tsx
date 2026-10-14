@@ -36,6 +36,17 @@ const CATEGORY_ICONS: Record<string, PhosphorIconName> = {
   Custom: 'Question',
 };
 
+const CATEGORY_DISPLAY_NAMES: Record<string, string> = {
+  Food: 'Food',
+  Transportation: 'Transport',
+  School: 'School',
+  Bills: 'Bills',
+  Shopping: 'Shopping',
+  Entertainment: 'Fun',
+  Savings: 'Savings',
+  'Emergency Fund': 'Emergency',
+};
+
 const CATEGORY_COLORS: Record<string, string> = {
   Food: '#F59E0B', // Amber
   Transportation: '#3B82F6', // Blue
@@ -68,7 +79,10 @@ export default function BudgetScreen() {
   // Tab State
   const [activeTab, setActiveTab] = useState<'budget' | 'calendar' | 'savings' | 'goals'>('budget');
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'overspent' | 'inbudget'>('all');
+  const [categorySearchQuery, setCategorySearchQuery] = useState('');
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [activityFilter, setActivityFilter] = useState<'all' | 'expenses' | 'income'>('all');
+  const [transactionSearchQuery, setTransactionSearchQuery] = useState('');
 
   // Calendar & Date Explorer State
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -307,6 +321,17 @@ export default function BudgetScreen() {
       filtered = filtered.filter((e) => e.type === 'income');
     }
 
+    // Filter by text search query (name, category, notes)
+    if (transactionSearchQuery.trim()) {
+      const q = transactionSearchQuery.trim().toLowerCase();
+      filtered = filtered.filter(
+        (e) =>
+          (e.name && e.name.toLowerCase().includes(q)) ||
+          (e.category && e.category.toLowerCase().includes(q)) ||
+          (e.notes && e.notes.toLowerCase().includes(q))
+      );
+    }
+
     // Sort by id / date descending
     filtered.reverse();
 
@@ -337,11 +362,15 @@ export default function BudgetScreen() {
     });
 
     return groups;
-  }, [store.loggedExpenses, activeSelectedDay, activityFilter]);
+  }, [store.loggedExpenses, activeSelectedDay, activityFilter, transactionSearchQuery]);
 
-  // Filtered categories
+  // Filtered categories (live search query + status dropdown)
   const filteredCategories = useMemo(() => {
     return store.selectedCategories.filter((cat) => {
+      if (categorySearchQuery.trim()) {
+        const query = categorySearchQuery.trim().toLowerCase();
+        if (!cat.toLowerCase().includes(query)) return false;
+      }
       const spent = store.loggedExpenses
         .filter((e) => e.type !== 'income' && e.category === cat)
         .reduce((s, e) => s + e.amount, 0);
@@ -350,7 +379,7 @@ export default function BudgetScreen() {
       if (categoryFilter === 'inbudget') return spent <= limit;
       return true;
     });
-  }, [store.selectedCategories, store.loggedExpenses, store.categoryLimits, categoryFilter]);
+  }, [store.selectedCategories, store.loggedExpenses, store.categoryLimits, categoryFilter, categorySearchQuery]);
 
   // Handlers
   const handleLogExpense = () => {
@@ -1318,37 +1347,277 @@ export default function BudgetScreen() {
                 </XStack>
               </View>
 
-              {/* 3. Category Budgets Section with Filter Chips */}
+              {/* 3. Category Budgets Section with Search Bar & Dropdown Filter */}
               <YStack gap={12}>
-                <Text color={theme.text} fontSize={18} fontFamily={Fonts.bold} letterSpacing={-0.3}>
-                  Budgets
-                </Text>
+                <XStack justifyContent="space-between" alignItems="center">
+                  <XStack alignItems="center" gap={8}>
+                    <Text color={theme.text} fontSize={18} fontFamily={Fonts.bold} letterSpacing={-0.3}>
+                      Budgets
+                    </Text>
+                    <View
+                      style={{
+                        paddingHorizontal: 8,
+                        paddingVertical: 2,
+                        borderRadius: 12,
+                        backgroundColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#E2E8F0' : '#1E293B',
+                      }}
+                    >
+                      <Text color={theme.textSecondary} fontSize={11} fontFamily={Fonts.bold}>
+                        {filteredCategories.length}/{store.selectedCategories.length}
+                      </Text>
+                    </View>
+                  </XStack>
 
-                {/* Filter Chips: All, Overspent, In budget */}
-                <XStack gap={8}>
-                  {(['all', 'overspent', 'inbudget'] as const).map((mode) => {
-                    const isActive = categoryFilter === mode;
-                    const labels = { all: 'All', overspent: 'Overspent', inbudget: 'In budget' };
-                    return (
-                      <TouchableOpacity
-                        key={mode}
-                        onPress={() => {
-                          safeHaptic('light');
-                          setCategoryFilter(mode);
-                        }}
-                        style={[styles.filterChip, isActive && styles.filterChipActive]}
-                        activeOpacity={0.7}
-                      >
-                        <Text color={isActive ? '#FFFFFF' : theme.textSecondary} fontSize={12} fontFamily={Fonts.bold}>
-                          {labels[mode]}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                  {(categoryFilter !== 'all' || categorySearchQuery.length > 0) && (
+                    <TouchableOpacity
+                      onPress={() => {
+                        safeHaptic('light');
+                        setCategorySearchQuery('');
+                        setCategoryFilter('all');
+                        setShowCategoryDropdown(false);
+                      }}
+                      activeOpacity={0.7}
+                      style={styles.resetFilterBtn}
+                    >
+                      <PhosphorIcon name="ArrowClockwise" size={11} color="#EF4444" />
+                      <Text color="#EF4444" fontSize={11} fontFamily={Fonts.bold}>
+                        Reset
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </XStack>
+
+                {/* Unified Pro Fintech Action Bar: Search Bar + Filter Dropdown Toggle */}
+                <XStack gap={8} alignItems="center">
+                  {/* Expanded Live Search Input */}
+                  <XStack
+                    flex={1}
+                    backgroundColor={theme.mode === 'hybrid' || theme.mode === 'light' ? '#FFFFFF' : '#131D31'}
+                    borderRadius={12}
+                    borderWidth={1}
+                    borderColor={theme.mode === 'hybrid' || theme.mode === 'light' ? '#E2E8F0' : 'rgba(255, 255, 255, 0.08)'}
+                    paddingHorizontal={12}
+                    height={42}
+                    alignItems="center"
+                    gap={8}
+                  >
+                    <PhosphorIcon name="MagnifyingGlass" size={16} color={theme.textSecondary} />
+                    <TextInput
+                      placeholder="Search budgets..."
+                      placeholderTextColor={theme.textSecondary}
+                      value={categorySearchQuery}
+                      onChangeText={setCategorySearchQuery}
+                      style={{
+                        flex: 1,
+                        color: theme.text,
+                        fontSize: 13,
+                        fontFamily: Fonts.regular,
+                        padding: 0,
+                      }}
+                    />
+                    {categorySearchQuery.length > 0 && (
+                      <TouchableOpacity
+                        onPress={() => setCategorySearchQuery('')}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <PhosphorIcon name="XCircle" size={16} color={theme.textSecondary} />
+                      </TouchableOpacity>
+                    )}
+                  </XStack>
+
+                  {/* Filter Dropdown Toggle Button */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      safeHaptic('light');
+                      setShowCategoryDropdown((prev) => !prev);
+                    }}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.filterDropdownToggle,
+                      {
+                        backgroundColor: categoryFilter !== 'all' || showCategoryDropdown
+                          ? 'rgba(16, 185, 129, 0.12)'
+                          : (theme.mode === 'hybrid' || theme.mode === 'light' ? '#FFFFFF' : '#131D31'),
+                        borderColor: categoryFilter !== 'all' || showCategoryDropdown
+                          ? '#10B981'
+                          : (theme.mode === 'hybrid' || theme.mode === 'light' ? '#E2E8F0' : 'rgba(255, 255, 255, 0.08)'),
+                      },
+                    ]}
+                  >
+                    <XStack alignItems="center" gap={6}>
+                      <PhosphorIcon
+                        name="FunnelSimple"
+                        size={16}
+                        color={categoryFilter !== 'all' || showCategoryDropdown ? '#10B981' : theme.textSecondary}
+                        weight={categoryFilter !== 'all' ? 'bold' : 'regular'}
+                      />
+                      <Text
+                        fontSize={12.5}
+                        fontFamily={Fonts.semiBold}
+                        color={categoryFilter !== 'all' || showCategoryDropdown ? '#10B981' : theme.text}
+                        numberOfLines={1}
+                      >
+                        {categoryFilter === 'all'
+                          ? 'Filter'
+                          : categoryFilter === 'overspent'
+                          ? 'Overspent'
+                          : 'In budget'}
+                      </Text>
+                      <PhosphorIcon
+                        name={showCategoryDropdown ? 'CaretUp' : 'CaretDown'}
+                        size={12}
+                        color={categoryFilter !== 'all' || showCategoryDropdown ? '#10B981' : theme.textSecondary}
+                        weight="bold"
+                      />
+                    </XStack>
+                  </TouchableOpacity>
+                </XStack>
+
+                {/* Filter Dropdown Menu Tray */}
+                {showCategoryDropdown && (
+                  <View
+                    style={[
+                      styles.dropdownMenu,
+                      {
+                        backgroundColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#FFFFFF' : '#131D31',
+                        borderColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#E2E8F0' : 'rgba(255, 255, 255, 0.12)',
+                      },
+                    ]}
+                  >
+                    {[
+                      {
+                        id: 'all' as const,
+                        label: 'All Budgets',
+                        sublabel: 'Show all selected category budgets',
+                        icon: 'SquaresFour' as const,
+                        color: theme.text,
+                      },
+                      {
+                        id: 'overspent' as const,
+                        label: 'Overspent',
+                        sublabel: 'Exceeding target budget limit (>100%)',
+                        icon: 'Warning' as const,
+                        color: '#EF4444',
+                      },
+                      {
+                        id: 'inbudget' as const,
+                        label: 'In Budget',
+                        sublabel: 'Spending within target limit (<=100%)',
+                        icon: 'CheckCircle' as const,
+                        color: '#10B981',
+                      },
+                    ].map((option, idx, arr) => {
+                      const isSelected = categoryFilter === option.id;
+                      return (
+                        <TouchableOpacity
+                          key={option.id}
+                          onPress={() => {
+                            safeHaptic('light');
+                            setCategoryFilter(option.id);
+                            setShowCategoryDropdown(false);
+                          }}
+                          activeOpacity={0.7}
+                          style={[
+                            styles.dropdownOption,
+                            isSelected && {
+                              backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                            },
+                            idx < arr.length - 1 && {
+                              borderBottomWidth: 1,
+                              borderBottomColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#F1F5F9' : 'rgba(255, 255, 255, 0.06)',
+                            },
+                          ]}
+                        >
+                          <XStack alignItems="center" justifyContent="space-between" flex={1}>
+                            <XStack alignItems="center" gap={10} flex={1}>
+                              <View
+                                style={[
+                                  styles.dropdownIconCircle,
+                                  {
+                                    backgroundColor: isSelected
+                                      ? 'rgba(16, 185, 129, 0.15)'
+                                      : (theme.mode === 'hybrid' || theme.mode === 'light' ? '#F8FAFC' : 'rgba(255, 255, 255, 0.05)'),
+                                  },
+                                ]}
+                              >
+                                <PhosphorIcon
+                                  name={option.icon}
+                                  size={16}
+                                  color={isSelected ? '#10B981' : option.color}
+                                  weight={isSelected ? 'bold' : 'regular'}
+                                />
+                              </View>
+                              <YStack flex={1}>
+                                <Text
+                                  color={isSelected ? '#10B981' : theme.text}
+                                  fontSize={13}
+                                  fontFamily={Fonts.bold}
+                                >
+                                  {option.label}
+                                </Text>
+                                <Text
+                                  color={theme.textSecondary}
+                                  fontSize={10.5}
+                                  fontFamily={Fonts.medium}
+                                >
+                                  {option.sublabel}
+                                </Text>
+                              </YStack>
+                            </XStack>
+                            {isSelected && (
+                              <PhosphorIcon name="Check" size={16} color="#10B981" weight="bold" />
+                            )}
+                          </XStack>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
 
                 {/* Category Item Cards */}
                 <YStack gap={10}>
+                  {filteredCategories.length === 0 && (
+                    <View
+                      style={[
+                        styles.emptyStateCard,
+                        {
+                          backgroundColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#FFFFFF' : '#131D31',
+                          borderColor: theme.mode === 'hybrid' || theme.mode === 'light' ? '#E2E8F0' : 'rgba(255, 255, 255, 0.08)',
+                        },
+                      ]}
+                    >
+                      <View style={styles.emptyIconCircle}>
+                        <PhosphorIcon name="MagnifyingGlass" size={22} color={theme.textSecondary} />
+                      </View>
+                      <Text color={theme.text} fontSize={14} fontFamily={Fonts.bold} textAlign="center">
+                        No budgets found
+                      </Text>
+                      <Text
+                        color={theme.textSecondary}
+                        fontSize={12}
+                        fontFamily={Fonts.medium}
+                        textAlign="center"
+                        style={{ marginTop: 2, marginBottom: 12 }}
+                      >
+                        {categorySearchQuery.trim()
+                          ? `No categories matching "${categorySearchQuery}"`
+                          : `No categories currently matching the "${categoryFilter === 'overspent' ? 'Overspent' : 'In budget'}" filter.`}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          safeHaptic('light');
+                          setCategorySearchQuery('');
+                          setCategoryFilter('all');
+                        }}
+                        activeOpacity={0.8}
+                        style={styles.emptyResetBtn}
+                      >
+                        <Text color="#FFFFFF" fontSize={12} fontFamily={Fonts.bold}>
+                          Reset Filter & Search
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                   {filteredCategories.map((cat) => {
                     const spent = store.loggedExpenses.filter((e) => e.category === cat).reduce((s, e) => s + e.amount, 0);
                     const limit = store.categoryLimits?.[cat] || store.totalBudget / (store.selectedCategories.length || 1);
@@ -1505,28 +1774,78 @@ export default function BudgetScreen() {
                 })}
               </ScrollView>
 
-              {/* 3. Transaction Filter Chips */}
-              <XStack gap={8}>
-                {(['all', 'expenses', 'income'] as const).map((filter) => {
-                  const isActive = activityFilter === filter;
-                  const labels = { all: 'All', expenses: 'Expenses', income: 'Income' };
-                  return (
+              {/* 3. Streamlined Search & Activity Filter Bar */}
+              <YStack gap={10}>
+                {/* Search Input Bar */}
+                <XStack
+                  alignItems="center"
+                  backgroundColor={theme.mode === 'hybrid' || theme.mode === 'light' ? '#FFFFFF' : '#131D31'}
+                  borderWidth={1}
+                  borderColor={theme.mode === 'hybrid' || theme.mode === 'light' ? '#E2E8F0' : 'rgba(255, 255, 255, 0.08)'}
+                  borderRadius={12}
+                  paddingHorizontal={12}
+                  height={42}
+                  gap={8}
+                >
+                  <PhosphorIcon name="MagnifyingGlass" size={17} color={theme.textSecondary} />
+                  <TextInput
+                    value={transactionSearchQuery}
+                    onChangeText={setTransactionSearchQuery}
+                    placeholder="Search by merchant, category, or note..."
+                    placeholderTextColor={theme.textSecondary}
+                    style={{
+                      flex: 1,
+                      color: theme.text,
+                      fontSize: 13,
+                      fontFamily: Fonts.regular,
+                      padding: 0,
+                    }}
+                  />
+                  {transactionSearchQuery.length > 0 && (
                     <TouchableOpacity
-                      key={filter}
-                      onPress={() => {
-                        safeHaptic('light');
-                        setActivityFilter(filter);
-                      }}
-                      style={[styles.filterChip, isActive && styles.filterChipActive]}
-                      activeOpacity={0.7}
+                      onPress={() => setTransactionSearchQuery('')}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
-                      <Text color={isActive ? '#FFFFFF' : theme.textSecondary} fontSize={12} fontFamily={Fonts.bold}>
-                        {labels[filter]}
-                      </Text>
+                      <PhosphorIcon name="XCircle" size={17} color={theme.textSecondary} weight="fill" />
                     </TouchableOpacity>
-                  );
-                })}
-              </XStack>
+                  )}
+                </XStack>
+
+                {/* Segmented Filter Pills */}
+                <XStack
+                  backgroundColor={theme.mode === 'hybrid' || theme.mode === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255, 255, 255, 0.05)'}
+                  borderRadius={10}
+                  padding={3}
+                  gap={4}
+                >
+                  {(['all', 'expenses', 'income'] as const).map((filter) => {
+                    const isActive = activityFilter === filter;
+                    const labels = { all: 'All Activity', expenses: 'Expenses', income: 'Income' };
+                    return (
+                      <TouchableOpacity
+                        key={filter}
+                        onPress={() => {
+                          safeHaptic('light');
+                          setActivityFilter(filter);
+                        }}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 7,
+                          borderRadius: 8,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: isActive ? '#10B981' : 'transparent',
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text color={isActive ? '#FFFFFF' : theme.textSecondary} fontSize={12} fontFamily={Fonts.bold}>
+                          {labels[filter]}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </XStack>
+              </YStack>
 
               {/* 4. Grouped Daily Purchase History Cards */}
               <YStack gap={14}>
@@ -1858,67 +2177,41 @@ export default function BudgetScreen() {
         </ScrollView>
       </SafeAreaView>
 
-      {/* ==================== MODAL: LOG EXPENSE / INCOME ==================== */}
+      {/* ==================== MODAL: LOG EXPENSE ==================== */}
       <Modal visible={showExpenseForm} transparent animationType="slide" onRequestClose={() => setShowExpenseForm(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#E2E8F0' }]}>
             <XStack justifyContent="space-between" alignItems="center" borderBottomWidth={1} borderBottomColor={isDark ? '#334155' : '#E2E8F0'} paddingBottom={12}>
-              <XStack alignItems="center" gap={8}>
-                <PhosphorCategoryIcon name={transactionType === 'income' ? 'Bills' : 'Shopping'} size={22} primaryColor={isDark ? '#0F172A' : '#FFFFFF'} accentColor="#10B981" style={{ width: 32, height: 32, borderRadius: 8 }} />
+              <XStack alignItems="center" gap={10}>
+                <View style={[styles.modalHeaderIconBadge, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#E6F9F3' }]}>
+                  <PhosphorIcon name="Receipt" size={18} color="#10B981" weight="bold" />
+                </View>
                 <Text color={isDark ? '#FFFFFF' : '#0F172A'} fontSize={16} fontFamily={Fonts.bold}>
-                  {transactionType === 'income' ? 'Log Income' : 'Log Expense'}
+                  Log Expense
                 </Text>
               </XStack>
-              <TouchableOpacity onPress={() => setShowExpenseForm(false)}>
-                <PhosphorIcon name="XCircle" size={20} color={isDark ? '#94A3B8' : '#64748B'} weight="fill" />
+              <TouchableOpacity onPress={() => setShowExpenseForm(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <PhosphorIcon name="XCircle" size={22} color={isDark ? '#94A3B8' : '#64748B'} weight="fill" />
               </TouchableOpacity>
             </XStack>
 
-            <ScrollView contentContainerStyle={{ gap: 14, paddingTop: 12 }}>
-              {/* Type Switcher */}
-              <View style={{ flexDirection: 'row', backgroundColor: isDark ? '#0F172A' : '#F5F5F5', borderRadius: 8, padding: 3 }}>
-                <TouchableOpacity
-                  onPress={() => {
-                    safeHaptic('light');
-                    setTransactionType('expense');
-                  }}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 6,
-                    borderRadius: 6,
-                    alignItems: 'center',
-                    backgroundColor: transactionType === 'expense' ? '#EF4444' : 'transparent',
-                  }}
-                >
-                  <Text color={transactionType === 'expense' ? '#FFFFFF' : isDark ? '#94A3B8' : '#64748B'} fontSize={12} fontFamily={Fonts.bold}>
-                    Expense
+            <ScrollView contentContainerStyle={{ gap: 14, paddingTop: 14 }} showsVerticalScrollIndicator={false}>
+              {/* Streamlined Category Selector: Horizontal Chip Strip */}
+              <YStack gap={8}>
+                <XStack justifyContent="space-between" alignItems="center">
+                  <Text color={isDark ? '#94A3B8' : '#64748B'} fontSize={11} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                    CATEGORY
                   </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    safeHaptic('light');
-                    setTransactionType('income');
-                  }}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 6,
-                    borderRadius: 6,
-                    alignItems: 'center',
-                    backgroundColor: transactionType === 'income' ? '#10B981' : 'transparent',
-                  }}
-                >
-                  <Text color={transactionType === 'income' ? '#FFFFFF' : isDark ? '#94A3B8' : '#64748B'} fontSize={12} fontFamily={Fonts.bold}>
-                    Income
+                  <Text color="#10B981" fontSize={11} fontFamily={Fonts.bold}>
+                    {CATEGORY_DISPLAY_NAMES[expenseCategory] || expenseCategory}
                   </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Category selector */}
-              <YStack gap={6}>
-                <Text color={isDark ? '#94A3B8' : '#64748B'} fontSize={11} fontFamily={Fonts.bold}>SELECT CATEGORY</Text>
-                <XStack flexWrap="wrap" gap={8}>
+                </XStack>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
                   {Object.keys(CATEGORY_ICONS).filter(c => c !== 'Custom').map((cat) => {
                     const isSel = expenseCategory === cat;
+                    const iconName = CATEGORY_ICONS[cat] || 'Question';
+                    const catColor = CATEGORY_COLORS[cat] || '#10B981';
+                    const displayName = CATEGORY_DISPLAY_NAMES[cat] || cat;
                     return (
                       <TouchableOpacity
                         key={cat}
@@ -1926,32 +2219,52 @@ export default function BudgetScreen() {
                           safeHaptic('light');
                           setExpenseCategory(cat);
                         }}
-                        style={[styles.catSelectPill, { backgroundColor: isDark ? '#0F172A' : '#F5F5F5', borderColor: isDark ? '#334155' : '#E2E8F0' }, isSel && styles.catSelectPillActive]}
-                        activeOpacity={0.8}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          paddingVertical: 7,
+                          paddingHorizontal: 12,
+                          borderRadius: 20,
+                          gap: 6,
+                          backgroundColor: isSel
+                            ? '#10B981'
+                            : isDark
+                            ? '#0F172A'
+                            : '#F8FAFC',
+                          borderWidth: 1,
+                          borderColor: isSel
+                            ? '#10B981'
+                            : isDark
+                            ? '#334155'
+                            : '#E2E8F0',
+                        }}
+                        activeOpacity={0.7}
                       >
-                        <XStack alignItems="center" gap={6}>
-                          <PhosphorCategoryIcon
-                            name={cat}
-                            size={16}
-                            primaryColor={isSel ? '#FFFFFF' : isDark ? '#0F172A' : '#FFFFFF'}
-                            accentColor={isSel ? '#FFFFFF' : '#10B981'}
-                            backgroundColor="transparent"
-                            style={{ width: 18, height: 18 }}
-                          />
-                          <Text color={isSel ? '#FFFFFF' : isDark ? '#94A3B8' : '#64748B'} fontSize={12} fontFamily={Fonts.bold}>
-                            {cat}
-                          </Text>
-                        </XStack>
+                        <PhosphorIcon
+                          name={iconName}
+                          size={15}
+                          color={isSel ? '#FFFFFF' : catColor}
+                          weight="bold"
+                        />
+                        <Text
+                          style={{
+                            color: isSel ? '#FFFFFF' : isDark ? '#E2E8F0' : '#475569',
+                            fontFamily: isSel ? Fonts.bold : Fonts.semiBold,
+                            fontSize: 12,
+                          }}
+                        >
+                          {displayName}
+                        </Text>
                       </TouchableOpacity>
                     );
                   })}
-                </XStack>
+                </ScrollView>
               </YStack>
 
               <FormInput
                 variant="default"
-                label={transactionType === 'income' ? 'Income Source' : 'Item Name / Merchant'}
-                placeholder={transactionType === 'income' ? 'e.g. Allowance, Freelance, Gift' : 'e.g. Jollibee, Jeepney'}
+                label="Item Name / Merchant"
+                placeholder="e.g. Jollibee, Jeepney"
                 value={expenseName}
                 onChangeText={handleExpenseNameChange}
               />
@@ -1977,7 +2290,7 @@ export default function BudgetScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleLogExpense} style={styles.modalSubmitBtn}>
                   <Text color="#FFFFFF" fontSize={13} fontFamily={Fonts.bold}>
-                    {transactionType === 'income' ? 'Log Income' : 'Log Purchase'}
+                    Log Purchase
                   </Text>
                 </TouchableOpacity>
               </XStack>
@@ -1991,23 +2304,36 @@ export default function BudgetScreen() {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#E2E8F0' }]}>
             <XStack justifyContent="space-between" alignItems="center" borderBottomWidth={1} borderBottomColor={isDark ? '#334155' : '#E2E8F0'} paddingBottom={12}>
-              <XStack alignItems="center" gap={8}>
-                <PhosphorCategoryIcon name={editExpenseCategory} size={20} primaryColor={isDark ? '#0F172A' : '#FFFFFF'} accentColor="#10B981" style={{ width: 28, height: 28, borderRadius: 6 }} />
+              <XStack alignItems="center" gap={10}>
+                <View style={[styles.modalHeaderIconBadge, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#E6F9F3' }]}>
+                  <PhosphorIcon name="Pencil" size={18} color="#10B981" weight="bold" />
+                </View>
                 <Text color={isDark ? '#FFFFFF' : '#0F172A'} fontSize={16} fontFamily={Fonts.bold}>
                   Edit Transaction
                 </Text>
               </XStack>
-              <TouchableOpacity onPress={() => setShowEditExpenseModal(false)}>
-                <PhosphorIcon name="XCircle" size={20} color={isDark ? '#94A3B8' : '#64748B'} weight="fill" />
+              <TouchableOpacity onPress={() => setShowEditExpenseModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <PhosphorIcon name="XCircle" size={22} color={isDark ? '#94A3B8' : '#64748B'} weight="fill" />
               </TouchableOpacity>
             </XStack>
 
-            <ScrollView contentContainerStyle={{ gap: 14, paddingTop: 12 }}>
-              <YStack gap={6}>
-                <Text color={isDark ? '#94A3B8' : '#64748B'} fontSize={11} fontFamily={Fonts.bold}>CATEGORY</Text>
-                <XStack flexWrap="wrap" gap={8}>
+            <ScrollView contentContainerStyle={{ gap: 14, paddingTop: 14 }} showsVerticalScrollIndicator={false}>
+              {/* Streamlined Category Selector: Horizontal Chip Strip */}
+              <YStack gap={8}>
+                <XStack justifyContent="space-between" alignItems="center">
+                  <Text color={isDark ? '#94A3B8' : '#64748B'} fontSize={11} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                    CATEGORY
+                  </Text>
+                  <Text color="#10B981" fontSize={11} fontFamily={Fonts.bold}>
+                    {CATEGORY_DISPLAY_NAMES[editExpenseCategory] || editExpenseCategory}
+                  </Text>
+                </XStack>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
                   {Object.keys(CATEGORY_ICONS).filter(c => c !== 'Custom').map((cat) => {
                     const isSel = editExpenseCategory === cat;
+                    const iconName = CATEGORY_ICONS[cat] || 'Question';
+                    const catColor = CATEGORY_COLORS[cat] || '#10B981';
+                    const displayName = CATEGORY_DISPLAY_NAMES[cat] || cat;
                     return (
                       <TouchableOpacity
                         key={cat}
@@ -2015,16 +2341,46 @@ export default function BudgetScreen() {
                           safeHaptic('light');
                           setEditExpenseCategory(cat);
                         }}
-                        style={[styles.catSelectPill, { backgroundColor: isDark ? '#0F172A' : '#F5F5F5', borderColor: isDark ? '#334155' : '#E2E8F0' }, isSel && styles.catSelectPillActive]}
-                        activeOpacity={0.8}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          paddingVertical: 7,
+                          paddingHorizontal: 12,
+                          borderRadius: 20,
+                          gap: 6,
+                          backgroundColor: isSel
+                            ? '#10B981'
+                            : isDark
+                            ? '#0F172A'
+                            : '#F8FAFC',
+                          borderWidth: 1,
+                          borderColor: isSel
+                            ? '#10B981'
+                            : isDark
+                            ? '#334155'
+                            : '#E2E8F0',
+                        }}
+                        activeOpacity={0.7}
                       >
-                        <Text color={isSel ? '#FFFFFF' : isDark ? '#94A3B8' : '#64748B'} fontSize={12} fontFamily={Fonts.bold}>
-                          {cat}
+                        <PhosphorIcon
+                          name={iconName}
+                          size={15}
+                          color={isSel ? '#FFFFFF' : catColor}
+                          weight="bold"
+                        />
+                        <Text
+                          style={{
+                            color: isSel ? '#FFFFFF' : isDark ? '#E2E8F0' : '#475569',
+                            fontFamily: isSel ? Fonts.bold : Fonts.semiBold,
+                            fontSize: 12,
+                          }}
+                        >
+                          {displayName}
                         </Text>
                       </TouchableOpacity>
                     );
                   })}
-                </XStack>
+                </ScrollView>
               </YStack>
 
               <FormInput variant="default" label="Name" placeholder="e.g. Jollibee" value={editExpenseName} onChangeText={setEditExpenseName} />
@@ -2701,6 +3057,82 @@ const styles = StyleSheet.create({
   filterChipActive: {
     backgroundColor: '#10B981',
   },
+  resetFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.25)',
+  },
+  filterDropdownToggle: {
+    height: 42,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropdownMenu: {
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: 'hidden',
+    marginTop: 2,
+    marginBottom: 4,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 4,
+      },
+      web: {
+        boxShadow: '0 4px 12px rgba(15, 23, 42, 0.1)',
+      } as any,
+    }),
+  },
+  dropdownOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  dropdownIconCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyStateCard: {
+    padding: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 4,
+  },
+  emptyIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(100, 116, 139, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  emptyResetBtn: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   categoryCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -2928,6 +3360,40 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     padding: 18,
     borderWidth: 1,
+  },
+  modalHeaderIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 8,
+  },
+  categoryGridItem: {
+    width: '23%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 2,
+    borderRadius: 14,
+    borderWidth: 1.5,
+  },
+  categoryIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 5,
+  },
+  categoryGridLabel: {
+    fontSize: 10,
+    textAlign: 'center',
   },
   catSelectPill: {
     backgroundColor: '#0F172A',

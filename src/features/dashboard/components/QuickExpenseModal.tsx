@@ -37,6 +37,42 @@ const DEFAULT_CATEGORIES = [
   'Other',
 ];
 
+const CATEGORY_ICONS: Record<string, any> = {
+  Food: 'ForkKnife',
+  Transportation: 'Car',
+  School: 'GraduationCap',
+  Bills: 'Receipt',
+  Shopping: 'ShoppingBag',
+  Entertainment: 'GameController',
+  Savings: 'PiggyBank',
+  'Emergency Fund': 'ShieldCheck',
+  Other: 'Question',
+};
+
+const CATEGORY_COLORS: Record<string, string> = {
+  Food: '#F59E0B',
+  Transportation: '#3B82F6',
+  School: '#8B5CF6',
+  Bills: '#EF4444',
+  Shopping: '#EC4899',
+  Entertainment: '#10B981',
+  Savings: '#06B6D4',
+  'Emergency Fund': '#6366F1',
+  Other: '#64748B',
+};
+
+const CATEGORY_DISPLAY_NAMES: Record<string, string> = {
+  Food: 'Food',
+  Transportation: 'Transport',
+  School: 'School',
+  Bills: 'Bills',
+  Shopping: 'Shopping',
+  Entertainment: 'Fun',
+  Savings: 'Savings',
+  'Emergency Fund': 'Emergency',
+  Other: 'Other',
+};
+
 export function QuickExpenseModal({
   visible,
   onClose,
@@ -112,7 +148,12 @@ export function QuickExpenseModal({
 
           {/* Header */}
           <View style={styles.headerRow}>
-            <Text style={[styles.sheetTitle, { color: theme.text }]}>Quick Log Expense</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={[styles.headerIconBadge, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#E6F9F3' }]}>
+                <PhosphorIcon name="Receipt" size={18} color="#10B981" weight="bold" />
+              </View>
+              <Text style={[styles.sheetTitle, { color: theme.text }]}>Quick Log Expense</Text>
+            </View>
             <InteractivePressable
               onPress={() => {
                 Keyboard.dismiss();
@@ -134,6 +175,84 @@ export function QuickExpenseModal({
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
+            {/* Streamlined Category Selector: Horizontal Chip Strip */}
+            <View style={styles.inputGroup}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={[styles.inputLabel, { color: theme.textSecondary, marginBottom: 0 }]}>CATEGORY</Text>
+                <Text style={{ color: '#10B981', fontFamily: Fonts.bold, fontSize: 11.5 }}>
+                  {CATEGORY_DISPLAY_NAMES[category] || category}
+                </Text>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                {categories.map((cat) => {
+                  const isSelected = category === cat;
+                  const iconName = CATEGORY_ICONS[cat] || 'Question';
+                  const catColor = CATEGORY_COLORS[cat] || '#10B981';
+                  const displayName = CATEGORY_DISPLAY_NAMES[cat] || cat;
+                  return (
+                    <InteractivePressable
+                      key={cat}
+                      onPress={() => setCategory(cat)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingVertical: 7,
+                        paddingHorizontal: 12,
+                        borderRadius: 20,
+                        gap: 6,
+                        backgroundColor: isSelected
+                          ? '#10B981'
+                          : isDark
+                          ? '#0F172A'
+                          : '#F8FAFC',
+                        borderWidth: 1,
+                        borderColor: isSelected
+                          ? '#10B981'
+                          : isDark
+                          ? '#334155'
+                          : '#E2E8F0',
+                      }}
+                    >
+                      <PhosphorIcon
+                        name={iconName}
+                        size={15}
+                        color={isSelected ? '#FFFFFF' : catColor}
+                        weight="bold"
+                      />
+                      <Text
+                        style={{
+                          color: isSelected ? '#FFFFFF' : isDark ? '#E2E8F0' : '#475569',
+                          fontFamily: isSelected ? Fonts.bold : Fonts.semiBold,
+                          fontSize: 12,
+                        }}
+                      >
+                        {displayName}
+                      </Text>
+                    </InteractivePressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* Description Input */}
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Item Name / Merchant</Text>
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                placeholder="e.g. Lunch, Grab Ride, Books"
+                placeholderTextColor={theme.textSecondary}
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: isDark ? '#0F172A' : '#F8FAFC',
+                    borderColor: theme.border,
+                    color: theme.text,
+                  },
+                ]}
+              />
+            </View>
+
             {/* Amount Input */}
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Amount ({currencyCode})</Text>
@@ -155,59 +274,6 @@ export function QuickExpenseModal({
                   keyboardType="decimal-pad"
                   style={[styles.amountInput, { color: theme.text }]}
                 />
-              </View>
-            </View>
-
-            {/* Description Input */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Description</Text>
-              <TextInput
-                value={name}
-                onChangeText={setName}
-                placeholder="e.g. Lunch, Grab Ride, Books"
-                placeholderTextColor={theme.textSecondary}
-                style={[
-                  styles.textInput,
-                  {
-                    backgroundColor: isDark ? '#0F172A' : '#F8FAFC',
-                    borderColor: theme.border,
-                    color: theme.text,
-                  },
-                ]}
-              />
-            </View>
-
-            {/* Category Chips */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Category</Text>
-              <View style={styles.categoriesWrap}>
-                {categories.map((cat) => {
-                  const isSelected = category === cat;
-                  return (
-                    <InteractivePressable
-                      key={cat}
-                      onPress={() => setCategory(cat)}
-                      style={[
-                        styles.categoryChip,
-                        {
-                          backgroundColor: isDark ? '#0F172A' : '#F5F5F5',
-                          borderColor: theme.border,
-                        },
-                        isSelected && styles.categoryChipSelected,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.categoryChipText,
-                          { color: theme.textSecondary },
-                          isSelected && styles.categoryChipTextSelected,
-                        ]}
-                      >
-                        {cat}
-                      </Text>
-                    </InteractivePressable>
-                  );
-                })}
               </View>
             </View>
 
@@ -255,6 +321,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
+  headerIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   sheetTitle: {
     color: '#FFFFFF',
     fontSize: 17,
@@ -270,6 +343,33 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 8,
+  },
+  categoryGridItem: {
+    width: '23%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 2,
+    borderRadius: 14,
+    borderWidth: 1.5,
+  },
+  categoryIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 5,
+  },
+  categoryGridLabel: {
+    fontSize: 10,
+    textAlign: 'center',
   },
   amountInputRow: {
     flexDirection: 'row',
@@ -304,32 +404,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontFamily: Fonts.medium,
-  },
-  categoriesWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  categoryChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#0F172A',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  categoryChipSelected: {
-    backgroundColor: '#10B981',
-    borderColor: '#10B981',
-  },
-  categoryChipText: {
-    color: '#94A3B8',
-    fontSize: 12,
-    fontFamily: Fonts.medium,
-  },
-  categoryChipTextSelected: {
-    color: '#FFFFFF',
-    fontFamily: Fonts.bold,
   },
   confirmBtn: {
     backgroundColor: '#10B981',

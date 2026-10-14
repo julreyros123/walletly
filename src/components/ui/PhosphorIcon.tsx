@@ -26,6 +26,8 @@ import {
   Power,
   CaretLeft,
   CaretRight,
+  CaretDown,
+  CaretUp,
   Check,
   CheckCircle,
   XCircle,
@@ -111,6 +113,10 @@ import {
   Target,
   Crosshair,
   Flag,
+  CurrencyDollarSimple,
+  ShieldWarning,
+  Bank,
+  Shield,
 } from 'phosphor-react-native';
 import type { StyleProp, ViewStyle, ColorValue } from 'react-native';
 
@@ -137,6 +143,8 @@ const ICON_MAP = {
   Power,
   CaretLeft,
   CaretRight,
+  CaretDown,
+  CaretUp,
   Check,
   CheckCircle,
   XCircle,
@@ -217,6 +225,10 @@ const ICON_MAP = {
   Target,
   Crosshair,
   Flag,
+  CurrencyDollarSimple,
+  ShieldWarning,
+  Bank,
+  Shield,
 } as const;
 
 export type PhosphorIconName = keyof typeof ICON_MAP;

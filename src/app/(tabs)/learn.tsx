@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Alert, TouchableOpacity } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { ScrollView, StyleSheet, Alert, TouchableOpacity, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { YStack, XStack, Text, Button, Progress, View } from 'tamagui';
 import { useTheme } from '@/hooks/use-theme';
@@ -13,6 +13,7 @@ import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { BackgroundSystem } from '@/components/ui/BackgroundSystem';
 import { useFocusEffect } from 'expo-router';
 import { setStatusBarStyle } from 'expo-status-bar';
+import { safeHaptic } from '@/utils/haptics';
 
 interface Question {
   id: number;
@@ -348,6 +349,8 @@ export default function LearnScreen() {
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [score, setScore] = useState(0);
   const [earnedXP, setEarnedXP] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'in_progress' | 'completed'>('all');
 
   const activeLevel = levels[activeLevelIdx];
   const activeLesson = activeLevel.lesson;
@@ -493,11 +496,112 @@ export default function LearnScreen() {
                 </CbudgetCard>
               </View>
 
+              {/* Search & Status Filter Bar */}
+              <YStack gap={10}>
+                {/* Search Input Bar */}
+                <XStack
+                  alignItems="center"
+                  backgroundColor={theme.mode === 'dark' ? '#131D31' : '#FFFFFF'}
+                  borderWidth={1}
+                  borderColor={theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0'}
+                  borderRadius={12}
+                  paddingHorizontal={12}
+                  height={42}
+                  gap={8}
+                >
+                  <PhosphorIcon name="MagnifyingGlass" size={17} color={theme.textSecondary} />
+                  <TextInput
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    placeholder="Search topics, lessons, or concepts..."
+                    placeholderTextColor={theme.textSecondary}
+                    style={{
+                      flex: 1,
+                      color: theme.text,
+                      fontSize: 13,
+                      fontFamily: Fonts.regular,
+                      padding: 0,
+                    }}
+                  />
+                  {searchQuery.length > 0 && (
+                    <TouchableOpacity
+                      onPress={() => setSearchQuery('')}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <PhosphorIcon name="XCircle" size={17} color={theme.textSecondary} weight="fill" />
+                    </TouchableOpacity>
+                  )}
+                </XStack>
+
+                {/* Status Segmented Control */}
+                <XStack
+                  backgroundColor={theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)'}
+                  borderRadius={10}
+                  padding={3}
+                  gap={4}
+                >
+                  {[
+                    { id: 'all' as const, label: 'All (9)' },
+                    { id: 'in_progress' as const, label: 'In Progress' },
+                    { id: 'completed' as const, label: 'Completed' },
+                  ].map((filter) => {
+                    const isActive = statusFilter === filter.id;
+                    return (
+                      <TouchableOpacity
+                        key={filter.id}
+                        onPress={() => {
+                          safeHaptic('light');
+                          setStatusFilter(filter.id);
+                        }}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 7,
+                          borderRadius: 8,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: isActive ? theme.primary : 'transparent',
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          color={isActive ? '#FFFFFF' : theme.textSecondary}
+                          fontSize={12}
+                          fontFamily={Fonts.bold}
+                        >
+                          {filter.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </XStack>
+              </YStack>
+
               {/* Chapters */}
               {chapters.map((chap, chapIdx) => {
-                const chapterLevels = levels.filter(
-                  (lvl) => lvl.levelNumber >= chap.levelsRange[0] && lvl.levelNumber <= chap.levelsRange[1]
-                );
+                const chapterLevels = levels.filter((lvl) => {
+                  const inChapter = lvl.levelNumber >= chap.levelsRange[0] && lvl.levelNumber <= chap.levelsRange[1];
+                  if (!inChapter) return false;
+
+                  // Text Search match
+                  if (searchQuery.trim()) {
+                    const q = searchQuery.trim().toLowerCase();
+                    const matchTitle = lvl.title.toLowerCase().includes(q);
+                    const matchLesson = lvl.lesson.title.toLowerCase().includes(q);
+                    const matchDesc = lvl.description.toLowerCase().includes(q);
+                    const matchContent = lvl.lesson.content.some((c) => c.toLowerCase().includes(q));
+                    if (!matchTitle && !matchLesson && !matchDesc && !matchContent) return false;
+                  }
+
+                  // Status filter match
+                  const completed = isLevelCompleted(lvl.levelNumber);
+                  const unlocked = isLevelUnlocked(lvl.levelNumber);
+                  if (statusFilter === 'completed' && !completed) return false;
+                  if (statusFilter === 'in_progress' && (!unlocked || completed)) return false;
+
+                  return true;
+                });
+
+                if (chapterLevels.length === 0) return null;
                 
                 // A chapter is completed if all of its levels are completed
                 const completedCount = chapterLevels.filter(lvl => isLevelCompleted(lvl.levelNumber)).length;

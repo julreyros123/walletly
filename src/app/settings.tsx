@@ -22,6 +22,7 @@ import { PhosphorIcon, PhosphorIconName } from '@/components/ui/PhosphorIcon';
 import { LegalPolicyModal } from '@/features/profile/components/LegalPolicyModal';
 import { LegalTabId } from '@/constants/legalPolicies';
 import { safeHaptic } from '@/utils/haptics';
+import { sendGuardianReport } from '@/utils/guardianReport';
 import { Fonts } from '@/constants/theme';
 
 interface SettingsRowItem {
@@ -72,6 +73,8 @@ export default function SettingsScreen() {
   const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
   const [languageModalVisible, setLanguageModalVisible] = useState(false);
   const [achievementsModalVisible, setAchievementsModalVisible] = useState(false);
+  const [achievementFilter, setAchievementFilter] = useState<'all' | 'unlocked' | 'locked'>('all');
+  const [achievementSearch, setAchievementSearch] = useState('');
   const [legalModalVisible, setLegalModalVisible] = useState(false);
   const [legalTab, setLegalTab] = useState<LegalTabId>('terms');
 
@@ -125,6 +128,18 @@ export default function SettingsScreen() {
       );
       if (cleanGuardian !== guardianEmail) {
         await setGuardianInfo(cleanGuardian, Boolean(cleanGuardian));
+        setEditProfileModalVisible(false);
+        if (cleanGuardian && cleanGuardian.includes('@')) {
+          Alert.alert(
+            'Guardian Linked! 🎉',
+            `Progress reports are now connected to ${cleanGuardian}.\n\nWould you like to send an introductory progress report now?`,
+            [
+              { text: 'Later', style: 'cancel' },
+              { text: 'Send Report Now', onPress: () => sendGuardianReport(cleanGuardian) },
+            ]
+          );
+          return;
+        }
       }
       setEditProfileModalVisible(false);
       Alert.alert('Profile Updated', 'Your profile details have been successfully updated.');
@@ -286,7 +301,22 @@ export default function SettingsScreen() {
       iconBgColor: primaryAccent,
       detail: guardianLinked ? 'Linked' : 'Not Linked',
       type: 'navigation',
-      onPress: handleOpenEditProfile,
+      onPress: () => {
+        safeHaptic('light');
+        if (guardianLinked && guardianEmail) {
+          Alert.alert(
+            'Parent & Guardian Report',
+            `Connected: ${guardianEmail}\n\nSend a financial literacy report to your guardian or update settings?`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Edit Email', onPress: handleOpenEditProfile },
+              { text: 'Send Report Now', onPress: () => sendGuardianReport() },
+            ]
+          );
+        } else {
+          handleOpenEditProfile();
+        }
+      },
     },
     {
       id: 'help',
@@ -819,9 +849,106 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             </View>
 
+            {/* Search & Status Filter Bar for Badges */}
+            <View style={{ paddingHorizontal: 16, paddingTop: 10, gap: 10 }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: isDark ? '#0A0F1D' : '#F8FAFC',
+                  borderWidth: 1,
+                  borderColor: isDark ? '#1E293B' : '#E2E8F0',
+                  borderRadius: 12,
+                  paddingHorizontal: 12,
+                  height: 40,
+                  gap: 8,
+                }}
+              >
+                <PhosphorIcon name="MagnifyingGlass" size={16} color={theme.textSecondary} />
+                <TextInput
+                  value={achievementSearch}
+                  onChangeText={setAchievementSearch}
+                  placeholder="Search badges by title or description..."
+                  placeholderTextColor={theme.textSecondary}
+                  style={{
+                    flex: 1,
+                    color: theme.text,
+                    fontSize: 13,
+                    fontFamily: Fonts.regular,
+                    padding: 0,
+                  }}
+                />
+                {achievementSearch.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setAchievementSearch('')}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <PhosphorIcon name="XCircle" size={16} color={theme.textSecondary} weight="fill" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View
+                style={{
+                  flexDirection: 'row',
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+                  borderRadius: 10,
+                  padding: 3,
+                  gap: 4,
+                }}
+              >
+                {[
+                  { id: 'all' as const, label: `All (${ALL_ACHIEVEMENTS.length})` },
+                  { id: 'unlocked' as const, label: `Unlocked (${unlockedCount})` },
+                  { id: 'locked' as const, label: `Locked (${ALL_ACHIEVEMENTS.length - unlockedCount})` },
+                ].map((tab) => {
+                  const isActive = achievementFilter === tab.id;
+                  return (
+                    <TouchableOpacity
+                      key={tab.id}
+                      onPress={() => {
+                        safeHaptic('light');
+                        setAchievementFilter(tab.id);
+                      }}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: isActive ? primaryAccent : 'transparent',
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={{
+                          color: isActive ? '#FFFFFF' : theme.textSecondary,
+                          fontSize: 11.5,
+                          fontFamily: Fonts.bold,
+                        }}
+                      >
+                        {tab.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
             <ScrollView showsVerticalScrollIndicator={false} style={styles.editFormScroll}>
               <View style={styles.achievementsGrid}>
-                {ALL_ACHIEVEMENTS.map((ach) => {
+                {ALL_ACHIEVEMENTS.filter((ach) => {
+                  const isUnlocked = unlockedAchievements.some((ua) => ua.id === ach.id);
+                  if (achievementFilter === 'unlocked' && !isUnlocked) return false;
+                  if (achievementFilter === 'locked' && isUnlocked) return false;
+                  if (achievementSearch.trim()) {
+                    const q = achievementSearch.trim().toLowerCase();
+                    const matchTitle = ach.title.toLowerCase().includes(q);
+                    const matchDesc = ach.description.toLowerCase().includes(q);
+                    if (!matchTitle && !matchDesc) return false;
+                  }
+                  return true;
+                }).map((ach) => {
                   const isUnlocked = unlockedAchievements.some((ua) => ua.id === ach.id);
                   return (
                     <View

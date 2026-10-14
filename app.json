@@ -18,7 +18,7 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#0A2540",
-        "foregroundImage": "./assets/images/walletly_app_icon_1024.png"
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": true,
       "package": "com.julreyros123.cbudget",

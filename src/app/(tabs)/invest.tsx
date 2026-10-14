@@ -207,8 +207,8 @@ export default function InvestScreen() {
     return () => pulse.stop();
   }, []);
   
-  // Active Tab Segment: Portfolio & Market vs Compounding Forecast
-  const [activeTab, setActiveTab] = useState<'portfolio' | 'compound'>('portfolio');
+  // Active Tab Segment: Portfolio vs Explore Market vs Compounding Forecast
+  const [activeTab, setActiveTab] = useState<'portfolio' | 'explore' | 'compound'>('portfolio');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [assetFilter, setAssetFilter] = useState<'ALL' | 'Conservative' | 'Moderate' | 'Aggressive'>('ALL');
@@ -257,6 +257,10 @@ export default function InvestScreen() {
 
   const holdingsValue = assets.reduce((sum, a) => sum + getAssetOwnedUnits(a.ticker) * a.price, 0);
   const totalPortfolioValue = holdingsValue + store.virtualBalance;
+
+  const ownedAssets = useMemo(() => {
+    return assets.filter((asset) => getAssetOwnedUnits(asset.ticker) > 0);
+  }, [assets, store.portfolioAllocations]);
 
   const filteredAssets = assets
     .filter((asset) => {
@@ -587,7 +591,7 @@ export default function InvestScreen() {
               Investing
             </Text>
             <Text color="rgba(255, 255, 255, 0.6)" fontSize={12.5} style={{ fontFamily: Fonts.regular }} lineHeight={17}>
-              Market & Portfolio
+              {activeTab === 'portfolio' ? 'Your Holdings & Returns' : activeTab === 'explore' ? 'Browse & Trade Companies' : 'Compound Wealth Model'}
             </Text>
           </YStack>
           <TouchableOpacity
@@ -646,9 +650,10 @@ export default function InvestScreen() {
 
         {/* ==================== SEGMENTED TOP SWITCHER ==================== */}
         <View style={styles.capsuleTrackWrapper}>
-          <AnimatedSegmentSwitch<'portfolio' | 'compound'>
+          <AnimatedSegmentSwitch<'portfolio' | 'explore' | 'compound'>
             options={[
               { id: 'portfolio', label: 'Portfolio' },
+              { id: 'explore', label: 'Explore' },
               { id: 'compound', label: 'Forecast' },
             ]}
             activeId={activeTab}
@@ -660,142 +665,7 @@ export default function InvestScreen() {
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-          {/* Real-Time Market Indices Moving Ribbon (Continuous Sideward Stream + Animated Live Feed Icon) */}
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              marginBottom: 14,
-              height: 36,
-              overflow: 'hidden',
-              borderRadius: 12,
-              backgroundColor: 'rgba(255, 255, 255, 0.02)',
-              borderWidth: 1,
-              borderColor: 'rgba(255, 255, 255, 0.06)',
-            }}
-          >
-            {/* Docked Animated LIVE FEED Pill (With Real-time Equalizer & Radar Ripple) */}
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 7,
-                paddingHorizontal: 10,
-                height: '100%',
-                backgroundColor: '#0B132B',
-                borderRightWidth: 1,
-                borderRightColor: 'rgba(255, 255, 255, 0.08)',
-                zIndex: 2,
-              }}
-            >
-              {/* Real-time Frequency Equalizer Bars (Live streaming soundwave) */}
-              <XStack alignItems="center" gap={2} height={14}>
-                <Animated.View
-                  style={{
-                    width: 2.5,
-                    height: 12,
-                    borderRadius: 1.5,
-                    backgroundColor: '#10B981',
-                    transform: [{ scaleY: eqBar1 }],
-                  }}
-                />
-                <Animated.View
-                  style={{
-                    width: 2.5,
-                    height: 12,
-                    borderRadius: 1.5,
-                    backgroundColor: '#10B981',
-                    transform: [{ scaleY: eqBar2 }],
-                  }}
-                />
-                <Animated.View
-                  style={{
-                    width: 2.5,
-                    height: 12,
-                    borderRadius: 1.5,
-                    backgroundColor: '#10B981',
-                    transform: [{ scaleY: eqBar3 }],
-                  }}
-                />
-                <Animated.View
-                  style={{
-                    width: 2.5,
-                    height: 12,
-                    borderRadius: 1.5,
-                    backgroundColor: '#10B981',
-                    transform: [{ scaleY: eqBar4 }],
-                  }}
-                />
-              </XStack>
-
-              {/* Live Signal Beacon Dot with Outward Radar Ripple */}
-              <View width={10} height={10} alignItems="center" justifyContent="center">
-                <Animated.View
-                  style={{
-                    position: 'absolute',
-                    width: 10,
-                    height: 10,
-                    borderRadius: 5,
-                    backgroundColor: 'rgba(16, 185, 129, 0.45)',
-                    transform: [{ scale: rippleScale }],
-                    opacity: rippleOpacity,
-                  }}
-                />
-                <View width={5} height={5} borderRadius={2.5} backgroundColor="#10B981" />
-              </View>
-
-              <Text color="#FFFFFF" fontSize={10.5} style={{ fontFamily: Fonts.bold }} letterSpacing={0.5}>
-                REFERENCE
-              </Text>
-            </View>
-
-            {/* Continuous Sideward Moving Ticker Stream */}
-            <View style={{ flex: 1, overflow: 'hidden' }}>
-              <Animated.View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  transform: [{ translateX: tickerTranslateX }],
-                }}
-              >
-                {/* First set of benchmark items (measured for seamless loop width) */}
-                <View
-                  onLayout={(e) => {
-                    const w = e.nativeEvent.layout.width;
-                    if (w > 0 && Math.abs(w - tickerTrackWidth) > 1) {
-                      setTickerTrackWidth(w);
-                    }
-                  }}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 8 }}
-                >
-                  {MARKET_BENCHMARKS.map((item, idx) => (
-                    <View key={`b1-${idx}`} style={styles.indexPill}>
-                      <XStack alignItems="center" gap={5}>
-                        <Text color="#FFFFFF" fontSize={11} style={{ fontFamily: Fonts.bold }}>{item.name}</Text>
-                        <Text color="rgba(255, 255, 255, 0.7)" fontSize={11} style={{ fontFamily: Fonts.medium }}>{item.val}</Text>
-                        <Text color={item.up ? '#10B981' : '#EF4444'} fontSize={10.5} style={{ fontFamily: Fonts.bold }}>{item.chg}</Text>
-                      </XStack>
-                    </View>
-                  ))}
-                </View>
-
-                {/* Second duplicated set for seamless infinite sideways loop */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 8 }}>
-                  {MARKET_BENCHMARKS.map((item, idx) => (
-                    <View key={`b2-${idx}`} style={styles.indexPill}>
-                      <XStack alignItems="center" gap={5}>
-                        <Text color="#FFFFFF" fontSize={11} style={{ fontFamily: Fonts.bold }}>{item.name}</Text>
-                        <Text color="rgba(255, 255, 255, 0.7)" fontSize={11} style={{ fontFamily: Fonts.medium }}>{item.val}</Text>
-                        <Text color={item.up ? '#10B981' : '#EF4444'} fontSize={10.5} style={{ fontFamily: Fonts.bold }}>{item.chg}</Text>
-                      </XStack>
-                    </View>
-                  ))}
-                </View>
-              </Animated.View>
-            </View>
-          </View>
-
-          {/* TAB 1: PORTFOLIO & MARKET WATCHLIST */}
+          {/* ==================== TAB 1: YOUR PERSONAL PORTFOLIO ==================== */}
           {activeTab === 'portfolio' && (
             <>
               {/* Unified Hero: Net Portfolio Balance & Real Scaled Performance */}
@@ -1304,7 +1174,7 @@ export default function InvestScreen() {
                   <TouchableOpacity
                     onPress={() => {
                       safeHaptic('light');
-                      setActiveTab('compound');
+                      setActiveTab('explore');
                     }}
                     activeOpacity={0.8}
                     style={{
@@ -1320,9 +1190,9 @@ export default function InvestScreen() {
                       gap: 6,
                     }}
                   >
-                    <PhosphorIcon name="Hourglass" size={15} color="#6EE7B7" weight="bold" />
+                    <PhosphorIcon name="MagnifyingGlass" size={15} color="#6EE7B7" weight="bold" />
                     <Text color="#FFFFFF" fontSize={12} style={{ fontFamily: Fonts.bold }}>
-                      Forecast
+                      Explore Market
                     </Text>
                   </TouchableOpacity>
                 </XStack>
@@ -1383,6 +1253,246 @@ export default function InvestScreen() {
                   </View>
                 </YStack>
               </CbudgetCard>
+
+              {/* ==================== YOUR HOLDINGS SECTION (PORTFOLIO TAB) ==================== */}
+              <YStack gap={12} marginBottom={24}>
+                <XStack justifyContent="space-between" alignItems="center" paddingHorizontal={2}>
+                  <YStack gap={1}>
+                    <Text color="#FFFFFF" fontSize={16} style={{ fontFamily: Fonts.bold }} letterSpacing={-0.3}>
+                      Your Holdings
+                    </Text>
+                    <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.medium }}>
+                      {ownedAssets.length === 0 ? 'No open positions' : `${ownedAssets.length} active position${ownedAssets.length === 1 ? '' : 's'}`}
+                    </Text>
+                  </YStack>
+
+                  {ownedAssets.length > 0 && (
+                    <View
+                      backgroundColor="rgba(16, 185, 129, 0.12)"
+                      paddingHorizontal={8}
+                      paddingVertical={3}
+                      borderRadius={8}
+                      borderWidth={1}
+                      borderColor="rgba(16, 185, 129, 0.25)"
+                    >
+                      <Text color="#10B981" fontSize={11} style={{ fontFamily: Fonts.bold }}>
+                        {currencySymbol}{holdingsValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </Text>
+                    </View>
+                  )}
+                </XStack>
+
+                {ownedAssets.length === 0 ? (
+                  <CbudgetCard
+                    padding={22}
+                    backgroundColor="#1C2541"
+                    borderColor="rgba(255, 255, 255, 0.08)"
+                    borderWidth={1}
+                    borderRadius={16}
+                    alignItems="center"
+                    gap={12}
+                  >
+                    <View
+                      width={52}
+                      height={52}
+                      borderRadius={26}
+                      backgroundColor="rgba(16, 185, 129, 0.12)"
+                      alignItems="center"
+                      justifyContent="center"
+                      borderWidth={1}
+                      borderColor="rgba(16, 185, 129, 0.25)"
+                    >
+                      <PhosphorIcon name="TrendUp" size={24} color="#10B981" weight="duotone" />
+                    </View>
+                    <YStack alignItems="center" gap={4}>
+                      <Text color="#FFFFFF" fontSize={15} style={{ fontFamily: Fonts.bold }}>
+                        No Active Holdings Yet
+                      </Text>
+                      <Text color="#8D99AE" fontSize={12} textAlign="center" style={{ fontFamily: Fonts.regular }} maxWidth={260} lineHeight={17}>
+                        Explore vetted companies in our simulated market to start building and compounding your portfolio.
+                      </Text>
+                    </YStack>
+                    <TouchableOpacity
+                      onPress={() => {
+                        safeHaptic('light');
+                        setActiveTab('explore');
+                      }}
+                      activeOpacity={0.8}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        backgroundColor: '#10B981',
+                        paddingHorizontal: 16,
+                        paddingVertical: 10,
+                        borderRadius: 12,
+                        marginTop: 4,
+                      }}
+                    >
+                      <Text color="#FFFFFF" fontSize={13} style={{ fontFamily: Fonts.bold }}>
+                        Explore Market
+                      </Text>
+                      <PhosphorIcon name="ArrowRight" size={14} color="#FFFFFF" weight="bold" />
+                    </TouchableOpacity>
+                  </CbudgetCard>
+                ) : (
+                  <CbudgetCard
+                    padding={0}
+                    backgroundColor="#1C2541"
+                    borderColor="rgba(255, 255, 255, 0.08)"
+                    borderWidth={1}
+                    borderRadius={16}
+                    overflow="hidden"
+                  >
+                    {ownedAssets.map((asset, index) => {
+                      const ownedUnits = getAssetOwnedUnits(asset.ticker);
+                      const assetTotalValue = ownedUnits * asset.price;
+                      const changeIsPositive = asset.change >= 0;
+                      const isLast = index === ownedAssets.length - 1;
+
+                      return (
+                        <View key={asset.ticker}>
+                          <TouchableOpacity
+                            activeOpacity={0.7}
+                            onPress={() => {
+                              safeHaptic('light');
+                              navigateToDetails(asset.ticker);
+                            }}
+                            style={{ padding: 14 }}
+                          >
+                            <XStack justifyContent="space-between" alignItems="center">
+                              <XStack gap={10} alignItems="center" flex={1}>
+                                <View
+                                  width={38}
+                                  height={38}
+                                  borderRadius={10}
+                                  backgroundColor="rgba(255, 255, 255, 0.05)"
+                                  borderWidth={1}
+                                  borderColor="rgba(255, 255, 255, 0.08)"
+                                  alignItems="center"
+                                  justifyContent="center"
+                                >
+                                  <Text color="#FFFFFF" fontSize={12} style={{ fontFamily: Fonts.bold }}>
+                                    {asset.ticker.slice(0, 3)}
+                                  </Text>
+                                </View>
+                                <YStack flex={1} gap={2}>
+                                  <XStack alignItems="center" gap={6}>
+                                    <Text color="#FFFFFF" fontSize={13.5} style={{ fontFamily: Fonts.bold }} numberOfLines={1}>
+                                      {asset.name}
+                                    </Text>
+                                    <View
+                                      backgroundColor={
+                                        asset.riskProfile === 'Conservative'
+                                          ? 'rgba(16, 185, 129, 0.12)'
+                                          : asset.riskProfile === 'Moderate'
+                                          ? 'rgba(245, 158, 11, 0.12)'
+                                          : 'rgba(239, 68, 68, 0.12)'
+                                      }
+                                      paddingHorizontal={5}
+                                      paddingVertical={1.5}
+                                      borderRadius={4}
+                                    >
+                                      <Text
+                                        color={
+                                          asset.riskProfile === 'Conservative'
+                                            ? '#10B981'
+                                            : asset.riskProfile === 'Moderate'
+                                            ? '#F59E0B'
+                                            : '#EF4444'
+                                        }
+                                        fontSize={9}
+                                        style={{ fontFamily: Fonts.bold }}
+                                      >
+                                        {asset.riskProfile}
+                                      </Text>
+                                    </View>
+                                  </XStack>
+                                  <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.medium }}>
+                                    {formatShares(ownedUnits)} shares · {currencySymbol}{asset.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </Text>
+                                </YStack>
+                              </XStack>
+
+                              <YStack alignItems="flex-end" gap={2}>
+                                <Text color="#FFFFFF" fontSize={13.5} style={{ fontFamily: Fonts.bold }}>
+                                  {currencySymbol}{assetTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </Text>
+                                <View
+                                  style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 3,
+                                    backgroundColor: changeIsPositive ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                                    paddingHorizontal: 6,
+                                    paddingVertical: 2,
+                                    borderRadius: 999,
+                                  }}
+                                >
+                                  <PhosphorIcon
+                                    name={changeIsPositive ? 'TrendUp' : 'TrendDown'}
+                                    size={10}
+                                    color={changeIsPositive ? '#10B981' : '#F87171'}
+                                    weight="bold"
+                                  />
+                                  <Text color={changeIsPositive ? '#10B981' : '#F87171'} fontSize={10} style={{ fontFamily: Fonts.bold }}>
+                                    {changeIsPositive ? '+' : ''}{asset.change.toFixed(2)}%
+                                  </Text>
+                                </View>
+                              </YStack>
+                            </XStack>
+                          </TouchableOpacity>
+                          {!isLast && <View height={1} backgroundColor="rgba(255, 255, 255, 0.05)" marginHorizontal={14} />}
+                        </View>
+                      );
+                    })}
+                  </CbudgetCard>
+                )}
+              </YStack>
+            </>
+          )}
+
+          {/* ==================== TAB 2: EXPLORE MARKET & DEMO COMPANIES ==================== */}
+          {activeTab === 'explore' && (
+            <>
+              {/* Market Benchmarks Mini Ticker Tape */}
+              <View marginBottom={16}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}>
+                  {MARKET_BENCHMARKS.map((m) => (
+                    <View
+                      key={m.name}
+                      style={{
+                        backgroundColor: '#1C2541',
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: 'rgba(255, 255, 255, 0.08)',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 8,
+                      }}
+                    >
+                      <YStack gap={1}>
+                        <Text color="#8D99AE" fontSize={10} style={{ fontFamily: Fonts.bold }}>{m.name}</Text>
+                        <Text color="#FFFFFF" fontSize={12} style={{ fontFamily: Fonts.bold }}>{m.val}</Text>
+                      </YStack>
+                      <View
+                        style={{
+                          backgroundColor: m.up ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                          paddingHorizontal: 5,
+                          paddingVertical: 2,
+                          borderRadius: 6,
+                        }}
+                      >
+                        <Text color={m.up ? '#10B981' : '#EF4444'} fontSize={9.5} style={{ fontFamily: Fonts.bold }}>
+                          {m.chg}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
 
               {/* ==================== DEMO INVESTMENT COMPANIES (WITH GRID FILTER & SEARCH) ==================== */}
               <YStack gap={12} marginBottom={24}>
