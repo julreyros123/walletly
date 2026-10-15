@@ -47,11 +47,14 @@
         }
       ],
       "expo-secure-store",
+      "expo-sqlite",
       "expo-localization",
       "@react-native-google-signin/google-signin",
       "expo-audio",
       "expo-notifications",
-      "expo-asset"
+      "expo-asset",
+      "expo-image",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

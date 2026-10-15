@@ -3,7 +3,8 @@ import { storage } from '@/utils/storage';
 import { ASSET_DATA, AssetDetails } from '@/constants/assets';
 import { fetchAllAssetQuotes, getFinnhubApiKey } from '@/services/finnhubApi';
 
-const STORAGE_KEY = '@walletly_market_store_v1';
+const STORAGE_KEY = 'walletly_market_store_v1';
+const LEGACY_STORAGE_KEY = '@walletly_market_store_v1';
 const AUTO_REFRESH_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes between Finnhub anchor pulls
 
 export type TickDirection = 'up' | 'down' | null;
@@ -36,7 +37,10 @@ export const useMarketStore = create<MarketState>((set, get) => ({
 
   initMarket: async () => {
     try {
-      const stored = await storage.getItem(STORAGE_KEY);
+      let stored = await storage.getItem(STORAGE_KEY);
+      if (!stored) {
+        stored = await storage.getItem(LEGACY_STORAGE_KEY);
+      }
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed.assets && typeof parsed.lastSyncTimestamp === 'number') {

@@ -51,7 +51,6 @@ function getGoogleSigninModule() {
 // ── Storage key constants (avoid magic strings) ──────────────────────
 const AUTH_TOKEN_KEY = 'cbudget_auth_token';
 const USER_KEY = 'cbudget_user';
-const PREMIUM_KEY = 'cbudget_is_premium';
 const GUEST_TOKEN_PREFIX = 'guest-session-';
 const LEGACY_MOCK_GUEST_TOKEN = 'mock-guest-token-56789';
 
@@ -72,7 +71,6 @@ let authSubscription: { unsubscribe: () => void } | null = null;
 async function clearLocalSessionData(): Promise<void> {
   await storage.deleteItem(AUTH_TOKEN_KEY);
   await storage.deleteItem(USER_KEY);
-  await storage.deleteItem(PREMIUM_KEY);
   await syncQueue.clear();
 }
 
@@ -94,7 +92,6 @@ interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  isPremium: boolean;
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   loginWithFacebook: () => Promise<void>;
@@ -103,7 +100,6 @@ interface AuthState {
   logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
   hydrate: () => Promise<void>;
-  setPremium: (premium: boolean) => Promise<void>;
   updateProfile: (
     name: string,
     email: string,
@@ -124,7 +120,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   token: null,
   isAuthenticated: false,
   isLoading: true,
-  isPremium: false,
 
   login: async (email, password) => {
     // Local guest state is cleared by the auth listener only after sign-in succeeds,
@@ -298,14 +293,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     };
     await storage.setItem(AUTH_TOKEN_KEY, guestToken);
     await storage.setItem(USER_KEY, JSON.stringify(mockUser));
-    await storage.setItem(PREMIUM_KEY, 'false');
 
     setActiveGamificationUser('guest');
     set({
       token: guestToken,
       user: mockUser,
       isAuthenticated: true,
-      isPremium: false,
       isLoading: false,
     });
     useGamificationStore.getState().hydrate('guest');
@@ -328,7 +321,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // Clear local session keys and remaining sync items
     await storage.deleteItem(AUTH_TOKEN_KEY);
     await storage.deleteItem(USER_KEY);
-    await storage.deleteItem(PREMIUM_KEY);
     await syncQueue.clear();
 
     // Also sign out of Native Google Sign-In so future sign-in prompts for account selection
@@ -347,7 +339,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     setActiveGamificationUser(null);
     useGamificationStore.getState().resetAllData(0);
-    set({ token: null, user: null, isAuthenticated: false, isPremium: false });
+    set({ token: null, user: null, isAuthenticated: false });
     useGamificationStore.getState().hydrate('guest');
   },
 
@@ -360,7 +352,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // Clear local guest storage and flush pending sync items
     await storage.deleteItem(AUTH_TOKEN_KEY);
     await storage.deleteItem(USER_KEY);
-    await storage.deleteItem(PREMIUM_KEY);
     await syncQueue.clear();
 
     // Also sign out of Native Google Sign-In so future sign-in prompts for account selection
@@ -390,7 +381,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     setActiveGamificationUser(null);
     useGamificationStore.getState().resetAllData(0);
-    set({ token: null, user: null, isAuthenticated: false, isPremium: false });
+    set({ token: null, user: null, isAuthenticated: false });
     useGamificationStore.getState().hydrate('guest');
   },
 
@@ -400,8 +391,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const guestToken = await storage.getItem(AUTH_TOKEN_KEY);
       if (isGuestToken(guestToken)) {
         const userStr = await storage.getItem(USER_KEY);
-        const storedPremium = await storage.getItem(PREMIUM_KEY);
-        const isPremium = storedPremium === 'true';
         let user: User = {
           id: 'guest',
           name: 'Guest Explorer',
@@ -421,7 +410,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           token: guestToken,
           user,
           isAuthenticated: true,
-          isPremium,
           isLoading: false,
         });
         useGamificationStore.getState().hydrate('guest');
@@ -478,7 +466,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             token: session.access_token,
             user: initialUser,
             isAuthenticated: true,
-            isPremium: false,
             isLoading: false,
           });
 
@@ -501,7 +488,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                   name: initialUser.name,
                   avatar_color: initialUser.avatarColor,
                   avatar_emoji: initialUser.avatarEmoji,
-                  is_premium: false,
                 });
               } else {
                 const profileAny = profile as Record<string, unknown>;
@@ -522,7 +508,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                         isOnboarded: resolvedOnboarded,
                       }
                     : state.user,
-                  isPremium: profile.is_premium || false,
                 }));
               }
             } catch (err) {
@@ -538,7 +523,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               token: null,
               user: null,
               isAuthenticated: false,
-              isPremium: false,
               isLoading: false,
             });
             useGamificationStore.getState().hydrate('guest');
@@ -554,25 +538,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  setPremium: async (premium: boolean) => {
-    const currentUser = get().user;
-    if (!currentUser) return;
 
-    if (currentUser.id === 'guest') {
-      await storage.setItem(PREMIUM_KEY, premium ? 'true' : 'false');
-      set({ isPremium: premium });
-      return;
-    }
-
-    const { error } = await supabase
-      .from('profiles')
-      .update({ is_premium: premium })
-      .eq('id', currentUser.id);
-
-    if (error) throw error;
-
-    set({ isPremium: premium });
-  },
 
   updateProfile: async (
     name: string,

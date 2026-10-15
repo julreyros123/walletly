@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from '@/utils/supabase';
 import { storage } from '@/utils/storage';
+import { applyLocalMutation, markSynced } from '@/db/localRepository';
 
 export interface SyncQueueItem {
   id: string;
@@ -7,6 +8,7 @@ export interface SyncQueueItem {
   action: 'insert' | 'upsert' | 'update' | 'delete';
   payload?: any;
   match?: Record<string, any>;
+  options?: { onConflict?: string; ignoreDuplicates?: boolean };
   createdAt: number;
   retryCount: number;
 }
@@ -85,6 +87,11 @@ export const syncQueue = {
     memoryQueue.push(queueItem);
     await persistQueue();
 
+    // Optimistically update local SQLite database
+    applyLocalMutation(item.table, item.action, item.payload, item.match).catch((err) => {
+      console.warn('[SyncQueue] SQLite local mutation error:', err);
+    });
+
     // Process immediately in background
     syncQueue.process().catch((err) => {
       console.warn('[SyncQueue] Auto-process error:', err);
@@ -111,8 +118,11 @@ export const syncQueue = {
 
       // Do not sync guest sessions to Supabase
       if (!session?.user?.id || session.user.id === 'guest') {
+        console.log('[SyncQueue] No authenticated Supabase session found (user is guest or logged out). Pausing sync.');
         return;
       }
+
+      console.log(`[SyncQueue] Processing ${memoryQueue.length} queued item(s) for user ${session.user.id}...`);
 
       // Work on a snapshot; items enqueued during processing stay in memoryQueue untouched
       const snapshot = [...memoryQueue];
@@ -127,7 +137,7 @@ export const syncQueue = {
             const res = await supabase.from(item.table).insert(item.payload);
             error = res.error;
           } else if (item.action === 'upsert') {
-            const res = await supabase.from(item.table).upsert(item.payload);
+            const res = await supabase.from(item.table).upsert(item.payload, item.options);
             error = res.error;
           } else if (item.action === 'update' && item.match) {
             let query = supabase.from(item.table).update(item.payload);
@@ -146,6 +156,13 @@ export const syncQueue = {
           }
 
           if (error) {
+            // Idempotent duplicate check: if row already exists in database (e.g. from an earlier attempt before timeout), mark complete
+            if (error.code === '23505') {
+              console.log(`[SyncQueue] Record in ${item.table} already exists (idempotent 23505), marking completed.`);
+              completedIds.add(item.id);
+              continue;
+            }
+
             console.warn(`[SyncQueue] Operation failed for ${item.table}.${item.action}:`, error.message);
             const isSchemaMismatch =
               error.code === '42703' ||
@@ -169,6 +186,9 @@ export const syncQueue = {
             }
           } else {
             completedIds.add(item.id);
+            markSynced(item.table, item.payload, item.match, 0).catch((err) => {
+              console.warn('[SyncQueue] markSynced error:', err);
+            });
           }
         } catch (execErr) {
           console.warn('[SyncQueue] Network/execution error during sync, preserving in queue:', execErr);

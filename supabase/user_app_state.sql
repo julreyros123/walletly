@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS public.user_app_state (
 
 ALTER TABLE public.user_app_state ENABLE ROW LEVEL SECURITY;
 
+REVOKE ALL ON public.user_app_state FROM anon;
+GRANT ALL ON public.user_app_state TO authenticated, service_role;
+
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'user_app_state' AND policyname = 'Users can manage their own app state') THEN
         CREATE POLICY "Users can manage their own app state"
@@ -22,13 +25,10 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- 2. transactions.category_id is NOT NULL (UUID in this database), but the app
---    stores the category name in the text `category` column and never sends
---    category_id. That made every expense/income insert fail and get dropped.
---    Making it nullable fixes the sync without touching existing data.
+-- 2. transactions.category_id is nullable; text `category` column is canonical
 ALTER TABLE public.transactions ALTER COLUMN category_id DROP NOT NULL;
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS category TEXT;
 
--- 3. Same safety for budgets (app only writes the text `category` column).
+-- 3. Same safety for budgets (app writes text `category` column)
 ALTER TABLE public.budgets ALTER COLUMN category_id DROP NOT NULL;
 ALTER TABLE public.budgets ADD COLUMN IF NOT EXISTS category TEXT;

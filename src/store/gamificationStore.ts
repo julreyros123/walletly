@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import { storage } from '@/utils/storage';
 import { supabase } from '@/utils/supabase';
 import { syncQueue } from '@/utils/syncQueue';
+import { applyRemoteRows, getLocalRows } from '@/db/localRepository';
 
 export const CURRENT_GAMIFICATION_VERSION = 2;
 const BASE_GAMIFICATION_KEY = 'cbudget_gamification_state';
@@ -754,41 +755,41 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       };
       persistState({ ...state, ...next });
 
-      // Enqueue sync for budgets with retry queue
+      // Enqueue sync for budgets with retry queue (atomic upsert per category & month)
       (async () => {
         try {
           const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
           if (session?.user?.id && session.user.id !== 'guest') {
             const currentMonth = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
-            const rowsToInsert = [
+            const rowsToUpsert = [
               {
-                owner_id: session.user.id,
                 user_id: session.user.id,
+                owner_id: session.user.id,
                 category: '__total__',
-                limit_amount: amount,
+                category_id: '__total__',
                 allocated_amount: amount,
-                period: 'monthly',
+                limit_amount: amount,
                 month: currentMonth,
+                period: currentMonth,
+                updated_at: new Date().toISOString(),
               },
               ...Object.entries(limits).map(([cat, limit]) => ({
-                owner_id: session.user.id,
                 user_id: session.user.id,
+                owner_id: session.user.id,
                 category: cat,
-                limit_amount: limit,
+                category_id: cat,
                 allocated_amount: limit,
-                period: 'monthly',
+                limit_amount: limit,
                 month: currentMonth,
+                period: currentMonth,
+                updated_at: new Date().toISOString(),
               })),
             ];
             await syncQueue.enqueue({
               table: 'budgets',
-              action: 'delete',
-              match: { owner_id: session.user.id },
-            });
-            await syncQueue.enqueue({
-              table: 'budgets',
-              action: 'insert',
-              payload: rowsToInsert,
+              action: 'upsert',
+              payload: rowsToUpsert,
+              options: { onConflict: 'user_id,category,month' },
             });
           }
         } catch (err) {
@@ -815,29 +816,22 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
             const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
             if (session?.user?.id && session.user.id !== 'guest') {
               const currentMonth = new Date().toISOString().slice(0, 7);
-              const { data: existing } = await supabase
-                .from('budgets')
-                .select('budget_id')
-                .eq('owner_id', session.user.id)
-                .eq('category', '__total__')
-                .maybeSingle();
-
-              if (existing?.budget_id) {
-                await supabase
-                  .from('budgets')
-                  .update({ limit_amount: amount, allocated_amount: amount, updated_at: new Date().toISOString() })
-                  .eq('budget_id', existing.budget_id);
-              } else {
-                await supabase.from('budgets').insert({
-                  owner_id: session.user.id,
+              await syncQueue.enqueue({
+                table: 'budgets',
+                action: 'upsert',
+                payload: {
                   user_id: session.user.id,
+                  owner_id: session.user.id,
                   category: '__total__',
-                  limit_amount: amount,
+                  category_id: '__total__',
                   allocated_amount: amount,
-                  period: 'monthly',
+                  limit_amount: amount,
                   month: currentMonth,
-                });
-              }
+                  period: currentMonth,
+                  updated_at: new Date().toISOString(),
+                },
+                options: { onConflict: 'user_id,category,month' },
+              });
             }
           } catch (err) {
             console.warn('[GamificationStore] Supabase setBudgetType error:', err);
@@ -850,6 +844,11 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
   },
 
   addExpense: (name, category, amount, date, notes, time) => {
+    if (!amount || !Number.isFinite(amount) || amount <= 0) {
+      console.warn('[GamificationStore] addExpense ignored invalid or non-positive amount:', amount);
+      return;
+    }
+
     set((state) => {
       const expenseId = generateUUID();
       const newExpense: Expense = {
@@ -892,24 +891,25 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       };
       persistState({ ...state, ...next });
 
-      // Enqueue sync for transaction insert
+      // Enqueue sync for transaction upsert (idempotent across retries)
       (async () => {
         try {
           const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
           if (session?.user?.id && session.user.id !== 'guest') {
             await syncQueue.enqueue({
               table: 'transactions',
-              action: 'insert',
+              action: 'upsert',
               payload: {
                 transaction_id: expenseId,
-                owner_id: session.user.id,
                 user_id: session.user.id,
+                owner_id: session.user.id,
                 type: 'expense',
                 category: category,
                 amount,
                 description: notes ? `${name} - ${notes}` : name,
                 transaction_date: toISODate(date),
               },
+              options: { onConflict: 'transaction_id' },
             });
           }
         } catch (err) {
@@ -922,6 +922,11 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
   },
 
   editExpense: (id, updated) => {
+    if (updated.amount !== undefined && (!Number.isFinite(updated.amount) || updated.amount <= 0)) {
+      console.warn('[GamificationStore] editExpense ignored invalid or non-positive amount:', updated.amount);
+      return;
+    }
+
     set((state) => {
       const updatedExpenses = state.loggedExpenses.map((exp) => {
         if (exp.id === id) {
@@ -949,7 +954,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
               table: 'transactions',
               action: 'update',
               payload: updatePayload,
-              match: { transaction_id: id, owner_id: session.user.id },
+              match: { transaction_id: id, user_id: session.user.id },
             });
           }
         } catch (err) {
@@ -987,7 +992,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
             await syncQueue.enqueue({
               table: 'transactions',
               action: 'delete',
-              match: { transaction_id: id, owner_id: session.user.id },
+              match: { transaction_id: id, user_id: session.user.id },
             });
           }
         } catch (err) {
@@ -1000,6 +1005,11 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
   },
 
   addIncome: (name, category, amount, date, notes, time) => {
+    if (!amount || !Number.isFinite(amount) || amount <= 0) {
+      console.warn('[GamificationStore] addIncome ignored invalid or non-positive amount:', amount);
+      return;
+    }
+
     set((state) => {
       const incomeId = generateUUID();
       const newIncome: Expense = {
@@ -1025,17 +1035,18 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
           if (session?.user?.id && session.user.id !== 'guest') {
             await syncQueue.enqueue({
               table: 'transactions',
-              action: 'insert',
+              action: 'upsert',
               payload: {
                 transaction_id: incomeId,
-                owner_id: session.user.id,
                 user_id: session.user.id,
+                owner_id: session.user.id,
                 type: 'income',
                 category: category || 'Income',
                 amount,
                 description: notes ? `${name} - ${notes}` : name,
                 transaction_date: toISODate(date),
               },
+              options: { onConflict: 'transaction_id' },
             });
           }
         } catch (err) {
@@ -1084,9 +1095,10 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
     if (currentActiveUserId && currentActiveUserId !== 'guest') {
       const uid = currentActiveUserId;
       Promise.allSettled([
-        supabase.from('transactions').delete().eq('owner_id', uid),
-        supabase.from('budgets').delete().eq('owner_id', uid),
+        supabase.from('transactions').delete().eq('user_id', uid),
+        supabase.from('budgets').delete().eq('user_id', uid),
         supabase.from('saving_challenges').delete().eq('user_id', uid),
+        supabase.from(CLOUD_STATE_TABLE).delete().eq('user_id', uid),
       ]).then((results) => {
         results.forEach((res, i) => {
           if (res.status === 'rejected') {
@@ -1122,7 +1134,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
           if (session?.user?.id && session.user.id !== 'guest') {
             await syncQueue.enqueue({
               table: 'saving_challenges',
-              action: 'insert',
+              action: 'upsert',
               payload: {
                 challenge_id: goalId,
                 user_id: session.user.id,
@@ -1133,6 +1145,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
                 end_date: targetDate.includes('-') ? targetDate : null,
                 is_completed: false,
               },
+              options: { onConflict: 'challenge_id' },
             });
           }
         } catch (err) {
@@ -1233,17 +1246,18 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
 
             await syncQueue.enqueue({
               table: 'transactions',
-              action: 'insert',
+              action: 'upsert',
               payload: {
                 transaction_id: expenseId,
-                owner_id: session.user.id,
                 user_id: session.user.id,
+                owner_id: session.user.id,
                 type: 'expense',
                 category: 'Savings',
                 amount: actualContributed,
                 description: `Allocated to ${goalName}`,
                 transaction_date: getLocalDateString(),
               },
+              options: { onConflict: 'transaction_id' },
             });
           }
         } catch (err) {
@@ -1312,17 +1326,18 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
 
             await syncQueue.enqueue({
               table: 'transactions',
-              action: 'insert',
+              action: 'upsert',
               payload: {
                 transaction_id: incomeId,
-                owner_id: session.user.id,
                 user_id: session.user.id,
+                owner_id: session.user.id,
                 type: 'income',
                 category: 'Savings',
                 amount,
                 description: `Withdrawn from ${targetGoal.name}`,
                 transaction_date: getLocalDateString(),
               },
+              options: { onConflict: 'transaction_id' },
             });
           }
         } catch (err) {
@@ -1469,17 +1484,18 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
           if (session?.user?.id && session.user.id !== 'guest') {
             await syncQueue.enqueue({
               table: 'transactions',
-              action: 'insert',
+              action: 'upsert',
               payload: {
                 transaction_id: expenseId,
-                owner_id: session.user.id,
                 user_id: session.user.id,
+                owner_id: session.user.id,
                 type: 'expense',
                 category: 'Savings',
                 amount,
                 description: `Savings Vault: ${defaultNote}`,
                 transaction_date: getLocalDateString(now),
               },
+              options: { onConflict: 'transaction_id' },
             });
           }
         } catch (err) {
@@ -1529,17 +1545,18 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
           if (session?.user?.id && session.user.id !== 'guest') {
             await syncQueue.enqueue({
               table: 'transactions',
-              action: 'insert',
+              action: 'upsert',
               payload: {
                 transaction_id: incomeId,
-                owner_id: session.user.id,
                 user_id: session.user.id,
+                owner_id: session.user.id,
                 type: 'income',
                 category: 'Savings',
                 amount,
                 description: `Withdrawal from Savings Vault at ${formattedTime}`,
                 transaction_date: getLocalDateString(now),
               },
+              options: { onConflict: 'transaction_id' },
             });
           }
         } catch (err) {
@@ -1609,17 +1626,18 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
           if (session?.user?.id && session.user.id !== 'guest') {
             await syncQueue.enqueue({
               table: 'transactions',
-              action: 'insert',
+              action: 'upsert',
               payload: {
                 transaction_id: expenseId,
-                owner_id: session.user.id,
                 user_id: session.user.id,
+                owner_id: session.user.id,
                 type: 'expense',
                 category: 'Savings',
                 amount,
                 description: 'Transfer to Investment Sandbox',
                 transaction_date: getLocalDateString(),
               },
+              options: { onConflict: 'transaction_id' },
             });
           }
         } catch (err) {
@@ -1966,7 +1984,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         const userId = resolvedUserId;
 
         // Concurrent fetch of full-state backup, transactions, budgets, and saving challenges
-        // Uses .or(owner_id, user_id) so no transactions are ever omitted
+        // Standardized on user_id UUID ownership
         const [snapshotRes, txRes, budgetRes, goalsRes] = await Promise.allSettled([
           supabase
             .from(CLOUD_STATE_TABLE)
@@ -1976,12 +1994,12 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
           supabase
             .from('transactions')
             .select('*')
-            .or(`owner_id.eq.${userId},user_id.eq.${userId}`)
+            .eq('user_id', userId)
             .order('transaction_date', { ascending: false }),
           supabase
             .from('budgets')
             .select('*')
-            .or(`owner_id.eq.${userId},user_id.eq.${userId}`),
+            .eq('user_id', userId),
           supabase
             .from('saving_challenges')
             .select('*')
@@ -2018,9 +2036,12 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
 
         const nextUpdates: Partial<GamificationState> = {};
 
-        // Transactions / Activity history sync (merge remote with offline local items)
+        // Transactions / Activity history sync (merge remote with offline local items, mirrored in SQLite)
         if (txRes.status === 'fulfilled' && txRes.value.data) {
           const remoteTxs = txRes.value.data;
+          applyRemoteRows('transactions', userId, remoteTxs).catch((e) => {
+            console.warn('[GamificationStore] SQLite transactions mirror error:', e);
+          });
           if (remoteTxs.length > 0) {
             const localById = new Map((get().loggedExpenses || []).map((e) => [e.id, e]));
             const mappedExpenses: Expense[] = remoteTxs.map((t: any) => {
@@ -2041,20 +2062,37 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
             const localOnly = (get().loggedExpenses || []).filter((e) => !remoteIds.has(e.id));
             nextUpdates.loggedExpenses = [...mappedExpenses, ...localOnly];
           }
+        } else {
+          // Offline fallback: load from local SQLite mirror
+          const localTxs = await getLocalRows('transactions', userId);
+          if (localTxs && localTxs.length > 0) {
+            nextUpdates.loggedExpenses = localTxs.map((t: any) => ({
+              id: String(t.transaction_id),
+              name: String(t.description || t.category || 'Transaction'),
+              category: String(t.category || 'Other'),
+              amount: Number(t.amount) || 0,
+              date: String(t.transaction_date || getLocalDateString()),
+              time: t.created_at ? format12HourTime(new Date(String(t.created_at))) : undefined,
+              type: (t.type === 'income' ? 'income' : 'expense') as 'expense' | 'income',
+            }));
+          }
         }
 
         // Budgets / Allocation sync (the full-state backup already carries budget data)
         if (!restoredFromSnapshot && budgetRes.status === 'fulfilled' && budgetRes.value.data) {
           const budgetRows = budgetRes.value.data;
+          applyRemoteRows('budgets', userId, budgetRows).catch((e) => {
+            console.warn('[GamificationStore] SQLite budgets mirror error:', e);
+          });
           if (budgetRows.length > 0) {
             let total = 0;
             const categoryLimits: Record<string, number> = {};
             const categories: string[] = [];
 
             for (const b of budgetRows) {
-              // Prefer `category`: older rows got category_id = '__total__' from the column default
-              const cat = b.category || b.category_id;
-              const limit = Number(b.limit_amount ?? b.allocated_amount) || 0;
+              // Canonical allocated_amount with legacy fallback, canonical category
+              const cat = b.category || b.category_id || '__total__';
+              const limit = Number(b.allocated_amount ?? b.limit_amount) || 0;
               if (cat === '__total__') {
                 total = limit;
               } else {
@@ -2073,11 +2111,39 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
             nextUpdates.selectedCategories = categories;
             if (!get().budgetType) nextUpdates.budgetType = 'monthly';
           }
+        } else if (!restoredFromSnapshot) {
+          // Offline fallback: read from local SQLite
+          const localBudgets = await getLocalRows('budgets', userId);
+          if (localBudgets && localBudgets.length > 0) {
+            let total = 0;
+            const categoryLimits: Record<string, number> = {};
+            const categories: string[] = [];
+            for (const b of localBudgets) {
+              const cat = String(b.category || '__total__');
+              const limit = Number(b.allocated_amount) || 0;
+              if (cat === '__total__') {
+                total = limit;
+              } else {
+                categoryLimits[cat] = limit;
+                categories.push(cat);
+              }
+            }
+            if (total === 0 && Object.keys(categoryLimits).length > 0) {
+              total = Object.values(categoryLimits).reduce((a, b) => a + b, 0);
+            }
+            nextUpdates.isBudgetSetupComplete = true;
+            nextUpdates.totalBudget = total;
+            nextUpdates.categoryLimits = categoryLimits;
+            nextUpdates.selectedCategories = categories;
+          }
         }
 
         // Savings Goals sync (saving_challenges in Supabase, merged with local goals)
         if (goalsRes.status === 'fulfilled' && goalsRes.value.data) {
           const goalsRows = goalsRes.value.data;
+          applyRemoteRows('saving_challenges', userId, goalsRows).catch((e) => {
+            console.warn('[GamificationStore] SQLite saving_challenges mirror error:', e);
+          });
           if (goalsRows.length > 0) {
             const localGoalsById = new Map((get().savingsGoals || []).map((g) => [g.id, g]));
             const mappedGoals = goalsRows.map((g: any) => {
@@ -2095,6 +2161,19 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
             const remoteGoalIds = new Set(mappedGoals.map((g) => g.id));
             const localOnlyGoals = (get().savingsGoals || []).filter((g) => !remoteGoalIds.has(g.id));
             nextUpdates.savingsGoals = [...mappedGoals, ...localOnlyGoals];
+          }
+        } else {
+          // Offline fallback: read from local SQLite
+          const localGoals = await getLocalRows('saving_challenges', userId);
+          if (localGoals && localGoals.length > 0) {
+            nextUpdates.savingsGoals = localGoals.map((g: any) => ({
+              id: String(g.challenge_id),
+              name: String(g.title || 'Savings Goal'),
+              targetAmount: Number(g.target_amount) || 0,
+              currentSavings: Number(g.current_amount) || 0,
+              targetDate: String(g.end_date || '120'),
+              category: String(g.icon || 'Emergency Fund'),
+            }));
           }
         }
 

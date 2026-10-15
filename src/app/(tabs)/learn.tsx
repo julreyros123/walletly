@@ -566,7 +566,7 @@ export default function LearnScreen() {
                         <Text
                           color={isActive ? '#FFFFFF' : theme.textSecondary}
                           fontSize={12}
-                          fontFamily={Fonts.bold}
+                          style={{ fontFamily: Fonts.bold }}
                         >
                           {filter.label}
                         </Text>

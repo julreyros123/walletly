@@ -35,7 +35,17 @@ const CHUNK_SIZE = 1500;
 const CHUNK_COUNT_SUFFIX = '__chunks_count';
 const CHUNK_PREFIX = '__chunk_';
 
-async function setSecureStoreChunked(key: string, value: string): Promise<void> {
+/**
+ * Ensures key satisfies Expo SecureStore requirements:
+ * Only alphanumeric characters, '.', '-', and '_'
+ */
+function toSecureStoreKey(key: string): string {
+  const sanitized = key.replace(/[^a-zA-Z0-9._-]/g, '_');
+  return sanitized.length > 0 ? sanitized : 'default_secure_key';
+}
+
+async function setSecureStoreChunked(rawKey: string, value: string): Promise<void> {
+  const key = toSecureStoreKey(rawKey);
   if (value.length <= CHUNK_SIZE) {
     try {
       await SecureStore.setItemAsync(key, value);
@@ -49,7 +59,7 @@ async function setSecureStoreChunked(key: string, value: string): Promise<void> 
         await SecureStore.deleteItemAsync(`${key}${CHUNK_COUNT_SUFFIX}`).catch(() => {});
       }
     } catch (e) {
-      console.warn(`[Storage] SecureStore.setItemAsync direct failed for ${key}:`, e);
+      if (__DEV__) console.log(`[Storage] SecureStore.setItemAsync fallback for ${key}:`, e);
     }
     return;
   }
@@ -65,11 +75,12 @@ async function setSecureStoreChunked(key: string, value: string): Promise<void> 
     // Remove old single key to avoid stale small value reading
     await SecureStore.deleteItemAsync(key).catch(() => {});
   } catch (e) {
-    console.warn(`[Storage] SecureStore chunked write failed for ${key}:`, e);
+    if (__DEV__) console.log(`[Storage] SecureStore chunked write fallback for ${key}:`, e);
   }
 }
 
-async function getSecureStoreChunked(key: string): Promise<string | null> {
+async function getSecureStoreChunked(rawKey: string): Promise<string | null> {
+  const key = toSecureStoreKey(rawKey);
   // 1. Check if chunk count exists
   try {
     const chunkCountStr = await SecureStore.getItemAsync(`${key}${CHUNK_COUNT_SUFFIX}`);
@@ -87,23 +98,24 @@ async function getSecureStoreChunked(key: string): Promise<string | null> {
       }
     }
   } catch (e) {
-    console.warn(`[Storage] Error reading chunked SecureStore for ${key}:`, e);
+    if (__DEV__) console.log(`[Storage] Error reading chunked SecureStore for ${key}:`, e);
   }
 
   // 2. Direct key read fallback
   try {
     return await SecureStore.getItemAsync(key);
   } catch (e) {
-    console.warn(`[Storage] SecureStore.getItemAsync direct failed for ${key}:`, e);
+    if (__DEV__) console.log(`[Storage] SecureStore.getItemAsync direct fallback for ${key}:`, e);
     return null;
   }
 }
 
-async function deleteSecureStoreChunked(key: string): Promise<void> {
+async function deleteSecureStoreChunked(rawKey: string): Promise<void> {
+  const key = toSecureStoreKey(rawKey);
   try {
     await SecureStore.deleteItemAsync(key);
   } catch (e) {
-    console.warn(`[Storage] SecureStore direct delete failed for ${key}:`, e);
+    // quiet fallback
   }
 
   try {
@@ -116,7 +128,7 @@ async function deleteSecureStoreChunked(key: string): Promise<void> {
       await SecureStore.deleteItemAsync(`${key}${CHUNK_COUNT_SUFFIX}`).catch(() => {});
     }
   } catch (e) {
-    console.warn(`[Storage] SecureStore chunk delete failed for ${key}:`, e);
+    // quiet fallback
   }
 }
 

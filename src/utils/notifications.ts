@@ -30,7 +30,9 @@ if (Platform.OS !== 'web') {
       }),
     });
   } catch (e) {
-    console.warn('[Notifications] Push notifications are not available in this environment (e.g. Expo Go)');
+    if (__DEV__) {
+      console.log('[Notifications] Push notifications are not available in this environment (e.g. Expo Go)');
+    }
   }
 }
 
@@ -40,7 +42,10 @@ export const NOTIFICATION_IDS = {
 } as const;
 
 export async function registerForPushNotificationsAsync(): Promise<string | undefined> {
-  if (!Notifications) {
+  if (!Notifications || Constants.appOwnership === 'expo') {
+    if (__DEV__) {
+      console.log('[Notifications] Push notifications are skipped in Expo Go environment.');
+    }
     return undefined;
   }
 
@@ -65,7 +70,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
     }
 
     if (finalStatus !== 'granted') {
-      console.warn('Failed to get push token for push notification!');
+      if (__DEV__) console.log('[Notifications] Push notification permissions not granted.');
       return;
     }
 
@@ -74,7 +79,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
         Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
 
       if (!projectId) {
-        console.warn('Project ID not found. Ensure eas.projectId is configured in app.json.');
+        if (__DEV__) console.log('[Notifications] Project ID not found. Ensure eas.projectId is configured in app.json.');
         return;
       }
 
@@ -84,9 +89,9 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
         })
       ).data;
 
-      if (__DEV__) console.log('Expo Push Token:', token);
+      if (__DEV__) console.log('[Notifications] Expo Push Token:', token);
     } catch (e) {
-      console.warn('Error getting push token:', e);
+      if (__DEV__) console.log('[Notifications] Could not get push token in current environment:', e);
     }
   } else {
     if (__DEV__) console.log('Must use physical device for Push Notifications');
