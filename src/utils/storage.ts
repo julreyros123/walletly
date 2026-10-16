@@ -225,10 +225,12 @@ export const storage = {
       }
     }
 
-    // Always mirror to SecureStore chunked storage if AsyncStorage failed or wasn't available,
-    // OR if payload is under 1800 bytes as backup
-    if (!asyncStorageSuccess || value.length <= 1800) {
+    // Always mirror to SecureStore chunked storage as a durable secondary backup,
+    // ensuring data survives dev client restarts, AsyncStorage native unlinking, or memory flushes.
+    try {
       await setSecureStoreChunked(key, value);
+    } catch (e) {
+      console.warn(`[Storage] SecureStore chunked backup write error for ${key}:`, e);
     }
   },
 

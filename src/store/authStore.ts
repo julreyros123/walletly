@@ -515,10 +515,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             }
           })();
         } else {
-          // If we had a local guest session, don't clear it. Otherwise, clean up auth state
+          // If we had a local guest session, preserve it.
+          // NEVER call resetAllData here! Calling resetAllData on app boot when session is null
+          // wipes the local state back to factory defaults before offline storage can hydrate.
           if (!isGuestToken(get().token)) {
-            setActiveGamificationUser(null);
-            useGamificationStore.getState().resetAllData(0);
+            setActiveGamificationUser('guest');
             set({
               token: null,
               user: null,

@@ -1,1049 +1,831 @@
-import React, { useState, useMemo } from 'react';
-import { ScrollView, StyleSheet, Alert, TouchableOpacity, TextInput } from 'react-native';
+import React, { useState, useMemo, useCallback } from 'react';
+import {
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  View,
+  Text,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { YStack, XStack, Text, Button, Progress, View } from 'tamagui';
+import { useFocusEffect } from 'expo-router';
+import { setStatusBarStyle } from 'expo-status-bar';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+
 import { useTheme } from '@/hooks/use-theme';
 import { PhosphorIcon, PhosphorIconName } from '@/components/ui/PhosphorIcon';
 import { useGamificationStore } from '@/store/gamificationStore';
 import { CbudgetCard } from '@/components/ui/CbudgetCard';
-import { FormButton } from '@/components/ui/FormButton';
-import { AppHeader } from '@/components/ui/AppHeader';
 import { Spacing, Fonts } from '@/constants/theme';
-import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { BackgroundSystem } from '@/components/ui/BackgroundSystem';
-import { useFocusEffect } from 'expo-router';
-import { setStatusBarStyle } from 'expo-status-bar';
 import { safeHaptic } from '@/utils/haptics';
 
-interface Question {
-  id: number;
-  question: string;
-  options: string[];
-  correctAnswer: number;
-}
+import {
+  LEVELS,
+  CHAPTERS,
+  QUIZ_PASS_RATIO,
+  shuffleQuestion,
+  Level,
+  QuizQuestion,
+} from '@/features/learn/curriculum';
+import { LessonReader } from '@/features/learn/components/LessonReader';
+import { QuizRunner } from '@/features/learn/components/QuizRunner';
+import { QuizSummary } from '@/features/learn/components/QuizSummary';
 
-interface Lesson {
-  id: string;
-  title: string;
-  estTime: string;
-  xpReward: number;
-  content: string[];
-  example?: { title: string; text: string };
-  questions: Question[];
-}
-
-interface Level {
-  levelNumber: number;
-  title: string;
-  description: string;
-  lesson: Lesson;
-}
+type ScreenState = 'roadmap' | 'reading' | 'quiz' | 'completed';
+type FilterOption = 'all' | 'in_progress' | 'completed';
 
 export default function LearnScreen() {
-  const theme = useTheme() as any;
+  const theme = useTheme();
   const store = useGamificationStore();
   const completeLesson = store.completeLesson;
   const streakDays = store.streakDays;
+  const learningScore = store.learningScore;
+  const completedIds = store.completedLessonIds || [];
 
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
       setStatusBarStyle(theme.mode === 'dark' ? 'light' : 'dark');
     }, [theme.mode])
   );
 
-  // 9-Level Academy Pathway Curriculum
-  const levels: Level[] = [
-    {
-      levelNumber: 1,
-      title: 'Level 1: Budgeting Basics',
-      description: 'Master cash-flow basics and the zero-based budgeting framework.',
-      lesson: {
-        id: 'lvl1_l1',
-        title: 'Zero-Based Budgeting Principles',
-        estTime: '4 mins',
-        xpReward: 50,
-        content: [
-          'Zero-based budgeting is a method where your income minus your expenditures and savings goals equals exactly zero.',
-          'Instead of leaving money sitting randomly in your account (which often leads to impulsive spending), you assign every single peso a job before you spend it.',
-          'By dividing your income into essential categories early on, you prevent lazy money habits and make sure your savings are taken care of first.'
-        ],
-        example: {
-          title: 'Giving Every Peso a Job',
-          text: 'If your monthly income is ₱10,000, you assign ₱5,000 to Needs, ₱2,500 to Wants, and ₱2,500 to Savings. Total allocated = ₱10,000. Unallocated = ₱0.'
-        },
-        questions: [
-          {
-            id: 1,
-            question: 'What is the core rule of zero-based budgeting?',
-            options: [
-              'Keep your bank account balance at zero at all times.',
-              'Assign every peso of income a specific category so that income minus expenses/savings equals zero.',
-              'Spend all your money on shopping and entertainment.'
-            ],
-            correctAnswer: 1
-          }
-        ]
-      }
-    },
-    {
-      levelNumber: 2,
-      title: 'Level 2: Expense Tracking',
-      description: 'Learn to track daily expenses and identify spending leaks.',
-      lesson: {
-        id: 'lvl2_l1',
-        title: 'Controlling Discretionary Leakage',
-        estTime: '3 mins',
-        xpReward: 50,
-        content: [
-          'Small, unrecorded purchases are the most common reason budgets fail. This is often called the "latte effect" or spending leaks.',
-          'Logging every simulated expense takes under 5 seconds, but it provides complete visibility into where your money goes.',
-          'Understanding your actual spending habits is the only way to make realistic cuts and free up money to build your savings.'
-        ],
-        example: {
-          title: 'The Daily Leak',
-          text: 'Buying a ₱150 specialty coffee every single day adds up to ₱4,500 a month. Tracking this leak allows you to redirect it to an emergency fund.'
-        },
-        questions: [
-          {
-            id: 1,
-            question: 'Why is logging small daily purchases important?',
-            options: [
-              'To avoid paying bank transfer fees.',
-              'To identify hidden spending leaks and gain complete visibility of cash flow.',
-              'To show off your transactions to friends.'
-            ],
-            correctAnswer: 1
-          }
-        ]
-      }
-    },
-    {
-      levelNumber: 3,
-      title: 'Level 3: Saving Strategies',
-      description: 'Discover the power of pay-yourself-first and auto-saving.',
-      lesson: {
-        id: 'lvl3_l1',
-        title: 'Pay Yourself First Method',
-        estTime: '4 mins',
-        xpReward: 50,
-        content: [
-          'Most people save what is left over after spending. Usually, nothing is left over.',
-          'The "Pay Yourself First" strategy flips this: you save a portion of your income immediately when you receive it, and then live off the remainder.',
-          'By putting savings first, you enforce discipline and treat your future self as the most important bill you have to pay.'
-        ],
-        example: {
-          title: 'Flipped Savings',
-          text: 'On payday, transfer 15% of your income (e.g., ₱1,500 out of ₱10,000) directly into your savings goals. Live on the remaining ₱8,500 for the rest of the month.'
-        },
-        questions: [
-          {
-            id: 1,
-            question: 'What does "Pay Yourself First" mean?',
-            options: [
-              'Buying new clothes immediately on payday.',
-              'Saving a designated portion of your income before paying bills or spending on wants.',
-              'Paying back simulated debts to friends first.'
-            ],
-            correctAnswer: 1
-          }
-        ]
-      }
-    },
-    {
-      levelNumber: 4,
-      title: 'Level 4: Emergency Funds',
-      description: 'Build your safety buffer against unexpected life crises.',
-      lesson: {
-        id: 'lvl4_l1',
-        title: 'Creating Your Financial Shield',
-        estTime: '5 mins',
-        xpReward: 50,
-        content: [
-          'An emergency fund is a cash reserve set aside exclusively for unplanned life events, such as medical emergencies, car repairs, or job loss.',
-          'Having an emergency fund creates a financial shield, preventing you from borrowing money or going into high-interest debt when a crisis occurs.',
-          'Financial experts recommend starting with a small goal (like ₱5,000) and gradually building it to cover 3 to 6 months of essential living costs.'
-        ],
-        example: {
-          title: 'The Shield in Action',
-          text: 'If your essential bills cost ₱5,000 per month, a fully funded emergency fund of ₱15,000 to ₱30,000 will protect you during major life interruptions.'
-        },
-        questions: [
-          {
-            id: 1,
-            question: 'What is the primary benefit of an emergency fund?',
-            options: [
-              'It provides capital to make high-risk trades.',
-              'It acts as a buffer to cover unexpected expenses without accumulating high-interest debt.',
-              'It earns the highest returns in the stock market.'
-            ],
-            correctAnswer: 1
-          }
-        ]
-      }
-    },
-    {
-      levelNumber: 5,
-      title: 'Level 5: Financial Planning',
-      description: 'Set S.M.A.R.T savings targets for short and long term goals.',
-      lesson: {
-        id: 'lvl5_l1',
-        title: 'Goal-Based Wealth Accumulation',
-        estTime: '4 mins',
-        xpReward: 50,
-        content: [
-          'Savings goals give your money direction. Vague savings plans often fail because they lack urgency and structure.',
-          'S.M.A.R.T savings goals are Specific, Measurable, Achievable, Relevant, and Time-bound. Having a target amount and deadline keeps you motivated.',
-          'Cbudget requires savings goals contribution before you can practice investing, matching real-world wealth priorities.'
-        ],
-        example: {
-          title: 'S.M.A.R.T Savings Goal',
-          text: 'Instead of saying "I want to save for a laptop," set a goal: "Save ₱20,000 (Measurable) for a Laptop (Specific) in 180 Days (Time-bound) by allocating ₱111 per day."'
-        },
-        questions: [
-          {
-            id: 1,
-            question: 'Which of the following is a S.M.A.R.T savings goal?',
-            options: [
-              '"I cbudget to save some money next month."',
-              '"I will save ₱6,000 for an Emergency Fund by contributing ₱50 per day for 120 days."',
-              '"I want to become rich in the future."'
-            ],
-            correctAnswer: 1
-          }
-        ]
-      }
-    },
-    {
-      levelNumber: 6,
-      title: 'Level 6: Investment Fundamentals',
-      description: 'Unlock compounding interest and capital growth concepts.',
-      lesson: {
-        id: 'lvl6_l1',
-        title: 'The Compounding Machine',
-        estTime: '5 mins',
-        xpReward: 50,
-        content: [
-          'Welcome to the Investment Lab! Investing is the practice of allocating capital to assets with the goal of generating future returns.',
-          'Unlike saving (which focuses on safety and liquidity), investing takes controlled risks to beat inflation and compound wealth over time.',
-          'Compound interest is earning returns on your initial capital plus all the returns you earned previously—effectively "returns on returns".'
-        ],
-        example: {
-          title: 'The Power of Compounding',
-          text: 'If you invest ₱1,000 at a simulated 10% interest rate, you have ₱1,100 after 1 year. In Year 2, you earn 10% on ₱1,100, which is ₱110. Your total becomes ₱1,210!'
-        },
-        questions: [
-          {
-            id: 1,
-            question: 'How does compounding interest build long-term wealth?',
-            options: [
-              'By paying out high cash dividends every day.',
-              'By generating returns on both your initial capital and prior accumulated returns over time.',
-              'By reducing the tax rate on simulated stocks.'
-            ],
-            correctAnswer: 1
-          }
-        ]
-      }
-    },
-    {
-      levelNumber: 7,
-      title: 'Level 7: Risk Management',
-      description: 'Assess risk tolerance and understand return relationships.',
-      lesson: {
-        id: 'lvl7_l1',
-        title: 'The Risk-Return Tradeoff',
-        estTime: '4 mins',
-        xpReward: 50,
-        content: [
-          'Every investment involves some degree of risk. Risk is the possibility of losing some or all of your original capital.',
-          'The Risk-Return Tradeoff states that potential return rises with an increase in risk. High-return assets (like individual stocks) have high risk and volatility.',
-          'Understanding your risk tolerance—how much price drop you can stand without panicking—is critical to building a stable long-term portfolio.'
-        ],
-        example: {
-          title: 'Risk Tolerance Scenario',
-          text: 'If your portfolio drops 20% in a simulator, would you sell in panic or see it as an allocation opportunity? Knowing this prevents emotional mistakes.'
-        },
-        questions: [
-          {
-            id: 1,
-            question: 'What is the relationship between risk and return?',
-            options: [
-              'Higher potential returns generally require taking on higher potential risks.',
-              'Low-risk investments always yield the highest returns.',
-              'There is no relationship between risk and return.'
-            ],
-            correctAnswer: 0
-          }
-        ]
-      }
-    },
-    {
-      levelNumber: 8,
-      title: 'Level 8: Diversification',
-      description: 'Learn allocation strategies across different simulated asset classes.',
-      lesson: {
-        id: 'lvl8_l1',
-        title: 'Spreading the Eggs',
-        estTime: '5 mins',
-        xpReward: 50,
-        content: [
-          'Diversification is the management practice of allocating investment cash across different assets to minimize overall risk.',
-          'If you invest 100% of your simulator cash into a single simulated EV stock and it crashes, you lose everything. If you spread it across Index Funds and Gold, the others cushion the blow.',
-          'By holding non-correlated assets (assets that move differently in response to the economy), you achieve a smoother wealth-building path.'
-        ],
-        example: {
-          title: 'A Diversified Portfolio Mix',
-          text: 'A common lab allocation is: 60% S&P 500 Index Fund (Simulated Equity), 30% Gold Reserve (Commodities), and 10% Cash.'
-        },
-        questions: [
-          {
-            id: 1,
-            question: 'What is the primary objective of diversification?',
-            options: [
-              'To guarantee that you never lose money.',
-              'To reduce overall portfolio risk and cushion losses by spreading capital across different asset classes.',
-              'To make tracking asset price charts more complicated.'
-            ],
-            correctAnswer: 1
-          }
-        ]
-      }
-    },
-    {
-      levelNumber: 9,
-      title: 'Level 9: Long-Term Wealth Building',
-      description: 'Develop the mindset of patience, compound growth, and discipline.',
-      lesson: {
-        id: 'lvl9_l1',
-        title: 'The Long-Term Horizon',
-        estTime: '5 mins',
-        xpReward: 50,
-        content: [
-          'Wealth building is not about quick trading or timing the market. It is about consistency and time in the market.',
-          'By maintaining healthy budgeting and savings habits, you generate a constant stream of leftover funds to allocate to your long-term portfolio.',
-          'Patience and compound growth are the ultimate keys to financial freedom. This completes the core Cbudget journey!'
-        ],
-        example: {
-          title: 'The Lifetime Compounder',
-          text: 'Investing ₱1,000 monthly in a diversified fund at 8% compound growth for 30 years results in over ₱1.4 Million, although you only put in ₱360,000!'
-        },
-        questions: [
-          {
-            id: 1,
-            question: 'What is the most effective mindset for long-term wealth building?',
-            options: [
-              'Trading speculative assets daily based on social media trends.',
-              'Consistent saving, disciplined asset allocation, and letting compounding work over decades.',
-              'Keeping all your cash under the mattress.'
-            ],
-            correctAnswer: 1
-          }
-        ]
-      }
-    }
-  ];
-
-  const [quizState, setQuizState] = useState<'roadmap' | 'reading' | 'quiz' | 'completed'>('roadmap');
+  const [screenState, setScreenState] = useState<ScreenState>('roadmap');
   const [activeLevelIdx, setActiveLevelIdx] = useState(0);
-  const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
-  const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  const [score, setScore] = useState(0);
+  const [activeQuestions, setActiveQuestions] = useState<QuizQuestion[]>([]);
+  const [lastQuizScore, setLastQuizScore] = useState(0);
+  const [lastQuizPassed, setLastQuizPassed] = useState(false);
   const [earnedXP, setEarnedXP] = useState(0);
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'in_progress' | 'completed'>('all');
+  const [statusFilter, setStatusFilter] = useState<FilterOption>('all');
 
-  const activeLevel = levels[activeLevelIdx];
-  const activeLesson = activeLevel.lesson;
-  const questions = activeLesson.questions;
+  const activeLevel = LEVELS[activeLevelIdx];
 
-  // Determine if a level is unlocked
-  // We lock Level N if the user's learningScore is not high enough.
-  // Each completed level adds ~11 to the learningScore (9 levels total).
-  const isLevelUnlocked = (levelNum: number) => {
-    if (levelNum === 1) return true;
-    const requiredScore = (levelNum - 1) * 11;
-    return store.learningScore >= requiredScore;
-  };
-
-  const isLevelCompleted = (levelNum: number) => {
-    return store.learningScore >= levelNum * 11 || (levelNum === 9 && store.learningScore >= 99);
-  };
-
-  const chapters = [
-    {
-      title: 'Budgeting Foundations',
-      description: 'Master cash-flow principles and log daily expenses.',
-      levelsRange: [1, 2],
-      badge: 'Chapter 1'
+  // Completion check with backwards-compatibility for existing users with learningScore
+  const isLevelCompleted = useCallback(
+    (lvl: Level) => {
+      return (
+        completedIds.includes(lvl.lesson.id) ||
+        learningScore >= lvl.levelNumber * 11 ||
+        (lvl.levelNumber === 9 && learningScore >= 99)
+      );
     },
-    {
-      title: 'Saving & Security',
-      description: 'Build your emergency shield and set savings goals.',
-      levelsRange: [3, 5],
-      badge: 'Chapter 2'
-    },
-    {
-      title: 'Wealth & Investment Lab',
-      description: 'Learn compounding, risk profiles, and asset allocation.',
-      levelsRange: [6, 9],
-      badge: 'Chapter 3'
-    }
-  ];
+    [completedIds, learningScore]
+  );
 
+  // Progressive unlock: Level 1 always open; subsequent levels unlocked when previous is completed
+  const isLevelUnlocked = useCallback(
+    (lvl: Level) => {
+      if (lvl.levelNumber === 1) return true;
+      const prevLvl = LEVELS[lvl.levelNumber - 2];
+      return isLevelCompleted(prevLvl);
+    },
+    [isLevelCompleted]
+  );
+
+  const completedCount = useMemo(() => {
+    return LEVELS.filter((lvl) => isLevelCompleted(lvl)).length;
+  }, [isLevelCompleted]);
+
+  // Start lesson reading
   const handleStartLesson = (idx: number) => {
+    safeHaptic('light');
     setActiveLevelIdx(idx);
-    setQuizState('reading');
+    setScreenState('reading');
   };
 
+  // Start quiz with options shuffled fresh
   const handleStartQuiz = () => {
-    setQuizState('quiz');
-    setCurrentQuestionIdx(0);
-    setSelectedOption(null);
-    setScore(0);
+    safeHaptic('medium');
+    const shuffled = activeLevel.lesson.questions.map(shuffleQuestion);
+    setActiveQuestions(shuffled);
+    setScreenState('quiz');
   };
 
-  const handleOptionSelect = (idx: number) => {
-    setSelectedOption(idx);
-  };
+  // Process quiz finish
+  const handleQuizFinish = (
+    finalScore: number,
+    _answers: { questionId: string; selected: number; isCorrect: boolean }[]
+  ) => {
+    const total = activeQuestions.length;
+    const passed = finalScore / total >= QUIZ_PASS_RATIO;
+    setLastQuizScore(finalScore);
+    setLastQuizPassed(passed);
 
-  const handleNextQuestion = () => {
-    if (selectedOption === null) return;
-
-    const isCorrect = selectedOption === questions[currentQuestionIdx].correctAnswer;
-    let newScore = score;
-    if (isCorrect) {
-      newScore = score + 1;
-      setScore(newScore);
-    }
-
-    if (currentQuestionIdx < questions.length - 1) {
-      setCurrentQuestionIdx((c) => c + 1);
-      setSelectedOption(null);
+    if (passed) {
+      completeLesson(activeLevel.title, activeLevel.lesson.id);
+      setEarnedXP(activeLevel.lesson.xpReward);
     } else {
-      if (newScore === questions.length) {
-        // Complete lesson & award XP in store with unique lesson ID
-        completeLesson(activeLevel.title, activeLesson.id);
-        setEarnedXP(activeLesson.xpReward);
-        setQuizState('completed');
-      } else {
-        Alert.alert(
-          'Quiz Incomplete',
-          'You missed a question. Review the key concept in the lesson and try the quiz again!',
-          [
-            {
-              text: 'Review Lesson',
-              onPress: () => {
-                setQuizState('reading');
-                setSelectedOption(null);
-                setScore(0);
-              },
-            },
-          ]
-        );
-      }
+      setEarnedXP(0);
+    }
+    setScreenState('completed');
+  };
+
+  const handleNextLevel = () => {
+    if (activeLevelIdx < LEVELS.length - 1) {
+      setActiveLevelIdx((idx) => idx + 1);
+      setScreenState('reading');
+    } else {
+      setScreenState('roadmap');
     }
   };
 
   return (
-    <YStack flex={1} backgroundColor={theme.background}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <BackgroundSystem mode="tabs" height={380} />
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          
-          {/* Header */}
-          <YStack gap={4} marginBottom={20}>
-            <Text color={theme.text} fontSize={22} fontWeight="700" letterSpacing={-0.5}>
-              Academy Roadmap
-            </Text>
-            <Text color={theme.textSecondary} fontSize={14}>
-              Master the financial journey in order: Budget → Save → Invest.
-            </Text>
-          </YStack>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Header Title (Roadmap only) */}
+          {screenState === 'roadmap' && (
+            <Animated.View entering={FadeInDown.duration(300)} style={styles.header}>
+              <Text style={[styles.headerTitle, { color: theme.text }]}>Financial Academy</Text>
+              <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>
+                Interactive micro-courses with knowledge-check quizzes. Master cash flow, saving, and investing.
+              </Text>
+            </Animated.View>
+          )}
 
           {/* ROADMAP VIEW */}
-          {quizState === 'roadmap' && (
-            <YStack gap={24}>
+          {screenState === 'roadmap' && (
+            <View style={styles.roadmapContent}>
               {/* Progress Summary Card */}
-              <View>
-                <CbudgetCard padding={16} gap={12} backgroundColor={`${theme.primary}05` as any}>
-                  <XStack justifyContent="space-between" alignItems="center">
-                    <YStack gap={2} flex={1}>
-                      <Text color={theme.text} fontSize={16} fontWeight="800">
-                        Academy Progress
+              <CbudgetCard padding={18} gap={14} backgroundColor={`${theme.primary}08` as any}>
+                <View style={styles.summaryTop}>
+                  <View style={styles.summaryTextGroup}>
+                    <View style={styles.summaryBadgeRow}>
+                      <PhosphorIcon name="GraduationCap" size={16} color={theme.primary} weight="bold" />
+                      <Text style={[styles.summaryBadgeText, { color: theme.primary }]}>
+                        PATHWAY PROGRESS
                       </Text>
-                      <Text color={theme.textSecondary} fontSize={12}>
-                        {store.learningScore >= 99 ? "Congratulations! You've completed the curriculum." : "Complete modules in order to level up your financial score."}
-                      </Text>
-                    </YStack>
-                    <YStack
-                      width={50}
-                      height={50}
-                      borderRadius={25}
-                      backgroundColor={`${theme.primary}15` as any}
-                      alignItems="center"
-                      justifyContent="center"
-                      borderWidth={2}
-                      borderColor={theme.primary}
-                    >
-                      <Text color={theme.primary as any} fontSize={14} fontWeight="800">
-                        {store.learningScore}%
-                      </Text>
-                    </YStack>
-                  </XStack>
-                  <Progress value={store.learningScore} height={6} backgroundColor={theme.backgroundElement}>
-                    <Progress.Indicator backgroundColor={theme.primary} />
-                  </Progress>
-                </CbudgetCard>
-              </View>
+                    </View>
+                    <Text style={[styles.summaryTitle, { color: theme.text }]}>
+                      {completedCount === LEVELS.length
+                        ? 'Curriculum Completed!'
+                        : `${completedCount} of ${LEVELS.length} Levels Mastered`}
+                    </Text>
+                    <Text style={[styles.summarySubtitle, { color: theme.textSecondary }]}>
+                      {completedCount === LEVELS.length
+                        ? 'You have completed all 9 levels. Retake quizzes anytime to keep your skills sharp.'
+                        : 'Pass each level quiz with 75% or higher to unlock the next level.'}
+                    </Text>
+                  </View>
 
-              {/* Search & Status Filter Bar */}
-              <YStack gap={10}>
+                  <View
+                    style={[
+                      styles.scoreCircle,
+                      {
+                        backgroundColor: `${theme.primary}18`,
+                        borderColor: theme.primary,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.scoreValue, { color: theme.primary }]}>
+                      {Math.round((completedCount / LEVELS.length) * 100)}%
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Progress Bar */}
+                <View style={[styles.summaryProgressBarTrack, { backgroundColor: theme.backgroundElement }]}>
+                  <View
+                    style={[
+                      styles.summaryProgressBarFill,
+                      {
+                        width: `${Math.max(6, (completedCount / LEVELS.length) * 100)}%`,
+                        backgroundColor: theme.primary,
+                      },
+                    ]}
+                  />
+                </View>
+              </CbudgetCard>
+
+              {/* Search & Status Filters */}
+              <View style={styles.filterSection}>
                 {/* Search Input Bar */}
-                <XStack
-                  alignItems="center"
-                  backgroundColor={theme.mode === 'dark' ? '#131D31' : '#FFFFFF'}
-                  borderWidth={1}
-                  borderColor={theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0'}
-                  borderRadius={12}
-                  paddingHorizontal={12}
-                  height={42}
-                  gap={8}
+                <View
+                  style={[
+                    styles.searchBar,
+                    {
+                      backgroundColor: theme.mode === 'dark' ? '#131D31' : '#FFFFFF',
+                      borderColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0',
+                    },
+                  ]}
                 >
-                  <PhosphorIcon name="MagnifyingGlass" size={17} color={theme.textSecondary} />
+                  <PhosphorIcon name="MagnifyingGlass" size={16} color={theme.textSecondary} />
                   <TextInput
                     value={searchQuery}
                     onChangeText={setSearchQuery}
-                    placeholder="Search topics, lessons, or concepts..."
+                    placeholder="Search topics, questions, or concepts..."
                     placeholderTextColor={theme.textSecondary}
-                    style={{
-                      flex: 1,
-                      color: theme.text,
-                      fontSize: 13,
-                      fontFamily: Fonts.regular,
-                      padding: 0,
-                    }}
+                    style={[styles.searchInput, { color: theme.text }]}
                   />
                   {searchQuery.length > 0 && (
                     <TouchableOpacity
                       onPress={() => setSearchQuery('')}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
-                      <PhosphorIcon name="XCircle" size={17} color={theme.textSecondary} weight="fill" />
+                      <PhosphorIcon name="XCircle" size={16} color={theme.textSecondary} weight="fill" />
                     </TouchableOpacity>
                   )}
-                </XStack>
+                </View>
 
-                {/* Status Segmented Control */}
-                <XStack
-                  backgroundColor={theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)'}
-                  borderRadius={10}
-                  padding={3}
-                  gap={4}
+                {/* Segmented Filter */}
+                <View
+                  style={[
+                    styles.segmentedTrack,
+                    {
+                      backgroundColor:
+                        theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+                    },
+                  ]}
                 >
-                  {[
-                    { id: 'all' as const, label: 'All (9)' },
-                    { id: 'in_progress' as const, label: 'In Progress' },
-                    { id: 'completed' as const, label: 'Completed' },
-                  ].map((filter) => {
-                    const isActive = statusFilter === filter.id;
+                  {(
+                    [
+                      { id: 'all', label: `All (${LEVELS.length})` },
+                      { id: 'in_progress', label: 'In Progress' },
+                      { id: 'completed', label: 'Completed' },
+                    ] as const
+                  ).map((tab) => {
+                    const isActive = statusFilter === tab.id;
                     return (
                       <TouchableOpacity
-                        key={filter.id}
+                        key={tab.id}
                         onPress={() => {
                           safeHaptic('light');
-                          setStatusFilter(filter.id);
+                          setStatusFilter(tab.id);
                         }}
-                        style={{
-                          flex: 1,
-                          paddingVertical: 7,
-                          borderRadius: 8,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          backgroundColor: isActive ? theme.primary : 'transparent',
-                        }}
+                        style={[
+                          styles.segmentedTab,
+                          {
+                            backgroundColor: isActive ? theme.primary : 'transparent',
+                          },
+                        ]}
                         activeOpacity={0.7}
                       >
                         <Text
-                          color={isActive ? '#FFFFFF' : theme.textSecondary}
-                          fontSize={12}
-                          style={{ fontFamily: Fonts.bold }}
+                          style={[
+                            styles.segmentedLabel,
+                            {
+                              color: isActive ? '#FFFFFF' : theme.textSecondary,
+                              fontFamily: isActive ? Fonts.bold : Fonts.semiBold,
+                            },
+                          ]}
                         >
-                          {filter.label}
+                          {tab.label}
                         </Text>
                       </TouchableOpacity>
                     );
                   })}
-                </XStack>
-              </YStack>
+                </View>
+              </View>
 
-              {/* Chapters */}
-              {chapters.map((chap, chapIdx) => {
-                const chapterLevels = levels.filter((lvl) => {
-                  const inChapter = lvl.levelNumber >= chap.levelsRange[0] && lvl.levelNumber <= chap.levelsRange[1];
-                  if (!inChapter) return false;
+              {/* Chapters & Levels */}
+              <View style={styles.chaptersContainer}>
+                {CHAPTERS.map((chapter) => {
+                  const chapterLevels = LEVELS.filter((lvl) => {
+                    const inRange =
+                      lvl.levelNumber >= chapter.levelsRange[0] &&
+                      lvl.levelNumber <= chapter.levelsRange[1];
+                    if (!inRange) return false;
 
-                  // Text Search match
-                  if (searchQuery.trim()) {
-                    const q = searchQuery.trim().toLowerCase();
-                    const matchTitle = lvl.title.toLowerCase().includes(q);
-                    const matchLesson = lvl.lesson.title.toLowerCase().includes(q);
-                    const matchDesc = lvl.description.toLowerCase().includes(q);
-                    const matchContent = lvl.lesson.content.some((c) => c.toLowerCase().includes(q));
-                    if (!matchTitle && !matchLesson && !matchDesc && !matchContent) return false;
-                  }
+                    // Query search
+                    if (searchQuery.trim()) {
+                      const q = searchQuery.trim().toLowerCase();
+                      const matchTitle = lvl.title.toLowerCase().includes(q);
+                      const matchLesson = lvl.lesson.title.toLowerCase().includes(q);
+                      const matchDesc = lvl.description.toLowerCase().includes(q);
+                      const matchContent = lvl.lesson.content.some((c) => c.toLowerCase().includes(q));
+                      const matchQuestion = lvl.lesson.questions.some((ques) =>
+                        ques.question.toLowerCase().includes(q)
+                      );
+                      if (!matchTitle && !matchLesson && !matchDesc && !matchContent && !matchQuestion) {
+                        return false;
+                      }
+                    }
 
-                  // Status filter match
-                  const completed = isLevelCompleted(lvl.levelNumber);
-                  const unlocked = isLevelUnlocked(lvl.levelNumber);
-                  if (statusFilter === 'completed' && !completed) return false;
-                  if (statusFilter === 'in_progress' && (!unlocked || completed)) return false;
+                    // Status filter
+                    const completed = isLevelCompleted(lvl);
+                    const unlocked = isLevelUnlocked(lvl);
+                    if (statusFilter === 'completed' && !completed) return false;
+                    if (statusFilter === 'in_progress' && (!unlocked || completed)) return false;
 
-                  return true;
-                });
+                    return true;
+                  });
 
-                if (chapterLevels.length === 0) return null;
-                
-                // A chapter is completed if all of its levels are completed
-                const completedCount = chapterLevels.filter(lvl => isLevelCompleted(lvl.levelNumber)).length;
-                const isChapterCompleted = completedCount === chapterLevels.length;
-                const isChapterUnlocked = chapterLevels.some(lvl => isLevelUnlocked(lvl.levelNumber));
+                  if (chapterLevels.length === 0) return null;
 
-                return (
-                  <YStack key={chap.title} gap={16}>
-                    {/* Chapter Header */}
-                    <YStack gap={4} paddingHorizontal={4}>
-                      <XStack gap={8} alignItems="center">
-                        <View
-                          backgroundColor={(isChapterCompleted ? `${theme.success}15` : isChapterUnlocked ? `${theme.primary}15` : `${theme.textSecondary}15`) as any}
-                          paddingHorizontal={8}
-                          paddingVertical={2}
-                          borderRadius={6}
-                        >
-                          <Text
-                            color={isChapterCompleted ? theme.success : isChapterUnlocked ? theme.primary : theme.textSecondary}
-                            fontSize={10}
-                            fontWeight="800"
-                            letterSpacing={0.5}
+                  const chapterCompletedCount = chapterLevels.filter((lvl) => isLevelCompleted(lvl)).length;
+                  const isChapterAllDone = chapterCompletedCount === chapterLevels.length;
+
+                  return (
+                    <View key={chapter.badge} style={styles.chapterSection}>
+                      {/* Chapter Header */}
+                      <View style={styles.chapterHeader}>
+                        <View style={styles.chapterBadgeRow}>
+                          <View
+                            style={[
+                              styles.chapterBadge,
+                              {
+                                backgroundColor: isChapterAllDone
+                                  ? 'rgba(16, 185, 129, 0.15)'
+                                  : `${theme.primary}15`,
+                              },
+                            ]}
                           >
-                            {chap.badge.toUpperCase()}
+                            <Text
+                              style={[
+                                styles.chapterBadgeText,
+                                { color: isChapterAllDone ? '#10B981' : theme.primary },
+                              ]}
+                            >
+                              {chapter.badge.toUpperCase()}
+                            </Text>
+                          </View>
+                          <Text style={[styles.chapterProgressText, { color: theme.textSecondary }]}>
+                            {chapterCompletedCount} of {chapterLevels.length} Done
                           </Text>
                         </View>
-                        <Text color={theme.textSecondary} fontSize={11} fontWeight="600">
-                          {completedCount} / {chapterLevels.length} COMPLETED
+                        <Text style={[styles.chapterTitle, { color: theme.text }]}>{chapter.title}</Text>
+                        <Text style={[styles.chapterDesc, { color: theme.textSecondary }]}>
+                          {chapter.description}
                         </Text>
-                      </XStack>
-                      <Text color={theme.text} fontSize={17} fontWeight="800">
-                        {chap.title}
-                      </Text>
-                      <Text color={theme.textSecondary} fontSize={12} lineHeight={16}>
-                        {chap.description}
-                      </Text>
-                    </YStack>
+                      </View>
 
-                    {/* Timeline List of Levels */}
-                    <YStack paddingHorizontal={4}>
-                      {chapterLevels.map((lvl, idx) => {
-                        const levelIdx = levels.indexOf(lvl); // original index in levels array
-                        const unlocked = isLevelUnlocked(lvl.levelNumber);
-                        const completed = isLevelCompleted(lvl.levelNumber);
-                        const isInvestLevel = lvl.levelNumber >= 6;
-                        const isLastItem = idx === chapterLevels.length - 1;
+                      {/* Timeline Items */}
+                      <View style={styles.timelineList}>
+                        {chapterLevels.map((lvl, index) => {
+                          const originalIdx = LEVELS.findIndex((l) => l.levelNumber === lvl.levelNumber);
+                          const unlocked = isLevelUnlocked(lvl);
+                          const completed = isLevelCompleted(lvl);
+                          const isLast = index === chapterLevels.length - 1;
 
-                        // Visual definitions
-                        const cardBg = completed 
-                          ? theme.surface 
-                          : unlocked 
-                          ? theme.surface 
-                          : theme.backgroundElement;
-                        const cardBorderColor = completed
-                          ? theme.border
-                          : unlocked
-                          ? theme.primary
-                          : 'transparent';
-                        const titleColor = unlocked ? theme.text : theme.textSecondary;
-
-                        // Node style
-                        const circleBg = completed
-                          ? theme.success
-                          : unlocked
-                          ? `${theme.primary}15`
-                          : `${theme.textSecondary}10`;
-                        const circleBorderColor = completed
-                          ? theme.success
-                          : unlocked
-                          ? theme.primary
-                          : theme.border;
-                        const nodeIcon: PhosphorIconName = completed
-                          ? 'Check'
-                          : unlocked
-                          ? 'GraduationCap'
-                          : 'Lock';
-                        const nodeIconColor = completed
-                          ? '#FFFFFF'
-                          : unlocked
-                          ? theme.primary
-                          : theme.textSecondary;
-
-                        const unlockedNext = levelIdx < levels.length - 1 && isLevelUnlocked(levels[levelIdx + 1].levelNumber);
-
-                        return (
-                          <XStack key={lvl.levelNumber} gap={16} position="relative">
-                            {/* Left Timeline Node & Line */}
-                            <YStack alignItems="center" width={32} position="relative">
-                              {/* Dotted or solid vertical line */}
-                              {!isLastItem && (
+                          return (
+                            <View key={lvl.levelNumber} style={styles.timelineRow}>
+                              {/* Left Spine Indicator */}
+                              <View style={styles.spineColumn}>
+                                {!isLast && (
+                                  <View
+                                    style={[
+                                      styles.spineLine,
+                                      {
+                                        backgroundColor: completed ? theme.primary : theme.border,
+                                      },
+                                    ]}
+                                  />
+                                )}
                                 <View
-                                  position="absolute"
-                                  top={32}
-                                  bottom={-24}
-                                  width={2}
-                                  backgroundColor={unlockedNext ? theme.primary : theme.border}
-                                  zIndex={0}
-                                />
-                              )}
-                              
-                              {/* Node Circle */}
-                              <View
-                                width={32}
-                                height={32}
-                                borderRadius={16}
-                                backgroundColor={circleBg as any}
-                                borderColor={circleBorderColor}
-                                borderWidth={2}
-                                alignItems="center"
-                                justifyContent="center"
-                                zIndex={1}
-                                style={{ elevation: 1 } as any}
-                              >
-                                <PhosphorIcon name={nodeIcon} size={13} color={nodeIconColor} weight={completed ? 'bold' : 'regular'} />
+                                  style={[
+                                    styles.spineNode,
+                                    {
+                                      backgroundColor: completed
+                                        ? '#10B981'
+                                        : unlocked
+                                        ? `${theme.primary}18`
+                                        : theme.backgroundElement,
+                                      borderColor: completed
+                                        ? '#10B981'
+                                        : unlocked
+                                        ? theme.primary
+                                        : theme.border,
+                                    },
+                                  ]}
+                                >
+                                  <PhosphorIcon
+                                    name={completed ? 'Check' : unlocked ? lvl.icon : 'Lock'}
+                                    size={13}
+                                    color={completed ? '#FFFFFF' : unlocked ? theme.primary : theme.textSecondary}
+                                    weight={completed ? 'bold' : 'regular'}
+                                  />
+                                </View>
                               </View>
-                            </YStack>
 
-                            {/* Right Content Card */}
-                            <View flex={1} marginBottom={24}>
+                              {/* Right Level Card */}
                               <TouchableOpacity
-                                onPress={() => unlocked && handleStartLesson(levelIdx)}
+                                style={styles.cardWrapper}
+                                onPress={() => unlocked && handleStartLesson(originalIdx)}
                                 disabled={!unlocked}
-                                activeOpacity={0.85}
+                                activeOpacity={0.82}
                               >
                                 <CbudgetCard
                                   padding={14}
-                                  backgroundColor={cardBg}
-                                  borderColor={cardBorderColor}
-                                  borderWidth={unlocked ? 1 : 0}
                                   borderRadius={16}
-                                  flexDirection="row"
-                                  alignItems="center"
-                                  gap={12}
-                                  elevation={unlocked ? 2 : 0}
-                                  shadowColor="#0F172A"
-                                  shadowOffset={{ width: 0, height: 2 }}
-                                  shadowOpacity={unlocked ? 0.04 : 0}
-                                  shadowRadius={6}
+                                  style={{
+                                    backgroundColor: completed
+                                      ? theme.surface
+                                      : unlocked
+                                      ? theme.surface
+                                      : theme.backgroundElement,
+                                    borderColor: completed
+                                      ? theme.border
+                                      : unlocked
+                                      ? theme.primary
+                                      : 'transparent',
+                                    borderWidth: unlocked ? 1 : 0,
+                                  }}
                                 >
-                                  <YStack flex={1} gap={4}>
-                                    <XStack gap={6} alignItems="center">
-                                      <Text color={unlocked ? theme.primary : theme.textSecondary} fontSize={10} fontWeight="800" letterSpacing={0.5} textTransform="uppercase">
-                                        Level {lvl.levelNumber}
-                                      </Text>
-                                      {completed && (
-                                        <XStack alignItems="center" gap={4} backgroundColor="rgba(16, 185, 129, 0.12)" paddingHorizontal={7} paddingVertical={2} borderRadius={6}>
-                                          <Text color="#059669" fontSize={8.5} style={{ fontFamily: Fonts.bold, letterSpacing: 0.4 }}>DONE</Text>
-                                        </XStack>
-                                      )}
-                                      {!completed && unlocked && (
-                                        <XStack alignItems="center" gap={4} backgroundColor="rgba(16, 185, 129, 0.1)" paddingHorizontal={7} paddingVertical={2} borderRadius={6}>
-                                          <View width={4.5} height={4.5} borderRadius={2.5} backgroundColor="#10B981" />
-                                          <Text color="#059669" fontSize={8.5} style={{ fontFamily: Fonts.bold, letterSpacing: 0.4 }}>ACTIVE</Text>
-                                        </XStack>
-                                      )}
-                                    </XStack>
-                                    <Text color={titleColor} fontSize={14} fontWeight="700">
-                                      {lvl.lesson.title}
-                                    </Text>
-                                    <Text color={theme.textSecondary} fontSize={11}>
-                                      {unlocked 
-                                        ? `Est. Time: ${lvl.lesson.estTime} • +${lvl.lesson.xpReward} XP`
-                                        : isInvestLevel
-                                        ? 'Locked • Complete Levels 1-5 first'
-                                        : 'Locked • Complete preceding level'
-                                      }
-                                    </Text>
-                                  </YStack>
-
-                                  {unlocked ? (
-                                    <View
-                                      width={26}
-                                      height={26}
-                                      borderRadius={13}
-                                      backgroundColor={(completed ? `${theme.success}10` : `${theme.primary}10`) as any}
-                                      alignItems="center"
-                                      justifyContent="center"
-                                    >
+                                  <View style={styles.cardHeaderRow}>
+                                    <View style={styles.levelHeaderLeft}>
                                       <PhosphorIcon
-                                        name="CaretRight"
-                                        size={10}
-                                        color={completed ? theme.success : theme.primary}
+                                        name={lvl.icon}
+                                        size={17}
+                                        color={unlocked ? theme.primary : theme.textSecondary}
+                                        weight="bold"
                                       />
+                                      <Text
+                                        style={[
+                                          styles.levelPillText,
+                                          { color: unlocked ? theme.primary : theme.textSecondary },
+                                        ]}
+                                      >
+                                        LEVEL {lvl.levelNumber}
+                                      </Text>
                                     </View>
-                                  ) : (
-                                    <PhosphorIcon
-                                      name="Lock"
-                                      size={12}
-                                      color={theme.textSecondary}
-                                    />
-                                  )}
+
+                                    {completed ? (
+                                      <View style={styles.statusPillSuccess}>
+                                        <PhosphorIcon name="CheckCircle" size={12} color="#059669" weight="bold" />
+                                        <Text style={styles.statusPillSuccessText}>MASTERED</Text>
+                                      </View>
+                                    ) : unlocked ? (
+                                      <View style={styles.statusPillActive}>
+                                        <View style={styles.statusActiveDot} />
+                                        <Text style={styles.statusPillActiveText}>READY</Text>
+                                      </View>
+                                    ) : (
+                                      <View style={styles.statusPillLocked}>
+                                        <PhosphorIcon name="Lock" size={11} color={theme.textSecondary} weight="bold" />
+                                        <Text style={[styles.statusPillLockedText, { color: theme.textSecondary }]}>
+                                          LOCKED
+                                        </Text>
+                                      </View>
+                                    )}
+                                  </View>
+
+                                  <Text
+                                    style={[
+                                      styles.levelTitleText,
+                                      { color: unlocked ? theme.text : theme.textSecondary },
+                                    ]}
+                                    numberOfLines={1}
+                                  >
+                                    {lvl.lesson.title}
+                                  </Text>
+
+                                  <View style={styles.cardMetaRow}>
+                                    <View style={styles.cardMetaItem}>
+                                      <PhosphorIcon name="Clock" size={12} color={theme.textSecondary} />
+                                      <Text style={[styles.cardMetaText, { color: theme.textSecondary }]}>
+                                        {lvl.lesson.estTime}
+                                      </Text>
+                                    </View>
+
+                                    <Text style={[styles.cardMetaDot, { color: theme.textSecondary }]}>•</Text>
+
+                                    <View style={styles.cardMetaItem}>
+                                      <PhosphorIcon name="Lightning" size={12} color={theme.primary} />
+                                      <Text style={[styles.cardMetaText, { color: theme.primary }]}>
+                                        +{lvl.lesson.xpReward} XP
+                                      </Text>
+                                    </View>
+
+                                    <Text style={[styles.cardMetaDot, { color: theme.textSecondary }]}>•</Text>
+
+                                    <View style={styles.cardMetaItem}>
+                                      <PhosphorIcon name="Question" size={12} color={theme.textSecondary} />
+                                      <Text style={[styles.cardMetaText, { color: theme.textSecondary }]}>
+                                        {lvl.lesson.questions.length} Qs
+                                      </Text>
+                                    </View>
+                                  </View>
                                 </CbudgetCard>
                               </TouchableOpacity>
                             </View>
-                          </XStack>
-                        );
-                      })}
-                    </YStack>
-                  </YStack>
-                );
-              })}
-            </YStack>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
           )}
 
           {/* READING VIEW */}
-          {quizState === 'reading' && (
-            <View>
-              <CbudgetCard gap={16}>
-                <XStack justifyContent="space-between" alignItems="center">
-                  <XStack
-                    backgroundColor={`${theme.primary}12` as any}
-                    paddingHorizontal={10}
-                    paddingVertical={4}
-                    borderRadius={100}
-                  >
-                    <Text color={theme.primary} fontSize={10} fontWeight="700" letterSpacing={0.5}>
-                      {activeLevel.title.toUpperCase()}
-                    </Text>
-                  </XStack>
-                  <Text color={theme.textSecondary} fontSize={11}>
-                    {activeLesson.estTime} read
-                  </Text>
-                </XStack>
-
-                <YStack gap={6}>
-                  <Text color={theme.text} fontSize={20} fontWeight="700" lineHeight={26}>
-                    {activeLesson.title}
-                  </Text>
-                  <View height={2} backgroundColor={theme.border} width="15%" />
-                </YStack>
-
-                <YStack gap={12}>
-                  {activeLesson.content.map((paragraph, pIdx) => (
-                    <Text key={pIdx} color={theme.text} fontSize={14} lineHeight={22}>
-                      {paragraph}
-                    </Text>
-                  ))}
-
-                  {activeLesson.example && (
-                    <YStack
-                      backgroundColor={theme.backgroundElement}
-                      padding={14}
-                      borderRadius={12}
-                      borderLeftWidth={4}
-                      borderLeftColor={theme.primary}
-                      gap={6}
-                      marginVertical={4}
-                    >
-                      <XStack gap={6} alignItems="center">
-                        <PhosphorIcon
-                          name="Lightbulb"
-                          size={14}
-                          color={theme.warning}
-                          weight="fill"
-                        />
-                        <Text color={theme.text} fontSize={13} fontWeight="700">
-                          {activeLesson.example.title}:
-                        </Text>
-                      </XStack>
-                      <Text color={theme.textSecondary} fontSize={12} lineHeight={18}>
-                        {activeLesson.example.text}
-                      </Text>
-                    </YStack>
-                  )}
-                </YStack>
-
-                <XStack gap={10} marginTop={6}>
-                  <Button
-                    flex={1}
-                    backgroundColor={theme.backgroundElement}
-                    borderRadius={10}
-                    height={44}
-                    onPress={() => setQuizState('roadmap')}
-                  >
-                    <Text color={theme.text} fontWeight="700">
-                      Back
-                    </Text>
-                  </Button>
-                  <FormButton
-                    flex={1.8}
-                    variant="primary"
-                    height={44}
-                    onPress={handleStartQuiz}
-                  >
-                    Take Quiz
-                  </FormButton>
-                </XStack>
-              </CbudgetCard>
-            </View>
+          {screenState === 'reading' && (
+            <LessonReader
+              level={activeLevel}
+              isCompleted={isLevelCompleted(activeLevel)}
+              onBack={() => setScreenState('roadmap')}
+              onStartQuiz={handleStartQuiz}
+            />
           )}
 
           {/* QUIZ VIEW */}
-          {quizState === 'quiz' && (
-            <View>
-              <CbudgetCard gap={16}>
-                <XStack justifyContent="space-between" alignItems="center">
-                  <Text color={theme.primary} fontSize={11} fontWeight="700" letterSpacing={0.5}>
-                    QUESTION {questions[currentQuestionIdx].id} OF {questions.length}
-                  </Text>
-                  <Text color={theme.textSecondary} fontSize={11} fontWeight="600">
-                    Current Score: {score}
-                  </Text>
-                </XStack>
-
-                <Progress
-                  value={((currentQuestionIdx + 1) / questions.length) * 100}
-                  height={4}
-                  backgroundColor={theme.backgroundElement}
-                  borderRadius={2}
-                >
-                  <Progress.Indicator backgroundColor={theme.primary} borderRadius={2} />
-                </Progress>
-
-                <Text color={theme.text} fontSize={16} fontWeight="700" lineHeight={22}>
-                  {questions[currentQuestionIdx].question}
-                </Text>
-
-                <YStack gap={8}>
-                  {questions[currentQuestionIdx].options.map((opt, idx) => {
-                    const isSelected = selectedOption === idx;
-                    return (
-                      <Button
-                        key={opt}
-                        backgroundColor={isSelected ? (`${theme.primary}12` as any) : theme.backgroundElement}
-                        borderColor={isSelected ? theme.primary : 'transparent'}
-                        borderWidth={1.5}
-                        borderRadius={10}
-                        padding={12}
-                        alignItems="flex-start"
-                        justifyContent="flex-start"
-                        onPress={() => handleOptionSelect(idx)}
-                        height="auto"
-                      >
-                        <XStack gap={10} alignItems="center" width="100%">
-                          <View
-                            width={18}
-                            height={18}
-                            borderRadius={9}
-                            borderWidth={2}
-                            borderColor={isSelected ? theme.primary : theme.textSecondary}
-                            backgroundColor={isSelected ? theme.primary : 'transparent'}
-                            alignItems="center"
-                            justifyContent="center"
-                          >
-                            {isSelected && (
-                              <View width={6} height={6} borderRadius={3} backgroundColor="#FFFFFF" />
-                            )}
-                          </View>
-                          <Text color={theme.text} fontSize={13} fontWeight={isSelected ? '700' : '400'} flex={1} style={{ textAlign: 'left' }}>
-                            {opt}
-                          </Text>
-                        </XStack>
-                      </Button>
-                    );
-                  })}
-                </YStack>
-
-                <FormButton
-                  variant="primary"
-                  height={46}
-                  disabled={selectedOption === null}
-                  onPress={handleNextQuestion}
-                  marginTop={6}
-                >
-                  {currentQuestionIdx < questions.length - 1 ? 'Next Question' : 'Finish Quiz'}
-                </FormButton>
-              </CbudgetCard>
-            </View>
+          {screenState === 'quiz' && (
+            <QuizRunner
+              questions={activeQuestions}
+              levelTitle={activeLevel.title}
+              onExit={() => setScreenState('reading')}
+              onFinish={handleQuizFinish}
+            />
           )}
 
-          {/* QUIZ COMPLETED */}
-          {quizState === 'completed' && (
-            <View>
-              <CbudgetCard alignItems="center" gap={16} padding={24}>
-                <YStack position="relative" alignItems="center" justifyContent="center">
-                  <YStack
-                    width={70}
-                    height={70}
-                    borderRadius={35}
-                    backgroundColor={`${theme.warning}15` as any}
-                    alignItems="center"
-                    justifyContent="center"
-                    borderWidth={2}
-                    borderColor={`${theme.warning}40` as any}
-                  >
-                    <PhosphorIcon
-                      name="CheckCircle"
-                      size={36}
-                      color={theme.warning}
-                      weight="fill"
-                    />
-                  </YStack>
-                </YStack>
-
-                <YStack gap={2} alignItems="center">
-                  <Text color={theme.text} fontSize={18} fontWeight="700">
-                    Level Completed!
-                  </Text>
-                  <Text color={theme.textSecondary} fontSize={13} textAlign="center">
-                    You answered {score} of {questions.length} questions correctly.
-                  </Text>
-                </YStack>
-
-                <YStack
-                  backgroundColor={theme.backgroundElement}
-                  padding={12}
-                  borderRadius={12}
-                  width="100%"
-                  gap={10}
-                  borderWidth={1}
-                  borderColor={theme.border}
-                >
-                  <XStack justifyContent="space-between" alignItems="center">
-                    <Text color={theme.text} fontSize={13} fontWeight="600">Learning Reward</Text>
-                    <Text color={theme.primary as any} fontSize={13} fontWeight="800">+{earnedXP} XP</Text>
-                  </XStack>
-                  <XStack justifyContent="space-between" alignItems="center" borderTopWidth={1} borderTopColor={theme.border} paddingTop={10}>
-                    <Text color={theme.text} fontSize={13} fontWeight="600">Streak Status</Text>
-                    <Text color={theme.warning} fontSize={13} fontWeight="800">{streakDays} Active Days</Text>
-                  </XStack>
-                </YStack>
-
-                <FormButton variant="primary" height={44} onPress={() => setQuizState('roadmap')}>
-                  Academy Roadmap
-                </FormButton>
-              </CbudgetCard>
-            </View>
+          {/* COMPLETED / SUMMARY VIEW */}
+          {screenState === 'completed' && (
+            <QuizSummary
+              level={activeLevel}
+              score={lastQuizScore}
+              total={activeQuestions.length}
+              passed={lastQuizPassed}
+              earnedXP={earnedXP}
+              streakDays={streakDays}
+              onRetry={handleStartQuiz}
+              onReviewLesson={() => setScreenState('reading')}
+              onNextLevel={
+                activeLevelIdx < LEVELS.length - 1 && lastQuizPassed ? handleNextLevel : undefined
+              }
+              onReturnToRoadmap={() => setScreenState('roadmap')}
+            />
           )}
-
         </ScrollView>
       </SafeAreaView>
-    </YStack>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   safeArea: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 6,
-    paddingTop: 20,
-    paddingBottom: 32,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 40,
+  },
+  header: {
+    marginBottom: 18,
+    gap: 4,
+  },
+  headerTitle: {
+    fontFamily: Fonts.extraBold,
+    fontSize: 24,
+    letterSpacing: -0.6,
+  },
+  headerSubtitle: {
+    fontFamily: Fonts.regular,
+    fontSize: 13.5,
+    lineHeight: 19,
+  },
+  roadmapContent: {
+    gap: 20,
+  },
+  summaryTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  summaryTextGroup: {
+    flex: 1,
+    gap: 4,
+  },
+  summaryBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  summaryBadgeText: {
+    fontFamily: Fonts.extraBold,
+    fontSize: 10,
+    letterSpacing: 0.8,
+  },
+  summaryTitle: {
+    fontFamily: Fonts.bold,
+    fontSize: 16,
+    letterSpacing: -0.2,
+  },
+  summarySubtitle: {
+    fontFamily: Fonts.regular,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  scoreCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scoreValue: {
+    fontFamily: Fonts.extraBold,
+    fontSize: 15,
+  },
+  summaryProgressBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  summaryProgressBarFill: {
+    height: 6,
+    borderRadius: 3,
+  },
+  filterSection: {
+    gap: 10,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 42,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: Fonts.regular,
+    padding: 0,
+  },
+  segmentedTrack: {
+    flexDirection: 'row',
+    borderRadius: 10,
+    padding: 3,
+    gap: 4,
+  },
+  segmentedTab: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segmentedLabel: {
+    fontSize: 12,
+  },
+  chaptersContainer: {
+    gap: 22,
+  },
+  chapterSection: {
+    gap: 14,
+  },
+  chapterHeader: {
+    gap: 4,
+    paddingHorizontal: 2,
+  },
+  chapterBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  chapterBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  chapterBadgeText: {
+    fontFamily: Fonts.extraBold,
+    fontSize: 10,
+    letterSpacing: 0.6,
+  },
+  chapterProgressText: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 11,
+  },
+  chapterTitle: {
+    fontFamily: Fonts.bold,
+    fontSize: 17,
+    letterSpacing: -0.2,
+  },
+  chapterDesc: {
+    fontFamily: Fonts.regular,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  timelineList: {
+    gap: 12,
+  },
+  timelineRow: {
+    flexDirection: 'row',
+    gap: 14,
+  },
+  spineColumn: {
+    width: 32,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  spineLine: {
+    position: 'absolute',
+    top: 32,
+    bottom: -18,
+    width: 2,
+  },
+  spineNode: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  cardWrapper: {
+    flex: 1,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  levelHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  levelPillText: {
+    fontFamily: Fonts.extraBold,
+    fontSize: 10.5,
+    letterSpacing: 0.6,
+  },
+  statusPillSuccess: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  statusPillSuccessText: {
+    color: '#059669',
+    fontFamily: Fonts.bold,
+    fontSize: 9,
+    letterSpacing: 0.4,
+  },
+  statusPillActive: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  statusActiveDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#10B981',
+  },
+  statusPillActiveText: {
+    color: '#059669',
+    fontFamily: Fonts.bold,
+    fontSize: 9,
+    letterSpacing: 0.4,
+  },
+  statusPillLocked: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(100, 116, 139, 0.12)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  statusPillLockedText: {
+    fontFamily: Fonts.bold,
+    fontSize: 9,
+    letterSpacing: 0.4,
+  },
+  levelTitleText: {
+    fontFamily: Fonts.bold,
+    fontSize: 14.5,
+    marginBottom: 6,
+  },
+  cardMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  cardMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  cardMetaText: {
+    fontFamily: Fonts.medium,
+    fontSize: 11,
+  },
+  cardMetaDot: {
+    fontSize: 10,
   },
 });

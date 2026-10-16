@@ -905,9 +905,11 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
                 owner_id: session.user.id,
                 type: 'expense',
                 category: category,
+                category_id: category || 'Other',
                 amount,
                 description: notes ? `${name} - ${notes}` : name,
                 transaction_date: toISODate(date),
+                date: toISODate(date),
               },
               options: { onConflict: 'transaction_id' },
             });
@@ -1042,9 +1044,11 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
                 owner_id: session.user.id,
                 type: 'income',
                 category: category || 'Income',
+                category_id: category || 'Income',
                 amount,
                 description: notes ? `${name} - ${notes}` : name,
                 transaction_date: toISODate(date),
+                date: toISODate(date),
               },
               options: { onConflict: 'transaction_id' },
             });
@@ -1915,11 +1919,9 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
 
     const isGuest = currentActiveUserId === null || currentActiveUserId === 'guest';
     if (!isGuest) return;
-    // Re-read state in case the rollover block above mutated it
     const latestState = get();
     if (latestState.guestSessionDate && latestState.guestSessionDate !== today) {
       const next = {
-        loggedExpenses: [] as Expense[],
         guestSessionDate: today,
       };
       set(next);
@@ -1994,16 +1996,16 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
           supabase
             .from('transactions')
             .select('*')
-            .eq('user_id', userId)
+            .or(`user_id.eq.${userId},owner_id.eq.${userId}`)
             .order('transaction_date', { ascending: false }),
           supabase
             .from('budgets')
             .select('*')
-            .eq('user_id', userId),
+            .or(`user_id.eq.${userId},owner_id.eq.${userId}`),
           supabase
             .from('saving_challenges')
             .select('*')
-            .eq('user_id', userId),
+            .or(`user_id.eq.${userId},owner_id.eq.${userId}`),
         ]);
 
         if (generation !== hydrationGeneration) {
@@ -2234,10 +2236,8 @@ function buildStateFromSnapshot(
   let effectiveExpenses: Expense[] = parsed.loggedExpenses ?? [];
   let guestSessionDate = parsed.guestSessionDate || parsed.lastActiveDate || todayISO;
 
-  // Midnight reset for Guest Mode: if date changed, clear guest transactions
   if (isGuestMode) {
     if (guestSessionDate !== todayISO) {
-      effectiveExpenses = [];
       guestSessionDate = todayISO;
     }
   }
