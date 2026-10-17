@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { useGamificationStore } from '@/store/gamificationStore';
+import { useExchangeRateStore } from '@/store/exchangeRateStore';
 import { useEffect, useMemo, useRef } from 'react';
 import { Platform, StatusBar as RNStatusBar } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -22,7 +23,11 @@ import { CbudgetSplashScreen } from '@/components/CbudgetSplashScreen';
 import tamaguiConfig from '../../tamagui.config';
 import { CustomAlertProvider } from '@/components/ui/CustomAlert';
 import { ToastProvider } from '@/components/ui/Toast';
-import { registerForPushNotificationsAsync, syncScheduledNotificationsAsync } from '@/utils/notifications';
+import {
+  registerForPushNotificationsAsync,
+  syncScheduledNotificationsAsync,
+  initNotificationChannelsAsync,
+} from '@/utils/notifications';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { supabase, isSupabaseConfigured } from '@/utils/supabase';
 
@@ -54,11 +59,12 @@ export default function RootLayout() {
     PlusJakartaSans_800ExtraBold,
   });
 
-  // Hydrate auth, theme, and user preferences on app mount
+  // Hydrate auth, theme, user preferences, and exchange rates on app mount
   useEffect(() => {
     hydrateAuth();
     hydrateTheme();
     hydratePreferences();
+    useExchangeRateStore.getState().fetchRates().catch(() => {});
   }, [hydrateAuth, hydrateTheme, hydratePreferences]);
 
   // Scoped gamification hydration once auth state resolves
@@ -72,11 +78,17 @@ export default function RootLayout() {
   const expoPushToken = usePreferencesStore((state) => state.expoPushToken);
 
   useEffect(() => {
+    // 1. Initialize Android system notification channels immediately
+    initNotificationChannelsAsync().catch(() => {});
+
+    // 2. Schedule active reminders (e.g. daily streak, weekly report)
+    syncScheduledNotificationsAsync().catch(() => {});
+
+    // 3. Register remote push token if supported
     registerForPushNotificationsAsync().then((token) => {
       if (token) {
         setExpoPushToken(token);
       }
-      syncScheduledNotificationsAsync().catch(() => {});
     });
 
     if (!Notifications) return;

@@ -54,6 +54,7 @@ example
 
 # temp scripts
 replace.js
+scratch/
 
 # Android build outputs & local caches
 .gradle/

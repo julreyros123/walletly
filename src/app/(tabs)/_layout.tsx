@@ -10,8 +10,10 @@ import { Fonts } from '@/constants/theme';
 import { YStack, Text, Button, View } from 'tamagui';
 import { DisclaimerInterstitial } from '@/components/DisclaimerInterstitial';
 import { AllocateUnspentModal } from '@/features/budget/components/AllocateUnspentModal';
+import { useTranslation } from '@/localization';
 
 export default function TabsLayout() {
+  const { t } = useTranslation();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
@@ -62,7 +64,7 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="index"
           options={{
-            title: 'Home',
+            title: t('tab_home'),
             tabBarIcon: ({ color, focused }) => (
               <PhosphorIcon
                 name="House"
@@ -76,7 +78,7 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="budget"
           options={{
-            title: 'Budget',
+            title: t('tab_budget'),
             tabBarIcon: ({ color, focused }) => (
               <PhosphorIcon
                 name="Wallet"
@@ -101,7 +103,7 @@ export default function TabsLayout() {
                   }}
                   activeOpacity={0.85}
                   accessibilityRole="button"
-                  accessibilityLabel="Log Expense"
+                  accessibilityLabel={t('log_expense')}
                   accessibilityHint="Directly opens the log expense form"
                   style={{
                     width: 52,
@@ -132,7 +134,7 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="invest"
           options={{
-            title: 'Invest Lab',
+            title: t('tab_invest'),
             tabBarIcon: ({ color, focused }) => (
               <PhosphorIcon
                 name="ChartLineUp"
@@ -146,7 +148,7 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="profile"
           options={{
-            title: 'Profile',
+            title: t('tab_profile'),
             tabBarIcon: ({ color, focused }) => (
               <PhosphorIcon
                 name="User"

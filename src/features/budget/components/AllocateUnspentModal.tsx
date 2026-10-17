@@ -19,11 +19,11 @@ export function AllocateUnspentModal({ visible, onClose, onSuccess }: AllocateUn
   const theme = useTheme() as any;
   const isDark = theme.mode === 'dark';
   const store = useGamificationStore();
-  const { symbol: currencySymbol } = useCurrency();
+  const { currency: currencyCode, symbol: currencySymbol } = useCurrency();
 
   const cycleMetrics = useMemo(
-    () => getCycleMetrics(store),
-    [store.totalBudget, store.budgetType, store.loggedExpenses]
+    () => getCycleMetrics(store, currencyCode),
+    [store.totalBudget, store.budgetType, store.loggedExpenses, currencyCode]
   );
 
   const [amountInput, setAmountInput] = useState('');

@@ -8,6 +8,7 @@ import { safeHaptic } from '@/utils/haptics';
 import { useTheme } from '@/hooks/use-theme';
 import { useGamificationStore, getLocalDateString } from '@/store/gamificationStore';
 import { useCurrency } from '@/utils/currency';
+import { useExchangeRateStore } from '@/store/exchangeRateStore';
 import { Fonts } from '@/constants/theme';
 
 interface DailyRewardModalProps {
@@ -258,8 +259,8 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
   };
 
   // Polished vector icon renderer: XP Star for XP-only days, Realistic Cash Bundle for Cash days
-  const renderRewardIcon = (item: DayRewardInfo, isPast: boolean, isCurrent: boolean) => {
-    if (isPast) {
+  const renderRewardIcon = (item: DayRewardInfo, isClaimed: boolean, isReadyToClaim: boolean) => {
+    if (isClaimed) {
       return (
         <View style={getStyles(theme).iconCircleClaimed}>
           <PhosphorIcon
@@ -311,8 +312,8 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
       <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
         <Path
           d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
-          fill={isCurrent ? '#FBBF24' : '#64748B'}
-          stroke={isCurrent ? '#D97706' : '#475569'}
+          fill={isReadyToClaim ? '#FBBF24' : '#64748B'}
+          stroke={isReadyToClaim ? '#D97706' : '#475569'}
           strokeWidth={1.2}
         />
       </Svg>
@@ -367,9 +368,10 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                 {/* 7-Day Reward Grid */}
                 <XStack flexWrap="wrap" justifyContent="space-between" width="100%" gap={8}>
                   {REWARD_SCHEDULE.map((item) => {
-                    const isPast = item.day < currentDayInCycle;
-                    const isCurrent = item.day === currentDayInCycle;
-                    const isFuture = item.day > currentDayInCycle;
+                    const isClaimed = item.day < currentDayInCycle || (item.day === currentDayInCycle && isAlreadyClaimedToday);
+                    const isReadyToClaim = item.day === currentDayInCycle && !isAlreadyClaimedToday;
+                    const isNextUp = isAlreadyClaimedToday && item.day === ((currentDayInCycle % 7) + 1);
+                    const isFuture = !isClaimed && !isReadyToClaim && !isNextUp;
                     const isDay7 = item.day === 7;
 
                     // Day 7: Sleek Clean Bonus Banner
@@ -379,14 +381,15 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                           key={item.day}
                           style={[
                             getStyles(theme).day7Card,
-                            isCurrent && getStyles(theme).day7CardCurrent,
-                            isPast && getStyles(theme).dayCardPast,
+                            isReadyToClaim && getStyles(theme).day7CardCurrent,
+                            isClaimed && getStyles(theme).dayCardPast,
+                            isNextUp && getStyles(theme).dayCardNextUp,
                             isFuture && getStyles(theme).dayCardFuture,
                           ]}
                         >
                           <XStack alignItems="center" gap={10} flex={1}>
                             <View style={getStyles(theme).day7IconBox}>
-                              {renderRewardIcon(item, isPast, isCurrent)}
+                              {renderRewardIcon(item, isClaimed, isReadyToClaim)}
                             </View>
                             <YStack gap={2}>
                               <View style={getStyles(theme).day7Badge}>
@@ -399,10 +402,17 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                               </Text>
                             </YStack>
                           </XStack>
-                          {isPast && (
+                          {isClaimed && (
                             <View style={getStyles(theme).claimedBadgeMini}>
                               <Text color="#10B981" fontSize={10} fontFamily={Fonts.bold}>
                                 Claimed ✓
+                              </Text>
+                            </View>
+                          )}
+                          {isNextUp && (
+                            <View style={getStyles(theme).nextUpBadgeMini}>
+                              <Text color="#60A5FA" fontSize={9.5} fontFamily={Fonts.bold}>
+                                Tomorrow
                               </Text>
                             </View>
                           )}
@@ -416,8 +426,9 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                         key={item.day}
                         style={[
                           getStyles(theme).dayCard,
-                          isCurrent && getStyles(theme).dayCardCurrent,
-                          isPast && getStyles(theme).dayCardPast,
+                          isReadyToClaim && getStyles(theme).dayCardCurrent,
+                          isClaimed && getStyles(theme).dayCardPast,
+                          isNextUp && getStyles(theme).dayCardNextUp,
                           isFuture && getStyles(theme).dayCardFuture,
                         ]}
                       >
@@ -425,28 +436,29 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                         <View
                           style={[
                             getStyles(theme).dayTagPill,
-                            isCurrent && getStyles(theme).dayTagPillCurrent,
-                            isPast && getStyles(theme).dayTagPillPast,
+                            isReadyToClaim && getStyles(theme).dayTagPillCurrent,
+                            isClaimed && getStyles(theme).dayTagPillPast,
+                            isNextUp && getStyles(theme).dayTagPillNext,
                           ]}
                         >
                           <Text
-                            color={isCurrent ? theme.text : theme.textSecondary}
+                            color={isReadyToClaim ? theme.text : isClaimed ? '#10B981' : isNextUp ? '#60A5FA' : theme.textSecondary}
                             fontSize={8.5}
                             fontFamily={Fonts.bold}
                           >
-                            {item.tag}
+                            {isClaimed ? `${item.tag} ✓` : isNextUp ? 'TOMORROW' : item.tag}
                           </Text>
                         </View>
 
                         {/* Custom Polished Vector Icon */}
                         <View style={getStyles(theme).iconContainer}>
-                          {renderRewardIcon(item, isPast, isCurrent)}
+                          {renderRewardIcon(item, isClaimed, isReadyToClaim)}
                         </View>
 
                         {/* Reward Details Text */}
                         <YStack alignItems="center" gap={1}>
                           <Text
-                            color={isCurrent ? theme.text : theme.textSecondary}
+                            color={isReadyToClaim ? theme.text : isClaimed ? '#10B981' : isNextUp ? '#60A5FA' : theme.textSecondary}
                             fontSize={11}
                             fontFamily={Fonts.bold}
                           >
@@ -470,13 +482,37 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                   style={[getStyles(theme).claimButton, isAlreadyClaimedToday && getStyles(theme).claimButtonChecked]}
                   activeOpacity={0.85}
                   accessibilityRole="button"
-                  accessibilityLabel={isAlreadyClaimedToday ? `Checked in today, Day ${currentDayInCycle}` : `Claim Day ${currentDayInCycle} Reward`}
+                  accessibilityLabel={
+                    isAlreadyClaimedToday
+                      ? `Day ${currentDayInCycle} claimed. Day ${((currentDayInCycle % 7) + 1)} unlocks tomorrow.`
+                      : `Claim Day ${currentDayInCycle} Reward`
+                  }
                   accessibilityState={{ disabled: isAlreadyClaimedToday }}
                 >
-                  <Text color={theme.text} fontSize={15} fontFamily={Fonts.bold}>
-                    {isAlreadyClaimedToday ? `Checked In Today ✓ (Day ${currentDayInCycle})` : `Claim Day ${currentDayInCycle} Reward ✨`}
+                  <Text color={theme.text} fontSize={14.5} fontFamily={Fonts.bold}>
+                    {isAlreadyClaimedToday
+                      ? `Day ${currentDayInCycle} Claimed ✓ (Day ${((currentDayInCycle % 7) + 1)} Unlocks Tomorrow)`
+                      : `Claim Day ${currentDayInCycle} Reward ✨`}
                   </Text>
                 </TouchableOpacity>
+
+                {/* Developer Fast-Forward Streak Testing Shortcut */}
+                {__DEV__ && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      safeHaptic('light');
+                      store.debugSimulateNextDay();
+                    }}
+                    style={getStyles(theme).devTestBtn}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel="Simulate Next Day for Testing"
+                  >
+                    <Text color="#94A3B8" fontSize={11} fontFamily={Fonts.medium}>
+                      ⚡ Dev Test: Advance 1 Day (Test Streak)
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </YStack>
             </View>
           </View>
@@ -623,6 +659,11 @@ const getStyles = (theme: any) => StyleSheet.create({
     borderColor: '#1E293B',
     opacity: 0.85,
   },
+  dayCardNextUp: {
+    borderColor: 'rgba(59, 130, 246, 0.45)',
+    borderWidth: 1.2,
+    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+  },
   dayCardFuture: {
     opacity: 0.6,
   },
@@ -637,6 +678,26 @@ const getStyles = (theme: any) => StyleSheet.create({
   },
   dayTagPillPast: {
     backgroundColor: 'rgba(16, 185, 129, 0.15)',
+  },
+  dayTagPillNext: {
+    backgroundColor: 'rgba(59, 130, 246, 0.25)',
+  },
+  nextUpBadgeMini: {
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  devTestBtn: {
+    marginTop: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    width: '100%',
   },
   iconContainer: {
     height: 32,

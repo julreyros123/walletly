@@ -104,3 +104,17 @@ export function parseMaskedNumber(value: string): number {
   const parsed = parseFloat(cleaned);
   return isNaN(parsed) ? 0 : parsed;
 }
+
+/**
+ * Converts an amount from one supported currency to another using the live exchange rate.
+ * e.g. convertCurrency(100, 'USD', 'PHP') -> ~6305
+ */
+export function convertCurrency(
+  amount: number,
+  fromCurrency: SupportedCurrency,
+  toCurrency: SupportedCurrency
+): number {
+  const { useExchangeRateStore } = require('@/store/exchangeRateStore');
+  return useExchangeRateStore.getState().convert(amount, fromCurrency, toCurrency);
+}
+

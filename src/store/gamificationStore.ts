@@ -4,6 +4,7 @@ import { storage } from '@/utils/storage';
 import { supabase } from '@/utils/supabase';
 import { syncQueue } from '@/utils/syncQueue';
 import { applyRemoteRows, getLocalRows } from '@/db/localRepository';
+import { useExchangeRateStore } from './exchangeRateStore';
 
 export const CURRENT_GAMIFICATION_VERSION = 2;
 const BASE_GAMIFICATION_KEY = 'cbudget_gamification_state';
@@ -263,20 +264,40 @@ export interface CycleMetrics {
   balance: number;
 }
 
-export function getCycleMetrics(state: {
-  totalBudget: number;
-  budgetType: 'daily' | 'weekly' | 'monthly' | null;
-  loggedExpenses: Expense[];
-}): CycleMetrics {
+export function getCycleMetrics(
+  state: {
+    totalBudget: number;
+    budgetType: 'daily' | 'weekly' | 'monthly' | null;
+    loggedExpenses: Expense[];
+  },
+  customCurrency?: string
+): CycleMetrics {
   const cycle = state.budgetType || 'monthly';
-  const limit =
-    state.totalBudget > 0
-      ? state.totalBudget
-      : cycle === 'daily'
-      ? 150
-      : cycle === 'weekly'
-      ? 1000
-      : 4000;
+  let activeCurrency = customCurrency;
+  if (!activeCurrency) {
+    try {
+      const { usePreferencesStore } = require('@/store/preferencesStore');
+      activeCurrency = usePreferencesStore.getState().currency || 'PHP';
+    } catch {
+      activeCurrency = 'PHP';
+    }
+  }
+
+  let limit = state.totalBudget;
+  if (!limit || limit <= 0) {
+    const phpBaseline =
+      cycle === 'daily'
+        ? 150
+        : cycle === 'weekly'
+        ? 1000
+        : 4000;
+
+    if (activeCurrency === 'PHP') {
+      limit = phpBaseline;
+    } else {
+      limit = useExchangeRateStore.getState().convert(phpBaseline, 'PHP', activeCurrency || 'PHP');
+    }
+  }
 
   const cycleName =
     cycle === 'daily'
@@ -359,11 +380,14 @@ interface GamificationState {
   completedLessonIds: string[];
   lastDividendClaimDates: Record<string, string>; // ticker -> YYYY-MM-DD
   guestSessionDate?: string;
+  currency?: string;
 
   // Core Actions
   addXP: (amount: number) => void;
   checkAndUpdateStreak: () => void;
   claimDailyReward: () => { success: boolean; xp: number; cash: number };
+  debugSimulateNextDay: () => void;
+  convertAllMonetaryValues: (fromCurrency: string, toCurrency: string) => void;
   unlockAchievement: (achievementId: string) => void;
 
   // Budget & Expense Actions
@@ -580,6 +604,7 @@ export type GamificationDataState = {
   completedLessonIds: string[];
   lastDividendClaimDates: Record<string, string>;
   guestSessionDate?: string;
+  currency?: string;
 };
 
 export const DEFAULT_GAMIFICATION_DATA: GamificationDataState = {
@@ -610,6 +635,7 @@ export const DEFAULT_GAMIFICATION_DATA: GamificationDataState = {
   completedLessonIds: [],
   lastDividendClaimDates: {},
   guestSessionDate: undefined,
+  currency: 'PHP',
 };
 
 export const useGamificationStore = create<GamificationState>()((set, get) => ({
@@ -634,6 +660,11 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
   checkAndUpdateStreak: () => {
     const today = getLocalDateString();
     set((state) => {
+      // Guard against running before stored cache has hydrated
+      if (!isHydrationComplete) {
+        return state;
+      }
+
       if (!state.lastActiveDate) {
         const next = { streakDays: 1, lastActiveDate: today };
         persistState({ ...state, ...next });
@@ -685,7 +716,24 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         return state;
       }
 
-      const dayInCycle = (((state.streakDays || 1) - 1) % 7) + 1;
+      // Check if streak needs advancing right now if checkAndUpdateStreak hasn't run yet today
+      let effectiveStreak = state.streakDays || 1;
+      if (state.lastActiveDate && state.lastActiveDate !== today) {
+        const [y1, m1, d1] = state.lastActiveDate.split('-').map(Number);
+        const [y2, m2, d2] = today.split('-').map(Number);
+        const dActive = new Date(y1, m1 - 1, d1);
+        const dToday = new Date(y2, m2 - 1, d2);
+        const diffTime = dToday.getTime() - dActive.getTime();
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 1 || diffDays === 2) {
+          effectiveStreak = (state.streakDays || 0) + 1;
+        } else if (diffDays > 2) {
+          effectiveStreak = 1;
+        }
+      }
+
+      const dayInCycle = (((effectiveStreak - 1) % 7) + 1);
       const xpReward = dayInCycle * 10;
       let cashReward = 0;
       if (dayInCycle === 3) cashReward = 500;
@@ -702,18 +750,94 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         }
       }
 
+      let updatedAchievements = [...state.achievements];
+      if (effectiveStreak >= 7 && !updatedAchievements.some((a) => a.id === 'streak_7')) {
+        const ach = ALL_ACHIEVEMENTS.find((a) => a.id === 'streak_7');
+        if (ach) {
+          updatedAchievements.push({ ...ach, unlockedAt: new Date().toISOString() });
+        }
+      }
+
       const next = {
+        streakDays: effectiveStreak,
         lastClaimedRewardDate: today,
         lastActiveDate: today,
         xp: newXp,
         level: newLevel,
         virtualBalance: state.virtualBalance + cashReward,
         learningScore: Math.min(100, state.learningScore + dayInCycle * 2),
+        achievements: updatedAchievements,
       };
       persistState({ ...state, ...next });
       return next;
     });
     return result;
+  },
+
+  debugSimulateNextDay: () => {
+    if (!__DEV__) return;
+    set((state) => {
+      // Shift last active & claim dates back by 24h
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const yesterdayISO = getLocalDateString(yesterday);
+      const next = {
+        lastActiveDate: yesterdayISO,
+        lastClaimedRewardDate: state.lastClaimedRewardDate ? yesterdayISO : null,
+      };
+      persistState({ ...state, ...next });
+      return next;
+    });
+    get().checkAndUpdateStreak();
+  },
+
+  convertAllMonetaryValues: (fromCurrency: string, toCurrency: string) => {
+    if (fromCurrency === toCurrency) return;
+    const convertFn = (val: number) => {
+      if (!val || typeof val !== 'number' || isNaN(val)) return 0;
+      return useExchangeRateStore.getState().convert(val, fromCurrency, toCurrency);
+    };
+
+    set((state) => {
+      const nextTotalBudget = convertFn(state.totalBudget);
+      const nextCategoryLimits: Record<string, number> = {};
+      Object.entries(state.categoryLimits || {}).forEach(([cat, lim]) => {
+        nextCategoryLimits[cat] = convertFn(lim);
+      });
+
+      const nextExpenses = (state.loggedExpenses || []).map((e) => ({
+        ...e,
+        amount: convertFn(e.amount),
+      }));
+
+      const nextGoals = (state.savingsGoals || []).map((g) => ({
+        ...g,
+        targetAmount: convertFn(g.targetAmount),
+        currentSavings: convertFn(g.currentSavings),
+      }));
+
+      const nextRecords = (state.savingsRecords || []).map((r) => ({
+        ...r,
+        amount: convertFn(r.amount),
+      }));
+
+      const nextUnspent = convertFn(state.unspentSavingsVault);
+      const nextBalance = convertFn(state.virtualBalance);
+      const nextSpare = convertFn(state.spareChangeAccumulated);
+
+      const next = {
+        totalBudget: nextTotalBudget,
+        categoryLimits: nextCategoryLimits,
+        loggedExpenses: nextExpenses,
+        savingsGoals: nextGoals,
+        savingsRecords: nextRecords,
+        unspentSavingsVault: nextUnspent,
+        virtualBalance: nextBalance,
+        spareChangeAccumulated: nextSpare,
+        currency: toCurrency,
+      };
+      persistState({ ...state, ...next });
+      return next;
+    });
   },
 
   unlockAchievement: (achievementId) => {
@@ -866,8 +990,22 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       const totalSpent = onlyExpenses.reduce((sum, e) => sum + e.amount, 0);
 
       let nextBudgetingScore = state.budgetingScore;
+      const prevSpent = state.loggedExpenses.filter((e) => e.type !== 'income').reduce((sum, e) => sum + e.amount, 0);
       if (state.totalBudget > 0 && totalSpent > state.totalBudget) {
         nextBudgetingScore = Math.max(20, state.budgetingScore - 10);
+        if (prevSpent <= state.totalBudget) {
+          try {
+            const { sendPhoneNotificationAsync, NOTIFICATION_CHANNELS } = require('@/utils/notifications');
+            const { usePreferencesStore } = require('@/store/preferencesStore');
+            const curr = usePreferencesStore.getState().currency || 'PHP';
+            const sym = curr === 'PHP' ? '₱' : curr === 'EUR' ? '€' : curr === 'GBP' ? '£' : '$';
+            sendPhoneNotificationAsync({
+              title: '⚠️ Smart Budget Alert: Spending Limit Exceeded',
+              body: `Total expenses reached ${sym}${totalSpent.toFixed(2)}, exceeding your ${sym}${state.totalBudget.toFixed(2)} budget limit.`,
+              channelId: NOTIFICATION_CHANNELS.BUDGET_GUARD,
+            }).catch(() => {});
+          } catch (_) {}
+        }
       } else {
         nextBudgetingScore = Math.min(100, state.budgetingScore + 5);
       }
@@ -875,7 +1013,16 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       let updatedAchievements = [...state.achievements];
       if (nextBudgetingScore >= 90 && !updatedAchievements.some((a) => a.id === 'budget_master')) {
         const ach = ALL_ACHIEVEMENTS.find((a) => a.id === 'budget_master');
-        if (ach) updatedAchievements.push({ ...ach, unlockedAt: new Date().toISOString() });
+        if (ach) {
+          updatedAchievements.push({ ...ach, unlockedAt: new Date().toISOString() });
+          try {
+            const { sendPhoneNotificationAsync } = require('@/utils/notifications');
+            sendPhoneNotificationAsync({
+              title: '🏆 Achievement Unlocked!',
+              body: `You unlocked "${ach.title}"! High financial discipline score maintained.`,
+            }).catch(() => {});
+          } catch (_) {}
+        }
       }
 
       const cents = amount % 100;
@@ -1980,6 +2127,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       }
 
       isHydrationComplete = true;
+      get().checkAndUpdateStreak();
 
       // 2. If authenticated with Supabase, pull cloud records and sync permanently
       if (resolvedUserId && resolvedUserId !== 'guest') {
@@ -2193,6 +2341,19 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
           persistState(get(), userId);
         }
 
+        // Automatic currency alignment: if user changed currency in preferences previously
+        // but gamification store was stored in another currency, convert all monetary values immediately
+        try {
+          const { usePreferencesStore } = require('@/store/preferencesStore');
+          const activeUserCurrency = usePreferencesStore.getState().currency || 'PHP';
+          const storedCurrency = get().currency || 'PHP';
+          if (storedCurrency !== activeUserCurrency) {
+            get().convertAllMonetaryValues(storedCurrency, activeUserCurrency);
+          }
+        } catch (err) {
+          console.warn('[GamificationStore] Currency alignment error post-hydration:', err);
+        }
+
         // Process any queued offline actions now that connection & user are verified
         syncQueue.process().catch((err) => {
           console.warn('[GamificationStore] Error processing sync queue post-hydration:', err);
@@ -2270,6 +2431,7 @@ function buildStateFromSnapshot(
     completedLessonIds: parsed.completedLessonIds ?? [],
     lastDividendClaimDates: parsed.lastDividendClaimDates ?? {},
     guestSessionDate,
+    currency: parsed.currency ?? 'PHP',
   };
 }
 
@@ -2298,6 +2460,7 @@ scheduleMidnightCheck();
 AppState.addEventListener('change', (nextAppState) => {
   if (nextAppState === 'active') {
     useGamificationStore.getState().checkMidnightGuestReset();
+    useGamificationStore.getState().checkAndUpdateStreak();
   } else if (nextAppState === 'background') {
     flushCloudSnapshot().catch((err) => console.warn('[GamificationStore] Background snapshot flush error:', err));
   }

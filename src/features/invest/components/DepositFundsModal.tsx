@@ -29,11 +29,11 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export function DepositFundsModal({ visible, onClose }: DepositFundsModalProps) {
   const insets = useSafeAreaInsets();
-  const { symbol: currencySymbol } = useCurrency();
+  const { currency: currencyCode, symbol: currencySymbol } = useCurrency();
   const store = useGamificationStore();
   const [amount, setAmount] = useState('');
 
-  const cycleMetrics = getCycleMetrics(store);
+  const cycleMetrics = getCycleMetrics(store, currencyCode);
   const availableToTransfer = Math.max(0, cycleMetrics.balance);
 
   const numericAmount = parseFloat((amount || '').replace(/[^0-9.]/g, '')) || 0;
@@ -225,7 +225,7 @@ export function DepositFundsModal({ visible, onClose }: DepositFundsModalProps) 
                 </View>
                 <View style={styles.metaRow}>
                   <Text style={styles.metaLabel}>Transfer Fee</Text>
-                  <Text style={styles.metaValueFree}>₱0.00 (Zero Fee)</Text>
+                  <Text style={styles.metaValueFree}>{currencySymbol}0.00 (Zero Fee)</Text>
                 </View>
                 <View style={styles.metaRow}>
                   <Text style={styles.metaLabel}>Available for Trading</Text>

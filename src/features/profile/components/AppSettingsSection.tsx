@@ -17,7 +17,13 @@ import { useAuthStore } from '@/store/authStore';
 import { useGamificationStore } from '@/store/gamificationStore';
 import { safeHaptic } from '@/utils/haptics';
 import { sendGuardianReport } from '@/utils/guardianReport';
+import {
+  sendPhoneNotificationAsync,
+  requestNotificationPermissionsAsync,
+  NOTIFICATION_CHANNELS,
+} from '@/utils/notifications';
 import { Fonts, Spacing } from '@/constants/theme';
+import { useTranslation } from '@/localization';
 
 const Text = (props: any) => <TamaguiText {...props} />;
 
@@ -37,6 +43,7 @@ interface AppSettingsSectionProps {
 }
 
 export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
+  const { t } = useTranslation();
   const { user } = useAuthStore();
   const { getFinancialHealthScore, streakDays, achievements } = useGamificationStore();
   const {
@@ -46,6 +53,7 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
     streakRemindersEnabled,
     weeklyReportEnabled,
     currency,
+    language,
     guardianEmail,
     guardianLinked,
     setSoundEffectsEnabled,
@@ -54,11 +62,59 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
     setStreakRemindersEnabled,
     setWeeklyReportEnabled,
     setCurrency,
+    setLanguage,
     setGuardianInfo,
   } = usePreferencesStore();
 
   const [guardianModalVisible, setGuardianModalVisible] = useState(false);
   const [inputEmail, setInputEmail] = useState(guardianEmail);
+  const [testingNotification, setTestingNotification] = useState(false);
+
+  const handleTestPhoneNotification = async (delaySeconds = 0) => {
+    try {
+      setTestingNotification(true);
+      safeHaptic('medium');
+      const granted = await requestNotificationPermissionsAsync();
+      if (!granted) {
+        Alert.alert(
+          'Notifications Disabled',
+          'Please enable notifications for CBudget in your device settings to receive reminders outside the app.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
+        return;
+      }
+
+      await sendPhoneNotificationAsync({
+        title: '🔔 CBudget Phone Reminder',
+        body: delaySeconds > 0
+          ? '🎉 Phone reminders work outside the app! You will receive daily streak and budget alerts even when CBudget is closed.'
+          : '✨ System phone notification active! You will receive streak reminders and budget alerts in your notification bar.',
+        delaySeconds,
+        channelId: NOTIFICATION_CHANNELS.REMINDERS,
+      });
+
+      if (delaySeconds > 0) {
+        Alert.alert(
+          'Notification Scheduled! ⏱️',
+          `Your phone will receive the notification in ${delaySeconds} seconds.\n\nPress your phone's Home button or lock your screen now to see the notification drop down in your phone's status bar!`,
+          [{ text: 'Got it!' }]
+        );
+      } else {
+        Alert.alert(
+          'Notification Sent! 📱',
+          'Check your phone status bar or pull down your notification tray to view the alert.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Could not send phone notification.');
+    } finally {
+      setTestingNotification(false);
+    }
+  };
 
 
   const handleSendGuardianReport = async (emailOverride?: string) => {
@@ -100,7 +156,7 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
       {/* 1. SOUND & HAPTIC EXPERIENCE */}
       <YStack gap={10}>
         <Text color={theme.text} fontSize={16} fontFamily={Fonts.bold} paddingHorizontal={2}>
-          Sound & Touch Feedback
+          {t('sound_and_touch')}
         </Text>
 
         <CbudgetCard padding={0} overflow="hidden">
@@ -122,10 +178,10 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
               </View>
               <YStack flex={1} gap={2}>
                 <Text color={theme.text} fontSize={14.5} fontFamily={Fonts.bold}>
-                  Game Sound Effects (SFX)
+                  {t('sound_effects')}
                 </Text>
                 <Text color={theme.textSecondary} fontSize={11.5} fontFamily={Fonts.medium}>
-                  Chimes, fanfare, and market audio in mini-games
+                  {t('sound_effects_sub')}
                 </Text>
               </YStack>
             </XStack>
@@ -158,10 +214,10 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
               </View>
               <YStack flex={1} gap={2}>
                 <Text color={theme.text} fontSize={14.5} fontFamily={Fonts.bold}>
-                  Vibration & Haptics
+                  {t('vibration')}
                 </Text>
                 <Text color={theme.textSecondary} fontSize={11.5} fontFamily={Fonts.medium}>
-                  Tactile feedback for button taps and card swipes
+                  {t('vibration_sub')}
                 </Text>
               </YStack>
             </XStack>
@@ -181,7 +237,7 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
       {/* 2. NOTIFICATIONS & REMINDERS */}
       <YStack gap={10}>
         <Text color={theme.text} fontSize={16} fontFamily={Fonts.bold} paddingHorizontal={2}>
-          Notifications & Alerts
+          {t('notifications_alerts')}
         </Text>
 
         <CbudgetCard padding={0} overflow="hidden">
@@ -204,7 +260,7 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
               <YStack flex={1} gap={2}>
                 <XStack alignItems="center" gap={8}>
                   <Text color={theme.text} fontSize={14.5} fontFamily={Fonts.bold}>
-                    Push Notifications
+                    {t('push_notifications')}
                   </Text>
                   <View
                     style={{
@@ -215,19 +271,33 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
                     }}
                   >
                     <Text color="#3B82F6" fontSize={9} fontFamily={Fonts.bold} letterSpacing={0.5}>
-                      BETA PREVIEW
+                      LIVE
                     </Text>
                   </View>
                 </XStack>
                 <Text color={theme.textSecondary} fontSize={11.5} fontFamily={Fonts.medium}>
-                  Allow CBudget to send learning alerts
+                  {t('push_notifications_sub')}
                 </Text>
               </YStack>
             </XStack>
             <Switch
               value={notificationsEnabled}
-              onValueChange={(val) => {
+              onValueChange={async (val) => {
                 safeHaptic('light');
+                if (val) {
+                  const granted = await requestNotificationPermissionsAsync();
+                  if (!granted) {
+                    Alert.alert(
+                      'Notifications Disabled',
+                      'Please enable notifications for CBudget in your phone settings to receive alerts outside the app.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Open Settings', onPress: () => Linking.openSettings() },
+                      ]
+                    );
+                    return;
+                  }
+                }
                 setNotificationsEnabled(val);
               }}
               trackColor={{ false: '#334155', true: '#10B981' }}
@@ -254,10 +324,10 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
               </View>
               <YStack flex={1} gap={2}>
                 <Text color={theme.text} fontSize={14.5} fontFamily={Fonts.bold}>
-                  Daily Streak Reminder
+                  {t('streak_reminder')}
                 </Text>
                 <Text color={theme.textSecondary} fontSize={11.5} fontFamily={Fonts.medium}>
-                  Evening nudge to protect your daily learning streak
+                  {t('streak_reminder_sub')}
                 </Text>
               </YStack>
             </XStack>
@@ -292,10 +362,10 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
               </View>
               <YStack flex={1} gap={2}>
                 <Text color={theme.text} fontSize={14.5} fontFamily={Fonts.bold}>
-                  Weekly Spending & XP Digest
+                  {t('weekly_digest')}
                 </Text>
                 <Text color={theme.textSecondary} fontSize={11.5} fontFamily={Fonts.medium}>
-                  Sunday summary of savings, trades & badges earned
+                  {t('weekly_digest_sub')}
                 </Text>
               </YStack>
             </XStack>
@@ -310,6 +380,61 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
               thumbColor="#FFFFFF"
             />
           </XStack>
+
+          {/* Test Phone Notification Button */}
+          <XStack
+            alignItems="center"
+            justifyContent="space-between"
+            paddingHorizontal={16}
+            paddingVertical={14}
+            style={{ borderTopWidth: 1, borderTopColor: theme.border, opacity: notificationsEnabled ? 1 : 0.5 }}
+          >
+            <XStack alignItems="center" gap={12} flex={1}>
+              <View style={[styles.iconBox, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
+                <PhosphorIcon
+                  name="DeviceMobile"
+                  size={18}
+                  color="#10B981"
+                  weight="fill"
+                />
+              </View>
+              <YStack flex={1} gap={2}>
+                <Text color={theme.text} fontSize={14.5} fontFamily={Fonts.bold}>
+                  {t('test_notification')}
+                </Text>
+                <Text color={theme.textSecondary} fontSize={11.5} fontFamily={Fonts.medium}>
+                  {t('test_notification_sub')}
+                </Text>
+              </YStack>
+            </XStack>
+            <TouchableOpacity
+              disabled={!notificationsEnabled || testingNotification}
+              onPress={() => {
+                Alert.alert(
+                  t('test_notification'),
+                  'Verify system notification delivery outside the app:',
+                  [
+                    { text: t('cancel'), style: 'cancel' },
+                    { text: 'Send Now', onPress: () => handleTestPhoneNotification(0) },
+                    {
+                      text: 'In 5s (Lock phone now)',
+                      onPress: () => handleTestPhoneNotification(5),
+                    },
+                  ]
+                );
+              }}
+              style={{
+                backgroundColor: notificationsEnabled ? '#10B981' : '#334155',
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 8,
+              }}
+            >
+              <Text color="#FFFFFF" fontSize={12} fontFamily={Fonts.bold}>
+                {testingNotification ? '...' : t('test_alert_btn')}
+              </Text>
+            </TouchableOpacity>
+          </XStack>
         </CbudgetCard>
       </YStack>
 
@@ -317,7 +442,7 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
       <YStack gap={10}>
         <XStack justifyContent="space-between" alignItems="center" paddingHorizontal={2}>
           <Text color={theme.text} fontSize={16} fontFamily={Fonts.bold}>
-            Display Currency
+            {t('display_currency')}
           </Text>
           <Text color={theme.textSecondary} fontSize={12} fontFamily={Fonts.medium}>
             Active: {currency}
@@ -326,7 +451,7 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
 
         <CbudgetCard padding={16} gap={10}>
           <Text color={theme.textSecondary} fontSize={12} fontFamily={Fonts.medium}>
-            Choose your preferred currency symbol for virtual learning balances:
+            {t('display_currency_sub')}
           </Text>
 
           <AnimatedSegmentSwitch<SupportedCurrency>
@@ -346,11 +471,43 @@ export function AppSettingsSection({ theme }: AppSettingsSectionProps) {
         </CbudgetCard>
       </YStack>
 
-      {/* 4. GUARDIAN / PARENTAL LINK (TEEN SAFETY) */}
+      {/* 4. APP INTERFACE LANGUAGE */}
       <YStack gap={10}>
         <XStack justifyContent="space-between" alignItems="center" paddingHorizontal={2}>
           <Text color={theme.text} fontSize={16} fontFamily={Fonts.bold}>
-            Parent & Guardian Link
+            {t('app_language')}
+          </Text>
+          <Text color={theme.textSecondary} fontSize={12} fontFamily={Fonts.medium}>
+            {language || 'English (US)'}
+          </Text>
+        </XStack>
+
+        <CbudgetCard padding={16} gap={10}>
+          <Text color={theme.textSecondary} fontSize={12} fontFamily={Fonts.medium}>
+            {t('app_language_sub')}
+          </Text>
+
+          <AnimatedSegmentSwitch<string>
+            options={[
+              { id: 'English (US)', label: '🇺🇸 English' },
+              { id: 'Filipino (Tagalog)', label: '🇵🇭 Filipino' },
+            ]}
+            activeId={language || 'English (US)'}
+            onChange={(newLang) => {
+              safeHaptic('light');
+              setLanguage(newLang);
+            }}
+            height={40}
+            fontSize={12.5}
+          />
+        </CbudgetCard>
+      </YStack>
+
+      {/* 5. GUARDIAN / PARENTAL LINK (TEEN SAFETY) */}
+      <YStack gap={10}>
+        <XStack justifyContent="space-between" alignItems="center" paddingHorizontal={2}>
+          <Text color={theme.text} fontSize={16} fontFamily={Fonts.bold}>
+            {t('parent_guardian_link')}
           </Text>
           <View
             style={[

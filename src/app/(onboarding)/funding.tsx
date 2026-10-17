@@ -12,14 +12,22 @@ import { FormButton } from '@/components/ui/FormButton';
 import { useGamificationStore } from '@/store/gamificationStore';
 import { useCurrency } from '@/utils/currency';
 
+import { useExchangeRateStore } from '@/store/exchangeRateStore';
+
 export default function OnboardingFundingScreen() {
   const theme = useTheme();
   const router = useRouter();
   const store = useGamificationStore();
-  const { symbol: currencySymbol } = useCurrency();
+  const { currency, symbol: currencySymbol } = useCurrency();
+
+  const grantAmount = React.useMemo(() => {
+    if (currency === 'PHP') return 10000;
+    const converted = useExchangeRateStore.getState().convert(10000, 'PHP', currency);
+    return Math.round(converted) || 150;
+  }, [currency]);
 
   const handleFinish = () => {
-    store.grantOnboardingCash(10000);
+    store.grantOnboardingCash(grantAmount);
     router.replace('/(tabs)' as Href);
   };
 
@@ -51,10 +59,10 @@ export default function OnboardingFundingScreen() {
             <Animated.View entering={FadeInDown.delay(400).duration(600)}>
               <YStack alignItems="center" gap={Spacing[16]}>
                 <Text color={theme.text} fontSize={Typography.h1.fontSize} fontFamily={Typography.h1.fontFamily as any} textAlign="center">
-                  {currencySymbol}10,000 Granted!
+                  {currencySymbol}{grantAmount.toLocaleString()} Granted!
                 </Text>
                 <Text color={theme.textSecondary} fontSize={Typography.body.fontSize} fontFamily={Typography.body.fontFamily as any} textAlign="center" lineHeight={24}>
-                  We've deposited {currencySymbol}10,000 in your virtual portfolio. Use this to practice investing in real stocks, risk-free.
+                  We've deposited {currencySymbol}{grantAmount.toLocaleString()} in your virtual portfolio. Use this to practice investing in real stocks, risk-free.
                 </Text>
               </YStack>
             </Animated.View>

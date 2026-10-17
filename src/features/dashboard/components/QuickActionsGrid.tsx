@@ -4,6 +4,7 @@ import { PhosphorIcon, PhosphorIconName } from '@/components/ui/PhosphorIcon';
 import { Fonts } from '@/constants/theme';
 import { InteractivePressable } from '@/components/ui/InteractivePressable';
 import { useTheme } from '@/hooks/use-theme';
+import { useTranslation } from '@/localization';
 
 interface QuickActionsGridProps {
   onPressSavings: () => void;
@@ -19,31 +20,32 @@ export function QuickActionsGrid({
   onPressLearn,
 }: QuickActionsGridProps) {
   const theme = useTheme();
+  const { isFilipino } = useTranslation();
 
   const BRAND_ACCENT = '#10B981';
 
   const actions: { id: string; title: string; icon: PhosphorIconName; onPress: () => void }[] = [
     {
       id: 'savings',
-      title: 'Savings',
+      title: isFilipino ? 'Ipon' : 'Savings',
       icon: 'PiggyBank',
       onPress: onPressSavings,
     },
     {
       id: 'set_goals',
-      title: 'Set Goals',
+      title: isFilipino ? 'Layunin' : 'Set Goals',
       icon: 'Target',
       onPress: onPressSetGoals,
     },
     {
       id: 'games',
-      title: 'Mini Games',
+      title: isFilipino ? 'Palaro' : 'Mini Games',
       icon: 'GameController',
       onPress: onPressMiniGames,
     },
     {
       id: 'learn',
-      title: 'Learn',
+      title: isFilipino ? 'Matuto' : 'Learn',
       icon: 'GraduationCap',
       onPress: onPressLearn,
     },

@@ -91,13 +91,24 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   },
 
   setCurrency: async (currency: SupportedCurrency) => {
-    set({ currency, currencyMigratedToPhp: true });
-    await savePreferences(get());
+    const oldCurrency = get().currency;
+    if (oldCurrency !== currency) {
+      try {
+        const { useGamificationStore } = require('@/store/gamificationStore');
+        useGamificationStore.getState().convertAllMonetaryValues(oldCurrency, currency);
+      } catch (err) {
+        console.warn('[PreferencesStore] Failed to convert balances on currency change:', err);
+      }
+      set({ currency, currencyMigratedToPhp: true });
+      await savePreferences(get());
+    }
   },
 
   setLanguage: async (language: string) => {
     set({ language });
-    await savePreferences(get());
+    const current = get();
+    await savePreferences(current);
+    syncScheduledNotificationsAsync(current).catch(() => {});
   },
 
   setGuardianInfo: async (email: string, linked: boolean) => {

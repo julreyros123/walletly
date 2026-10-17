@@ -28,6 +28,7 @@ import { QuickExpenseModal } from '@/features/dashboard/components/QuickExpenseM
 import { ASSET_DATA } from '@/constants/assets';
 import { useMarketStore } from '@/store/marketStore';
 import { useCurrency } from '@/utils/currency';
+import { useTranslation } from '@/localization';
 
 export const getMasteryAvatarDetails = (title: string) => {
   switch (title) {
@@ -70,6 +71,7 @@ export const getMasteryAvatarDetails = (title: string) => {
 };
 
 export default function DashboardScreen() {
+  const { t, isFilipino } = useTranslation();
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const router = useRouter();
@@ -77,7 +79,7 @@ export default function DashboardScreen() {
   const user = useAuthStore((state) => state.user);
   const isAuthLoading = useAuthStore((state) => state.isLoading);
   const marketAssets = useMarketStore((state) => state.assets);
-  const { symbol: currencySymbol } = useCurrency();
+  const { currency: currencyCode, symbol: currencySymbol } = useCurrency();
 
   useFocusEffect(
     React.useCallback(() => {
@@ -137,8 +139,8 @@ export default function DashboardScreen() {
   const isClaimedToday = store.lastClaimedRewardDate === todayISO;
 
   const cycleMetrics = useMemo(
-    () => getCycleMetrics(store),
-    [store.totalBudget, store.budgetType, store.loggedExpenses]
+    () => getCycleMetrics(store, currencyCode),
+    [store.totalBudget, store.budgetType, store.loggedExpenses, currencyCode]
   );
   const displayLimit = cycleMetrics.limit;
   const displaySpent = cycleMetrics.spent;
@@ -154,10 +156,10 @@ export default function DashboardScreen() {
 
   const cardTitle =
     currentCycle === 'daily'
-      ? "TODAY'S BAON"
+      ? (isFilipino ? "BAON NGAYON" : "TODAY'S BAON")
       : currentCycle === 'weekly'
-      ? "THIS WEEK'S ALLOWANCE"
-      : 'CURRENT BALANCE';
+      ? (isFilipino ? "LINGGUHANG BAON" : "THIS WEEK'S ALLOWANCE")
+      : (isFilipino ? "KASALUKUYANG BALANSE" : 'CURRENT BALANCE');
 
   const currentLevelXP = (store.level - 1) * 100;
   const nextLevelThreshold = store.level * 100;
@@ -369,10 +371,10 @@ export default function DashboardScreen() {
             <View style={styles.activityHeader}>
               <View style={styles.activityTitleCol}>
                 <Text style={[styles.activityTitle, { color: theme.text }]}>
-                  Recent Activity
+                  {t('recent_activity')}
                 </Text>
                 <Text style={[styles.activitySubtitle, { color: theme.textSecondary }]}>
-                  This month: <Text style={{ color: theme.text, fontFamily: Fonts.bold }}>-{currencySymbol}{totalSpent.toLocaleString()}</Text>
+                  {isFilipino ? 'Ngayong buwan: ' : 'This month: '}<Text style={{ color: theme.text, fontFamily: Fonts.bold }}>-{currencySymbol}{totalSpent.toLocaleString()}</Text>
                 </Text>
               </View>
 
@@ -380,7 +382,7 @@ export default function DashboardScreen() {
                 onPress={() => router.push('/(tabs)/budget' as Href)}
                 style={styles.seeAllBtn}
               >
-                <Text style={styles.seeAllText}>See All</Text>
+                <Text style={styles.seeAllText}>{isFilipino ? 'Tingnan Lahat' : 'See All'}</Text>
               </InteractivePressable>
             </View>
 
@@ -393,7 +395,7 @@ export default function DashboardScreen() {
                   weight="duotone"
                 />
                 <Text style={[styles.emptyActivityText, { color: theme.textSecondary }]}>
-                  No transactions recorded yet.
+                  {t('no_transactions')}
                 </Text>
               </View>
             ) : (

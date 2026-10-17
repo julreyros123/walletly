@@ -1,6 +1,7 @@
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+import { getTranslation } from '@/localization';
 
 function getPreferencesState() {
   try {
@@ -20,9 +21,11 @@ if (Platform.OS !== 'web') {
   try {
     Notifications = require('expo-notifications');
 
-    // Set how notifications are handled when the app is foregrounded
+    // Set how notifications are handled when the app is foregrounded or active
+    // Returning true for shouldShowAlert / shouldShowBanner ensures heads-up banner & status bar display
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
+        shouldShowAlert: true,
         shouldShowBanner: true,
         shouldShowList: true,
         shouldPlaySound: true,
@@ -31,7 +34,7 @@ if (Platform.OS !== 'web') {
     });
   } catch (e) {
     if (__DEV__) {
-      console.log('[Notifications] Push notifications are not available in this environment (e.g. Expo Go)');
+      console.log('[Notifications] Notifications module not available in this environment');
     }
   }
 }
@@ -39,39 +42,129 @@ if (Platform.OS !== 'web') {
 export const NOTIFICATION_IDS = {
   STREAK_REMINDER: 'cbudget_daily_streak_reminder',
   WEEKLY_REPORT: 'cbudget_weekly_financial_report',
+  BUDGET_GUARD: 'cbudget_budget_guard_alert',
+  TEST_NOTIFICATION: 'cbudget_test_notification',
 } as const;
 
+export const NOTIFICATION_CHANNELS = {
+  DEFAULT: 'default',
+  REMINDERS: 'reminders',
+  BUDGET_GUARD: 'budget-guard',
+} as const;
+
+/**
+ * Creates system notification channels on Android.
+ * Essential for Android 8.0+ (API 26+) so notifications pop up outside the app in the status bar and lock screen.
+ */
+export async function initNotificationChannelsAsync(): Promise<void> {
+  if (!Notifications || Platform.OS !== 'android') return;
+
+  try {
+    // 1. Default channel for general notifications
+    await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNELS.DEFAULT, {
+      name: 'General Alerts & Updates',
+      description: 'Account activity, achievements, and system announcements',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#10B981', // Emerald Green
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      sound: 'default',
+      bypassDnd: false,
+    });
+
+    // 2. Reminders channel for daily streak and weekly recap
+    await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNELS.REMINDERS, {
+      name: 'Daily Streaks & Reminders',
+      description: 'Daily expense logging nudges, streak savers, and weekly summaries',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 300, 200, 300],
+      lightColor: '#EF4444', // Red/Orange for streak fire
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      sound: 'default',
+      bypassDnd: false,
+    });
+
+    // 3. Smart Guard channel for urgent budget overspending warnings
+    await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNELS.BUDGET_GUARD, {
+      name: 'Smart Budget Guard',
+      description: 'High-priority alerts when spending exceeds daily or category budgets',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 400, 200, 400],
+      lightColor: '#F59E0B', // Amber
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      sound: 'default',
+      bypassDnd: false,
+    });
+
+    if (__DEV__) {
+      console.log('[Notifications] Android system notification channels registered successfully.');
+    }
+  } catch (err) {
+    console.warn('[Notifications] Failed to set notification channels:', err);
+  }
+}
+
+/**
+ * Checks if the user has granted notification permissions.
+ */
+export async function checkNotificationPermissionsAsync(): Promise<boolean> {
+  if (!Notifications) return false;
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    return status === 'granted';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Requests native system notification permissions (including Android 13+ POST_NOTIFICATIONS).
+ */
+export async function requestNotificationPermissionsAsync(): Promise<boolean> {
+  if (!Notifications) return false;
+
+  try {
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    if (existingStatus === 'granted') {
+      return true;
+    }
+
+    const { status } = await Notifications.requestPermissionsAsync({
+      ios: {
+        allowAlert: true,
+        allowBadge: true,
+        allowSound: true,
+      },
+    });
+
+    return status === 'granted';
+  } catch (err) {
+    console.warn('[Notifications] Error requesting notification permissions:', err);
+    return false;
+  }
+}
+
+/**
+ * Registers device for remote push notifications (Supabase / Expo push server).
+ */
 export async function registerForPushNotificationsAsync(): Promise<string | undefined> {
   if (!Notifications || Constants.appOwnership === 'expo') {
     if (__DEV__) {
-      console.log('[Notifications] Push notifications are skipped in Expo Go environment.');
+      console.log('[Notifications] Remote push notifications are skipped in Expo Go environment.');
     }
     return undefined;
   }
 
-  let token;
+  // Always ensure local notification channels are initialized
+  await initNotificationChannelsAsync();
 
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#10B981', // Emerald Green for Walletly
-    });
-  }
+  let token: string | undefined;
 
   if (Device.isDevice) {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-
-    if (finalStatus !== 'granted') {
+    const granted = await requestNotificationPermissionsAsync();
+    if (!granted) {
       if (__DEV__) console.log('[Notifications] Push notification permissions not granted.');
-      return;
+      return undefined;
     }
 
     try {
@@ -80,7 +173,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
 
       if (!projectId) {
         if (__DEV__) console.log('[Notifications] Project ID not found. Ensure eas.projectId is configured in app.json.');
-        return;
+        return undefined;
       }
 
       token = (
@@ -101,28 +194,100 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
 }
 
 /**
+ * Dispatches an immediate or delayed native phone notification.
+ * Appears in the system status bar, lock screen, and notification drawer outside the app.
+ */
+export async function sendPhoneNotificationAsync({
+  title,
+  body,
+  data = {},
+  channelId = NOTIFICATION_CHANNELS.DEFAULT,
+  delaySeconds = 0,
+}: {
+  title: string;
+  body: string;
+  data?: Record<string, any>;
+  channelId?: string;
+  delaySeconds?: number;
+}): Promise<string | null> {
+  if (!Notifications) return null;
+
+  try {
+    // Check master user preference
+    const prefs = getPreferencesState();
+    if (!prefs.notificationsEnabled) {
+      if (__DEV__) console.log('[Notifications] Notification suppressed because notificationsEnabled is false.');
+      return null;
+    }
+
+    // Ensure permissions
+    const hasPermission = await checkNotificationPermissionsAsync();
+    if (!hasPermission) {
+      const granted = await requestNotificationPermissionsAsync();
+      if (!granted) return null;
+    }
+
+    // Ensure channels exist
+    await initNotificationChannelsAsync();
+
+    let trigger: any = null;
+    if (delaySeconds > 0) {
+      trigger = {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: Math.max(1, Math.round(delaySeconds)),
+        channelId,
+      };
+    }
+
+    const notificationId = await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        sound: true,
+        priority: Notifications.AndroidNotificationPriority?.MAX ?? 'max',
+        data,
+      },
+      trigger,
+    });
+
+    if (__DEV__) {
+      console.log(`[Notifications] Dispatched native phone notification (${notificationId}): ${title}`);
+    }
+
+    return notificationId;
+  } catch (error) {
+    console.warn('[Notifications] Failed to send phone notification:', error);
+    return null;
+  }
+}
+
+/**
  * Schedules a daily reminder at 8:00 PM to log expenses and protect the user's streak.
+ * Fires via Android AlarmManager / iOS APNS outside the app when locked or closed.
  */
 export async function scheduleStreakReminderAsync(hour = 20, minute = 0): Promise<string | null> {
   if (!Notifications) return null;
 
   try {
-    // Cancel existing streak reminder first to avoid duplicates
+    await initNotificationChannelsAsync();
     await cancelNotificationAsync(NOTIFICATION_IDS.STREAK_REMINDER);
+
+    const triggerType = Notifications.SchedulableTriggerInputTypes?.DAILY ?? 'daily';
 
     const notificationId = await Notifications.scheduleNotificationAsync({
       identifier: NOTIFICATION_IDS.STREAK_REMINDER,
       content: {
-        title: '🔥 Keep Your Streak Alive!',
-        body: "Don't break your momentum! Log today's allowance or complete a quick quiz in CBudget.",
+        title: getTranslation('streak_notification_title'),
+        body: getTranslation('streak_notification_body'),
         sound: true,
+        priority: Notifications.AndroidNotificationPriority?.MAX ?? 'max',
         data: { screen: '/(tabs)/budget' },
       },
       trigger: {
-        type: 'daily',
+        type: triggerType,
         hour,
         minute,
-        channelId: 'default',
+        channelId: NOTIFICATION_CHANNELS.REMINDERS,
       },
     });
 
@@ -136,28 +301,32 @@ export async function scheduleStreakReminderAsync(hour = 20, minute = 0): Promis
 
 /**
  * Schedules a weekly financial recap notification every Sunday at 6:00 PM.
+ * Fires outside the app on the phone lock screen and notification tray.
  */
 export async function scheduleWeeklyReportAsync(weekday = 1, hour = 18, minute = 0): Promise<string | null> {
   if (!Notifications) return null;
 
   try {
-    // Cancel existing weekly report reminder first
+    await initNotificationChannelsAsync();
     await cancelNotificationAsync(NOTIFICATION_IDS.WEEKLY_REPORT);
+
+    const triggerType = Notifications.SchedulableTriggerInputTypes?.WEEKLY ?? 'weekly';
 
     const notificationId = await Notifications.scheduleNotificationAsync({
       identifier: NOTIFICATION_IDS.WEEKLY_REPORT,
       content: {
-        title: '📊 Your Weekly Budget Summary is Ready',
-        body: 'Check out your spending habits and see how much you saved this week!',
+        title: getTranslation('weekly_notification_title'),
+        body: getTranslation('weekly_notification_body'),
         sound: true,
+        priority: Notifications.AndroidNotificationPriority?.MAX ?? 'max',
         data: { screen: '/(tabs)/profile' },
       },
       trigger: {
-        type: 'weekly',
+        type: triggerType,
         weekday, // 1 = Sunday
         hour,
         minute,
-        channelId: 'default',
+        channelId: NOTIFICATION_CHANNELS.REMINDERS,
       },
     });
 
@@ -215,6 +384,9 @@ export async function syncScheduledNotificationsAsync(prefs?: {
     await cancelAllNotificationsAsync();
     return;
   }
+
+  // Ensure channels and permissions are up to date
+  await initNotificationChannelsAsync();
 
   // Manage Streak Reminders
   if (streakRemindersEnabled) {

@@ -26,10 +26,27 @@ export interface SetBudgetModalProps {
   onSave: (cycle: BudgetCycleType, amount: number) => void;
 }
 
-const PRESETS: Record<BudgetCycleType, number[]> = {
-  daily: [50, 100, 150, 200, 300, 500],
-  weekly: [500, 1000, 1500, 2000, 3000, 5000],
-  monthly: [3000, 5000, 8000, 10000, 15000, 20000],
+const PRESETS_BY_CURRENCY: Record<string, Record<BudgetCycleType, number[]>> = {
+  PHP: {
+    daily: [50, 100, 150, 200, 300, 500],
+    weekly: [500, 1000, 1500, 2000, 3000, 5000],
+    monthly: [3000, 5000, 8000, 10000, 15000, 20000],
+  },
+  USD: {
+    daily: [2, 5, 10, 15, 20, 30],
+    weekly: [25, 50, 75, 100, 150, 250],
+    monthly: [100, 150, 200, 300, 500, 800],
+  },
+  EUR: {
+    daily: [2, 5, 10, 15, 20, 30],
+    weekly: [25, 50, 75, 100, 150, 250],
+    monthly: [100, 150, 200, 300, 500, 800],
+  },
+  GBP: {
+    daily: [2, 5, 10, 15, 20, 25],
+    weekly: [20, 40, 60, 80, 120, 200],
+    monthly: [80, 120, 180, 250, 400, 650],
+  },
 };
 
 const CYCLE_META: Record<BudgetCycleType, { title: string; subtitle: string; icon: string }> = {
@@ -63,6 +80,10 @@ export function SetBudgetModal({
 
   const [selectedCycle, setSelectedCycle] = useState<BudgetCycleType>(currentCycle);
   const [amountInput, setAmountInput] = useState<string>('');
+
+  const activeCurrencyKey =
+    currencySymbol === '$' ? 'USD' : currencySymbol === '€' ? 'EUR' : currencySymbol === '£' ? 'GBP' : 'PHP';
+  const cyclePresets = (PRESETS_BY_CURRENCY[activeCurrencyKey] || PRESETS_BY_CURRENCY.PHP)[selectedCycle];
 
   useEffect(() => {
     if (visible) {
@@ -314,7 +335,7 @@ export function SetBudgetModal({
                 Quick Presets
               </Text>
               <View style={styles.presetsGrid}>
-                {PRESETS[selectedCycle].map((val) => {
+                {cyclePresets.map((val) => {
                   const isCurrent = parsedAmount === val;
                   return (
                     <TouchableOpacity

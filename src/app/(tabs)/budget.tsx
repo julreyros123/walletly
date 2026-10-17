@@ -172,8 +172,8 @@ export default function BudgetScreen() {
 
   // Dynamic budget metrics based on current cycle (daily, weekly, or monthly)
   const cycleMetrics = useMemo(
-    () => getCycleMetrics(store),
-    [store.totalBudget, store.budgetType, store.loggedExpenses]
+    () => getCycleMetrics(store, currencyCode),
+    [store.totalBudget, store.budgetType, store.loggedExpenses, currencyCode]
   );
   const effectiveBudget = cycleMetrics.limit;
   const effectiveSpent = cycleMetrics.spent;
