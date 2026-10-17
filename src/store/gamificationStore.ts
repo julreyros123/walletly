@@ -564,6 +564,7 @@ async function persistState(state: GamificationState, specificUserId?: string | 
       completedLessonIds: state.completedLessonIds,
       lastDividendClaimDates: state.lastDividendClaimDates,
       guestSessionDate: state.guestSessionDate,
+      currency: state.currency || 'PHP',
       _savedAt: Date.now(),
     };
     await storage.setItem(storageKey, JSON.stringify(dataToSave));
@@ -2144,16 +2145,16 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
           supabase
             .from('transactions')
             .select('*')
-            .or(`user_id.eq.${userId},owner_id.eq.${userId}`)
+            .eq('user_id', userId)
             .order('transaction_date', { ascending: false }),
           supabase
             .from('budgets')
             .select('*')
-            .or(`user_id.eq.${userId},owner_id.eq.${userId}`),
+            .eq('user_id', userId),
           supabase
             .from('saving_challenges')
             .select('*')
-            .or(`user_id.eq.${userId},owner_id.eq.${userId}`),
+            .eq('user_id', userId),
         ]);
 
         if (generation !== hydrationGeneration) {
@@ -2331,11 +2332,8 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
           set(nextUpdates);
         }
 
-        // Allow cloud backups only once we know we won't clobber real cloud data:
-        // either the cloud row was read, or this device already had its own cache.
-        if (snapshotRead || hasLocalCache) {
-          cloudReadyUserId = userId;
-        }
+        // Allow cloud backups for this authenticated user once initial hydration completes
+        cloudReadyUserId = userId;
 
         if (restoredFromSnapshot || Object.keys(nextUpdates).length > 0 || cloudReadyUserId === userId) {
           persistState(get(), userId);

@@ -318,10 +318,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     }
 
-    // Clear local session keys and remaining sync items
+    // Clear local auth session credentials (keeps user's gamification data intact on disk)
     await storage.deleteItem(AUTH_TOKEN_KEY);
     await storage.deleteItem(USER_KEY);
-    await syncQueue.clear();
 
     // Also sign out of Native Google Sign-In so future sign-in prompts for account selection
     const googleModule = getGoogleSigninModule();
@@ -337,10 +336,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await supabase.auth.signOut();
     }
 
-    setActiveGamificationUser(null);
-    useGamificationStore.getState().resetAllData(0);
+    // Transition cleanly to guest state without destroying the user's saved data
+    setActiveGamificationUser('guest');
     set({ token: null, user: null, isAuthenticated: false });
-    useGamificationStore.getState().hydrate('guest');
+    await useGamificationStore.getState().hydrate('guest');
   },
 
   deleteAccount: async () => {
