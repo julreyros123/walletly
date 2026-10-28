@@ -385,7 +385,7 @@ interface GamificationState {
   // Core Actions
   addXP: (amount: number) => void;
   checkAndUpdateStreak: () => void;
-  claimDailyReward: () => { success: boolean; xp: number; cash: number };
+  claimDailyReward: () => { success: boolean; xp: number; cash: number; day?: number };
   debugSimulateNextDay: () => void;
   convertAllMonetaryValues: (fromCurrency: string, toCurrency: string) => void;
   unlockAchievement: (achievementId: string) => void;
@@ -710,7 +710,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
   },
 
   claimDailyReward: () => {
-    let result = { success: false, xp: 0, cash: 0 };
+    let result = { success: false, xp: 0, cash: 0, day: 1 };
     set((state) => {
       const today = getLocalDateString();
       if (state.lastClaimedRewardDate === today) {
@@ -740,7 +740,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       if (dayInCycle === 3) cashReward = 500;
       if (dayInCycle === 7) cashReward = 2000;
 
-      result = { success: true, xp: xpReward, cash: cashReward };
+      result = { success: true, xp: xpReward, cash: cashReward, day: dayInCycle };
 
       const newXp = state.xp + xpReward;
       let newLevel = 1;
@@ -759,6 +759,25 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         }
       }
 
+      let updatedExpenses = state.loggedExpenses;
+      let rewardTransactionId: string | null = null;
+      if (cashReward > 0) {
+        rewardTransactionId = generateUUID();
+        const now = new Date();
+        const formattedTime = format12HourTime(now);
+        const rewardIncome: Expense = {
+          id: rewardTransactionId,
+          name: dayInCycle === 7 ? 'Daily Check-In: 7-Day Streak Bonus' : `Daily Check-In Reward (Day ${dayInCycle})`,
+          category: 'Rewards',
+          amount: cashReward,
+          date: today,
+          time: formattedTime,
+          notes: dayInCycle === 7 ? 'Completed 7-day sign-in streak bonus reward' : `Day ${dayInCycle} daily login bonus`,
+          type: 'income',
+        };
+        updatedExpenses = [rewardIncome, ...state.loggedExpenses];
+      }
+
       const next = {
         streakDays: effectiveStreak,
         lastClaimedRewardDate: today,
@@ -766,10 +785,41 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         xp: newXp,
         level: newLevel,
         virtualBalance: state.virtualBalance + cashReward,
+        loggedExpenses: updatedExpenses,
         learningScore: Math.min(100, state.learningScore + dayInCycle * 2),
         achievements: updatedAchievements,
       };
       persistState({ ...state, ...next });
+
+      if (rewardTransactionId && cashReward > 0) {
+        (async () => {
+          try {
+            const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+            if (session?.user?.id && session.user.id !== 'guest') {
+              await syncQueue.enqueue({
+                table: 'transactions',
+                action: 'upsert',
+                payload: {
+                  transaction_id: rewardTransactionId,
+                  user_id: session.user.id,
+                  owner_id: session.user.id,
+                  type: 'income',
+                  category: 'Rewards',
+                  category_id: 'Rewards',
+                  amount: cashReward,
+                  description: dayInCycle === 7 ? 'Daily Check-In: 7-Day Streak Bonus' : `Daily Check-In Reward (Day ${dayInCycle})`,
+                  transaction_date: toISODate(today),
+                  date: toISODate(today),
+                },
+                options: { onConflict: 'transaction_id' },
+              });
+            }
+          } catch (err) {
+            console.warn('[GamificationStore] Daily reward transaction sync enqueue error:', err);
+          }
+        })();
+      }
+
       return next;
     });
     return result;

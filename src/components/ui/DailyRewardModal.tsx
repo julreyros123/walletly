@@ -231,12 +231,30 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
   const [claimedReward, setClaimedReward] = useState<{ xp: number; cash: number; day: number } | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
 
-  // Guarantee it begins at Day 1 (1 to 7 cycle)
-  const currentStreak = Math.max(1, store.streakDays || 1);
-  const currentDayInCycle = ((currentStreak - 1) % 7) + 1;
-
   const today = getLocalDateString();
   const isAlreadyClaimedToday = store.lastClaimedRewardDate === today;
+
+  // Compute effective streak safely even if checkAndUpdateStreak hasn't executed yet today
+  let effectiveStreak = store.streakDays || 1;
+  if (!isAlreadyClaimedToday && store.lastActiveDate && store.lastActiveDate !== today) {
+    const [y1, m1, d1] = store.lastActiveDate.split('-').map(Number);
+    const [y2, m2, d2] = today.split('-').map(Number);
+    const dActive = new Date(y1, m1 - 1, d1);
+    const dToday = new Date(y2, m2 - 1, d2);
+    const diffTime = dToday.getTime() - dActive.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 1 || diffDays === 2) {
+      effectiveStreak = (store.streakDays || 0) + 1;
+    } else if (diffDays > 2) {
+      effectiveStreak = 1;
+    }
+  }
+
+  // Guarantee it begins at Day 1 (1 to 7 cycle)
+  const currentStreak = Math.max(1, effectiveStreak);
+  const currentDayInCycle = ((currentStreak - 1) % 7) + 1;
+  const nextDayInCycle = (currentDayInCycle % 7) + 1;
 
   const handleClaim = () => {
     if (isAlreadyClaimedToday) return;
@@ -245,7 +263,8 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
     const res = store.claimDailyReward();
     if (!res.success) return;
 
-    setClaimedReward({ xp: res.xp, cash: res.cash, day: currentDayInCycle });
+    const claimedDay = res.day ?? currentDayInCycle;
+    setClaimedReward({ xp: res.xp, cash: res.cash, day: claimedDay });
     // 1. Automatically close the 7-day grid modal
     onClose();
     // 2. Open the dedicated "You're Checked In" shining celebration modal
@@ -368,9 +387,18 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                 {/* 7-Day Reward Grid */}
                 <XStack flexWrap="wrap" justifyContent="space-between" width="100%" gap={8}>
                   {REWARD_SCHEDULE.map((item) => {
-                    const isClaimed = item.day < currentDayInCycle || (item.day === currentDayInCycle && isAlreadyClaimedToday);
+                    // Next consecutive day (e.g., Day 1 after Day 7 is claimed) unlocks tomorrow
+                    const isNextUp = isAlreadyClaimedToday && item.day === nextDayInCycle;
                     const isReadyToClaim = item.day === currentDayInCycle && !isAlreadyClaimedToday;
-                    const isNextUp = isAlreadyClaimedToday && item.day === ((currentDayInCycle % 7) + 1);
+                    // Claimed check:
+                    // If isNextUp is true (e.g. Day 1 when Day 7 has been claimed today), it is NOT claimed!
+                    // Otherwise, if Day 7 is claimed today, all other days (2-7) are marked completed.
+                    const isClaimed =
+                      !isNextUp &&
+                      ((item.day === currentDayInCycle && isAlreadyClaimedToday) ||
+                        (currentDayInCycle === 7 && isAlreadyClaimedToday
+                          ? item.day > 1
+                          : item.day < currentDayInCycle));
                     const isFuture = !isClaimed && !isReadyToClaim && !isNextUp;
                     const isDay7 = item.day === 7;
 
@@ -484,14 +512,14 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                   accessibilityRole="button"
                   accessibilityLabel={
                     isAlreadyClaimedToday
-                      ? `Day ${currentDayInCycle} claimed. Day ${((currentDayInCycle % 7) + 1)} unlocks tomorrow.`
+                      ? `Day ${currentDayInCycle} claimed. Day ${nextDayInCycle} unlocks tomorrow.`
                       : `Claim Day ${currentDayInCycle} Reward`
                   }
                   accessibilityState={{ disabled: isAlreadyClaimedToday }}
                 >
                   <Text color={theme.text} fontSize={14.5} fontFamily={Fonts.bold}>
                     {isAlreadyClaimedToday
-                      ? `Day ${currentDayInCycle} Claimed ✓ (Day ${((currentDayInCycle % 7) + 1)} Unlocks Tomorrow)`
+                      ? `Day ${currentDayInCycle} Claimed ✓ (Day ${nextDayInCycle} Unlocks Tomorrow)`
                       : `Claim Day ${currentDayInCycle} Reward ✨`}
                   </Text>
                 </TouchableOpacity>
