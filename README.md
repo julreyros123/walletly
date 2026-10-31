@@ -1,8 +1,28 @@
-# Welcome to your Expo app 👋
+# Cbudget (Walletly) 📱💳
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Smart personal finance and budgeting mobile application built with Expo (SDK 56), React Native, and Supabase.
 
-## Get started
+---
+
+## 📥 Download & Installation (Android)
+
+You can download and install the latest pre-compiled Android APK directly on your device:
+
+| Architecture | Package | Direct Download |
+| :--- | :--- | :--- |
+| **Android (Universal)** | `com.julreyros123.cbudget` | [⬇️ **Download cbudget-release.apk**](https://github.com/julreyros123/walletly/releases/download/v1.0.0/cbudget-release.apk) |
+
+> 🔗 You can also browse all versions and assets on the [GitHub Releases Page](https://github.com/julreyros123/walletly/releases/latest).
+
+### How to Install on Android:
+1. **Download**: Tap the [Download cbudget-release.apk](https://github.com/julreyros123/walletly/releases/download/v1.0.0/cbudget-release.apk) link on your Android device.
+2. **Open the File**: Open your device's **Downloads** folder or tap the completed download notification.
+3. **Allow Unknown Apps**: If prompted with *"For your security, your phone is not allowed to install unknown apps from this source"*, tap **Settings** and switch **Allow from this source** to ON.
+4. **Complete Installation**: Tap **Install**, then open **Cbudget**.
+
+---
+
+## 🛠️ Development & Getting Started
 
 1. Install dependencies
 
