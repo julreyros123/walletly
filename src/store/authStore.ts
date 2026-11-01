@@ -35,7 +35,7 @@ function getGoogleSigninModule() {
       googleSigninModule.GoogleSignin.configure({
         webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '',
         scopes: ['email', 'profile'],
-        offlineAccess: true,
+        offlineAccess: false,
       });
       googleSigninConfigured = true;
     }
@@ -228,8 +228,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           params = Object.fromEntries(new URLSearchParams(query));
         }
 
-        if (params.code) {
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(params.code);
+        const rawCode = params.code ? params.code.split('#')[0] : undefined;
+        if (rawCode) {
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(rawCode);
           if (exchangeError) throw exchangeError;
         } else if (params.access_token && params.refresh_token) {
           const { error: sessionError } = await supabase.auth.setSession({
@@ -277,8 +278,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           params = Object.fromEntries(new URLSearchParams(query));
         }
 
-        if (params.code) {
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(params.code);
+        const rawCode = params.code ? params.code.split('#')[0] : undefined;
+        if (rawCode) {
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(rawCode);
           if (exchangeError) throw exchangeError;
         } else if (params.access_token && params.refresh_token) {
           const { error: sessionError } = await supabase.auth.setSession({

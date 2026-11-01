@@ -138,7 +138,10 @@ export default function WelcomeScreen() {
     setLoadingType('google');
     try {
       await loginWithGoogle();
-      const currentUser = useAuthStore.getState().user;
+      const { user: currentUser, isAuthenticated } = useAuthStore.getState();
+      if (!isAuthenticated || !currentUser) {
+        return;
+      }
       const isNewAccount = !currentUser?.isOnboarded || !currentUser?.name || currentUser.name === 'User' || !currentUser?.age;
       if (isNewAccount && currentUser?.id !== 'guest') {
         router.replace('/(onboarding)' as Href);
@@ -160,7 +163,10 @@ export default function WelcomeScreen() {
     setLoadingType('facebook');
     try {
       await loginWithFacebook();
-      const currentUser = useAuthStore.getState().user;
+      const { user: currentUser, isAuthenticated } = useAuthStore.getState();
+      if (!isAuthenticated || !currentUser) {
+        return;
+      }
       const isNewAccount = !currentUser?.isOnboarded || !currentUser?.name || currentUser.name === 'User' || !currentUser?.age;
       if (isNewAccount && currentUser?.id !== 'guest') {
         router.replace('/(onboarding)' as Href);

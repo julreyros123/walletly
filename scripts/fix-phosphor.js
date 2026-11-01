@@ -176,4 +176,20 @@ try {
   console.warn('[postinstall] google-signin patch warning:', e.message);
 }
 
+// 5. Fix @react-native-google-signin/google-signin package.json exports for Expo config plugin
+try {
+  const gsigninPkgPath = path.resolve(__dirname, '../node_modules/@react-native-google-signin/google-signin/package.json');
+  if (fs.existsSync(gsigninPkgPath)) {
+    const raw = fs.readFileSync(gsigninPkgPath, 'utf8');
+    const pkg = JSON.parse(raw);
+    if (pkg.exports && !pkg.exports['./app.plugin']) {
+      pkg.exports['./app.plugin'] = './app.plugin.js';
+      fs.writeFileSync(gsigninPkgPath, JSON.stringify(pkg, null, 2) + '\n');
+      console.log('[postinstall] Added ./app.plugin to google-signin exports');
+    }
+  }
+} catch (e) {
+  console.warn('[postinstall] google-signin package.json patch warning:', e.message);
+}
+
 

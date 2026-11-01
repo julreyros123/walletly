@@ -2,8 +2,8 @@
   "expo": {
     "name": "Cbudget",
     "slug": "cbudget",
-    "version": "1.0.1",
-    "runtimeVersion": "1.0.1",
+    "version": "1.0.2",
+    "runtimeVersion": "1.0.2",
     "updates": {
       "url": "https://u.expo.dev/9cdb044d-ef95-4b1a-9a6a-183275403052",
       "fallbackToCacheTimeout": 0
@@ -55,7 +55,7 @@
       "expo-secure-store",
       "expo-sqlite",
       "expo-localization",
-      "@react-native-google-signin/google-signin",
+      "@react-native-google-signin/google-signin/app.plugin.js",
       "expo-audio",
       "expo-notifications",
       "expo-asset",

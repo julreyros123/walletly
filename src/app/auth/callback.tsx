@@ -24,8 +24,9 @@ export default function AuthCallbackScreen() {
         const url = incomingUrl || (await Linking.getInitialURL());
 
         // 1. If PKCE code parameter exists
-        if (params.code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(params.code);
+        const rawCode = params.code ? params.code.split('#')[0] : undefined;
+        if (rawCode) {
+          const { error } = await supabase.auth.exchangeCodeForSession(rawCode);
           if (error) {
             console.warn('[AuthCallback] Exchange code error:', error.message);
           }
