@@ -177,6 +177,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             token: idToken,
           });
           if (error) throw error;
+          await get().hydrate();
           return;
         } else {
           console.warn('[Auth] Google sign in did not return success response:', response);
@@ -193,12 +194,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             if (__DEV__) console.log('[Auth] Google sign in operation in progress');
             return;
           }
-          if (errWithCode.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-            throw new Error('Google Play Services is not available or outdated on this device.');
-          }
         }
-        console.error('[Auth] Native Google Sign-In failed:', error);
-        throw error;
+        console.warn('[Auth] Native Google Sign-In not available or failed, falling back to browser OAuth:', error);
       }
     }
 
@@ -231,19 +228,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           params = Object.fromEntries(new URLSearchParams(query));
         }
 
-        if (params.access_token && params.refresh_token) {
+        if (params.code) {
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(params.code);
+          if (exchangeError) throw exchangeError;
+        } else if (params.access_token && params.refresh_token) {
           const { error: sessionError } = await supabase.auth.setSession({
             access_token: params.access_token,
             refresh_token: params.refresh_token,
           });
           if (sessionError) throw sessionError;
+        } else if (params.error || params.error_description) {
+          throw new Error(params.error_description || params.error || 'Google authentication failed');
         }
+
+        await get().hydrate();
       }
       return;
     }
   },
 
   loginWithFacebook: async () => {
+    if (!isSupabaseConfigured) {
+      throw new Error(
+        'Supabase is not configured. Please ensure EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY are set in your environment.'
+      );
+    }
     const redirectUrl = Linking.createURL('auth/callback');
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'facebook',
@@ -268,13 +277,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           params = Object.fromEntries(new URLSearchParams(query));
         }
 
-        if (params.access_token && params.refresh_token) {
+        if (params.code) {
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(params.code);
+          if (exchangeError) throw exchangeError;
+        } else if (params.access_token && params.refresh_token) {
           const { error: sessionError } = await supabase.auth.setSession({
             access_token: params.access_token,
             refresh_token: params.refresh_token,
           });
           if (sessionError) throw sessionError;
+        } else if (params.error || params.error_description) {
+          throw new Error(params.error_description || params.error || 'Facebook authentication failed');
         }
+
+        await get().hydrate();
       }
     }
   },
