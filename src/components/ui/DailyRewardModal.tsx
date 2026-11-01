@@ -41,12 +41,14 @@ function CheckedInCelebrationModal({
   xp,
   cash,
   day,
+  currencySymbol = '₱',
   onDismiss,
 }: {
   visible: boolean;
   xp: number;
   cash: number;
   day: number;
+  currencySymbol?: string;
   onDismiss: () => void;
 }) {
   const theme = useTheme();
@@ -197,7 +199,7 @@ function CheckedInCelebrationModal({
                   {cash > 0 && (
                     <View style={getStyles(theme).earnedPillCash}>
                       <Text color="#34D399" fontSize={13} fontFamily={Fonts.bold}>
-                        +₱{cash} Sim Cash
+                        +{currencySymbol}{cash} Sim Cash
                       </Text>
                     </View>
                   )}
@@ -211,7 +213,7 @@ function CheckedInCelebrationModal({
                   accessibilityRole="button"
                   accessibilityLabel="Awesome, dismiss celebration"
                 >
-                  <Text color={theme.text} fontSize={14} fontFamily={Fonts.bold}>
+                  <Text color="#FFFFFF" fontSize={14} fontFamily={Fonts.bold}>
                     Awesome! ✨
                   </Text>
                 </TouchableOpacity>
@@ -234,26 +236,32 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
   const today = getLocalDateString();
   const isAlreadyClaimedToday = store.lastClaimedRewardDate === today;
 
-  // Compute effective streak safely even if checkAndUpdateStreak hasn't executed yet today
-  let effectiveStreak = store.streakDays || 1;
-  if (!isAlreadyClaimedToday && store.lastActiveDate && store.lastActiveDate !== today) {
-    const [y1, m1, d1] = store.lastActiveDate.split('-').map(Number);
+  // Calculate calendar days difference between today and the last claimed reward date
+  let daysSinceLastClaim = -1;
+  if (store.lastClaimedRewardDate) {
+    const [y1, m1, d1] = store.lastClaimedRewardDate.split('-').map(Number);
     const [y2, m2, d2] = today.split('-').map(Number);
-    const dActive = new Date(y1, m1 - 1, d1);
+    const dClaim = new Date(y1, m1 - 1, d1);
     const dToday = new Date(y2, m2 - 1, d2);
-    const diffTime = dToday.getTime() - dActive.getTime();
-    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 1 || diffDays === 2) {
-      effectiveStreak = (store.streakDays || 0) + 1;
-    } else if (diffDays > 2) {
-      effectiveStreak = 1;
-    }
+    const diffTime = dToday.getTime() - dClaim.getTime();
+    daysSinceLastClaim = Math.round(diffTime / (1000 * 60 * 60 * 24));
   }
 
-  // Guarantee it begins at Day 1 (1 to 7 cycle)
-  const currentStreak = Math.max(1, effectiveStreak);
-  const currentDayInCycle = ((currentStreak - 1) % 7) + 1;
+  // Determine current day in the 7-day reward cycle (1 to 7)
+  let currentDayInCycle: number;
+  if (isAlreadyClaimedToday) {
+    // Already claimed today: show today's claimed day
+    currentDayInCycle = store.lastClaimedDay || (((store.streakDays - 1) % 7) + 1) || 1;
+  } else if (daysSinceLastClaim === 1) {
+    // Claimed yesterday: advance consecutively to the next day in the 1..7 cycle
+    const prevDay = store.lastClaimedDay || store.streakDays || 1;
+    currentDayInCycle = ((prevDay - 1) % 7) + 2;
+    if (currentDayInCycle > 7) currentDayInCycle = 1;
+  } else {
+    // First time, or missed days: start at Day 1
+    currentDayInCycle = 1;
+  }
+
   const nextDayInCycle = (currentDayInCycle % 7) + 1;
 
   const handleClaim = () => {
@@ -470,7 +478,7 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                           ]}
                         >
                           <Text
-                            color={isReadyToClaim ? theme.text : isClaimed ? '#10B981' : isNextUp ? '#60A5FA' : theme.textSecondary}
+                            color={isReadyToClaim ? '#FFFFFF' : isClaimed ? '#10B981' : isNextUp ? '#60A5FA' : theme.textSecondary}
                             fontSize={8.5}
                             fontFamily={Fonts.bold}
                           >
@@ -517,7 +525,7 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                   }
                   accessibilityState={{ disabled: isAlreadyClaimedToday }}
                 >
-                  <Text color={theme.text} fontSize={14.5} fontFamily={Fonts.bold}>
+                  <Text color={isAlreadyClaimedToday ? '#10B981' : '#FFFFFF'} fontSize={14.5} fontFamily={Fonts.bold}>
                     {isAlreadyClaimedToday
                       ? `Day ${currentDayInCycle} Claimed ✓ (Day ${nextDayInCycle} Unlocks Tomorrow)`
                       : `Claim Day ${currentDayInCycle} Reward ✨`}
@@ -554,6 +562,7 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
           xp={claimedReward.xp}
           cash={claimedReward.cash}
           day={claimedReward.day}
+          currencySymbol={currencySymbol}
           onDismiss={handleDismissCelebration}
         />
       )}
@@ -684,8 +693,9 @@ const getStyles = (theme: any) => StyleSheet.create({
   },
   dayCardPast: {
     backgroundColor: theme.backgroundSelected,
-    borderColor: '#1E293B',
-    opacity: 0.85,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+    borderWidth: 1.2,
+    opacity: 0.9,
   },
   dayCardNextUp: {
     borderColor: 'rgba(59, 130, 246, 0.45)',
@@ -737,7 +747,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     justifyContent: 'center',
   },
   claimButton: {
-    backgroundColor: '#1D8348',
+    backgroundColor: '#10B981',
     width: '100%',
     paddingVertical: 13,
     borderRadius: 12,
@@ -746,7 +756,9 @@ const getStyles = (theme: any) => StyleSheet.create({
     marginTop: 4,
   },
   claimButtonChecked: {
-    backgroundColor: '#059669',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(16, 185, 129, 0.35)',
   },
   sunburstHeroBox: {
     width: 140,

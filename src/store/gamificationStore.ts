@@ -346,6 +346,7 @@ interface GamificationState {
   streakDays: number;
   lastActiveDate: string | null;
   lastClaimedRewardDate: string | null;
+  lastClaimedDay?: number;
   achievements: Achievement[];
 
   // Educational Subscores (0 - 100)
@@ -542,6 +543,7 @@ async function persistState(state: GamificationState, specificUserId?: string | 
       streakDays: state.streakDays,
       lastActiveDate: state.lastActiveDate,
       lastClaimedRewardDate: state.lastClaimedRewardDate,
+      lastClaimedDay: state.lastClaimedDay,
       achievements: state.achievements,
       budgetingScore: state.budgetingScore,
       learningScore: state.learningScore,
@@ -583,6 +585,7 @@ export type GamificationDataState = {
   streakDays: number;
   lastActiveDate: string | null;
   lastClaimedRewardDate: string | null;
+  lastClaimedDay?: number;
   achievements: Achievement[];
   budgetingScore: number;
   learningScore: number;
@@ -614,6 +617,7 @@ export const DEFAULT_GAMIFICATION_DATA: GamificationDataState = {
   streakDays: 1,
   lastActiveDate: null,
   lastClaimedRewardDate: null,
+  lastClaimedDay: undefined,
   achievements: [],
   budgetingScore: 0,
   learningScore: 0,
@@ -667,7 +671,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       }
 
       if (!state.lastActiveDate) {
-        const next = { streakDays: 1, lastActiveDate: today };
+        const next = { streakDays: state.streakDays || 1, lastActiveDate: today };
         persistState({ ...state, ...next });
         return next;
       }
@@ -684,24 +688,20 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
       if (diffDays === 1 || diffDays === 2) {
-        const nextStreak = (state.streakDays || 0) + 1;
-        let updatedAchievements = [...state.achievements];
-        if (nextStreak >= 7 && !updatedAchievements.some((a) => a.id === 'streak_7')) {
-          const ach = ALL_ACHIEVEMENTS.find((a) => a.id === 'streak_7');
-          if (ach) {
-            updatedAchievements.push({ ...ach, unlockedAt: new Date().toISOString() });
-          }
-        }
+        // Active consecutive day: maintain streak and update last active date
         const next = {
-          streakDays: nextStreak,
           lastActiveDate: today,
-          savingScore: Math.min(100, state.savingScore + 5),
-          achievements: updatedAchievements,
+          savingScore: Math.min(100, state.savingScore + 2),
         };
         persistState({ ...state, ...next });
         return next;
       } else if (diffDays > 2) {
-        const next = { streakDays: 1, lastActiveDate: today };
+        // Inactive for more than 2 calendar days: reset streak to 1
+        const next = {
+          streakDays: 1,
+          lastClaimedDay: undefined,
+          lastActiveDate: today,
+        };
         persistState({ ...state, ...next });
         return next;
       }
@@ -717,24 +717,34 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         return state;
       }
 
-      // Check if streak needs advancing right now if checkAndUpdateStreak hasn't run yet today
-      let effectiveStreak = state.streakDays || 1;
-      if (state.lastActiveDate && state.lastActiveDate !== today) {
-        const [y1, m1, d1] = state.lastActiveDate.split('-').map(Number);
+      let daysSinceLastClaim = -1;
+      if (state.lastClaimedRewardDate) {
+        const [y1, m1, d1] = state.lastClaimedRewardDate.split('-').map(Number);
         const [y2, m2, d2] = today.split('-').map(Number);
-        const dActive = new Date(y1, m1 - 1, d1);
+        const dClaim = new Date(y1, m1 - 1, d1);
         const dToday = new Date(y2, m2 - 1, d2);
-        const diffTime = dToday.getTime() - dActive.getTime();
-        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
-        if (diffDays === 1 || diffDays === 2) {
-          effectiveStreak = (state.streakDays || 0) + 1;
-        } else if (diffDays > 2) {
-          effectiveStreak = 1;
-        }
+        const diffTime = dToday.getTime() - dClaim.getTime();
+        daysSinceLastClaim = Math.round(diffTime / (1000 * 60 * 60 * 24));
       }
 
-      const dayInCycle = (((effectiveStreak - 1) % 7) + 1);
+      let dayInCycle = 1;
+      let nextStreak = 1;
+      if (daysSinceLastClaim === 1) {
+        // Consecutive check-in!
+        const prevDay = state.lastClaimedDay || state.streakDays || 1;
+        dayInCycle = ((prevDay - 1) % 7) + 2;
+        if (dayInCycle > 7) dayInCycle = 1;
+        nextStreak = (state.streakDays || 0) + 1;
+      } else if (daysSinceLastClaim === -1) {
+        // First ever claim
+        dayInCycle = 1;
+        nextStreak = 1;
+      } else {
+        // Streak broken: restart at Day 1
+        dayInCycle = 1;
+        nextStreak = 1;
+      }
+
       const xpReward = dayInCycle * 10;
       let cashReward = 0;
       if (dayInCycle === 3) cashReward = 500;
@@ -752,7 +762,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       }
 
       let updatedAchievements = [...state.achievements];
-      if (effectiveStreak >= 7 && !updatedAchievements.some((a) => a.id === 'streak_7')) {
+      if (nextStreak >= 7 && !updatedAchievements.some((a) => a.id === 'streak_7')) {
         const ach = ALL_ACHIEVEMENTS.find((a) => a.id === 'streak_7');
         if (ach) {
           updatedAchievements.push({ ...ach, unlockedAt: new Date().toISOString() });
@@ -779,7 +789,8 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       }
 
       const next = {
-        streakDays: effectiveStreak,
+        streakDays: nextStreak,
+        lastClaimedDay: dayInCycle,
         lastClaimedRewardDate: today,
         lastActiveDate: today,
         xp: newXp,
@@ -2156,6 +2167,14 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       if (!stored && isGuestMode) {
         // Migration: check legacy un-scoped key only for guest/unauthenticated sessions
         stored = await storage.getItem(BASE_GAMIFICATION_KEY);
+      } else if (!stored && resolvedUserId && resolvedUserId !== 'guest') {
+        // Migration: If newly signed-in user has no local cache yet, inherit guest progress
+        const guestStored = await storage.getItem(`${BASE_GAMIFICATION_KEY}_guest`);
+        if (guestStored) {
+          stored = guestStored;
+          // Store under active user's key immediately
+          await storage.setItem(userKey, guestStored);
+        }
       }
 
       if (generation !== hydrationGeneration) {
@@ -2224,6 +2243,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
               if (!hasLocalCache || remoteSavedAt > localSavedAt) {
                 set(buildStateFromSnapshot(remoteState, false, todayISO));
                 restoredFromSnapshot = true;
+                get().checkAndUpdateStreak();
               }
             }
           } else if (isMissingTableError(snapErr)) {
@@ -2457,6 +2477,7 @@ function buildStateFromSnapshot(
     streakDays: parsed.streakDays ?? 1,
     lastActiveDate: parsed.lastActiveDate ?? null,
     lastClaimedRewardDate: parsed.lastClaimedRewardDate ?? null,
+    lastClaimedDay: parsed.lastClaimedDay !== undefined ? Number(parsed.lastClaimedDay) : undefined,
     achievements: parsed.achievements ?? [],
     budgetingScore: parsed.budgetingScore ?? 0,
     learningScore: parsed.learningScore ?? 0,

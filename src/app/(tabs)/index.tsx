@@ -269,9 +269,13 @@ export default function DashboardScreen() {
             <Text style={[styles.streakText, isClaimedToday && styles.streakTextChecked]}>
               {store.streakDays}d Streak
             </Text>
-            {isClaimedToday && (
+            {isClaimedToday ? (
               <View style={styles.streakCheckedTag}>
-                <PhosphorIcon name="Check" size={11} color="#34D399" weight="bold" />
+                <PhosphorIcon name="Check" size={11} color="#FFFFFF" weight="bold" />
+              </View>
+            ) : (
+              <View style={styles.streakClaimTag}>
+                <Text style={styles.streakClaimText}>CLAIM</Text>
               </View>
             )}
           </InteractivePressable>
