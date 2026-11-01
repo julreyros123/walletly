@@ -141,3 +141,39 @@ try {
   console.warn('[postinstall] autolinking patch warning:', e.message);
 }
 
+// 4. Fix @react-native-google-signin/google-signin ESM imports for Node & IDE resolution
+try {
+  const gsigninBase = path.resolve(__dirname, '../node_modules/@react-native-google-signin/google-signin/lib/module');
+  const patchFile = (relPath, replacements) => {
+    const fullPath = path.join(gsigninBase, relPath);
+    if (!fs.existsSync(fullPath)) return;
+    let content = fs.readFileSync(fullPath, 'utf8');
+    let changed = false;
+    for (const [target, repl] of replacements) {
+      if (content.includes(target)) {
+        content = content.replace(target, repl);
+        changed = true;
+      }
+    }
+    if (changed) {
+      fs.writeFileSync(fullPath, content, 'utf8');
+      console.log('[postinstall] Patched google-signin ' + relPath);
+    }
+  };
+
+  patchFile('index.js', [
+    ["from './signIn/GoogleSignin'", "from './signIn/GoogleSignin.js'"],
+    ["from './errors/errorCodes'", "from './errors/errorCodes.js'"],
+    ["from './buttons/GoogleSigninButton'", "from './buttons/GoogleSigninButton.js'"],
+  ]);
+  patchFile('translateNativeRejection.js', [
+    ["from './errors/errorCodes'", "from './errors/errorCodes.js'"],
+  ]);
+  patchFile('signIn/GoogleSignin.js', [
+    ["from '../errors/errorCodes'", "from '../errors/errorCodes.js'"],
+  ]);
+} catch (e) {
+  console.warn('[postinstall] google-signin patch warning:', e.message);
+}
+
+
