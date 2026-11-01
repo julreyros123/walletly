@@ -1,9 +1,9 @@
-import { Platform, NativeModules } from 'react-native';
+import { Platform, NativeModules, TurboModuleRegistry } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { create } from 'zustand';
 import { storage } from '@/utils/storage';
-import { supabase } from '@/utils/supabase';
+import { supabase, isSupabaseConfigured } from '@/utils/supabase';
 import {
   useGamificationStore,
   setActiveGamificationUser,
@@ -22,9 +22,7 @@ function getGoogleSigninModule() {
 
     // Check if the native binary actually has RNGoogleSignin registered
     // to avoid triggering TurboModuleRegistry.getEnforcing invariant crash
-    const globalObj = globalThis as Record<string, unknown>;
-    const turboRegistry = globalObj.TurboModuleRegistry as { get?: (name: string) => unknown } | undefined;
-    const hasTurbo = typeof turboRegistry?.get === 'function' && turboRegistry.get('RNGoogleSignin') != null;
+    const hasTurbo = typeof TurboModuleRegistry?.get === 'function' && TurboModuleRegistry.get('RNGoogleSignin') != null;
     const hasNative = typeof NativeModules !== 'undefined' && NativeModules?.RNGoogleSignin != null;
 
     if (!hasTurbo && !hasNative) {
@@ -129,6 +127,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   loginWithGoogle: async () => {
+    if (!isSupabaseConfigured) {
+      throw new Error(
+        'Supabase is not configured. Please ensure EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY are set in your environment.'
+      );
+    }
+
     // Local guest state is cleared by the auth listener only after sign-in succeeds
     if (Platform.OS === 'web') {
       const { error } = await supabase.auth.signInWithOAuth({
