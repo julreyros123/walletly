@@ -36,7 +36,14 @@ export default function TabsLayout() {
       <StatusBar style={tabStatusBarStyle} />
       <Tabs
         screenOptions={{
-          animation: 'none',
+          animation: 'shift',
+          transitionSpec: {
+            animation: 'timing',
+            config: {
+              duration: 220,
+              easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+            },
+          },
           sceneStyle: { backgroundColor: isDark ? '#0A0F1D' : '#F8FAFC' },
           tabBarActiveTintColor: theme.primary as any,
           tabBarInactiveTintColor: theme.textSecondary as any,
