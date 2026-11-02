@@ -138,6 +138,42 @@ export function AvatarPickerModal({
     }
   };
 
+  const handleTakePhoto = async () => {
+    safeHaptic('light');
+    setIsPickingImage(true);
+    try {
+      if (Platform.OS !== 'web') {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert(
+            'Camera Permission Required',
+            'Please grant camera access in your device settings to take a profile picture.'
+          );
+          setIsPickingImage(false);
+          return;
+        }
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0 && result.assets[0].uri) {
+        setSelectedAvatarUrl(result.assets[0].uri);
+        setActiveTab('gallery');
+        safeHaptic('success');
+      }
+    } catch (err) {
+      console.warn('[AvatarPicker] Camera capture error:', err);
+      Alert.alert('Camera Error', 'Could not open camera. Please try again.');
+    } finally {
+      setIsPickingImage(false);
+    }
+  };
+
   const handleSelectPresetEmoji = (emoji: string) => {
     safeHaptic('light');
     setSelectedEmoji(emoji);
@@ -296,7 +332,7 @@ export function AvatarPickerModal({
                   },
                 ]}
               >
-                From Gallery
+                Camera & Gallery
               </Text>
             </TouchableOpacity>
           </View>
@@ -392,29 +428,55 @@ export function AvatarPickerModal({
                       { backgroundColor: primaryAccent + '20' },
                     ]}
                   >
-                    <PhosphorIcon name="Images" size={32} color={primaryAccent} weight="bold" />
+                    <PhosphorIcon name="Camera" size={32} color={primaryAccent} weight="bold" />
                   </View>
 
                   <Text style={[styles.galleryTitle, { color: theme.text }]}>
-                    Photo Library
+                    Take Photo or Choose Gallery
                   </Text>
                   <Text style={[styles.galleryDesc, { color: theme.textSecondary }]}>
-                    Select a photo from your camera roll. It will be cropped to a square and displayed as your profile avatar.
+                    Snap a photo using your camera or choose an image from your library. It will be cropped to a clean square for your avatar.
                   </Text>
 
+                  {/* Option 1: Take Photo with Camera */}
                   <TouchableOpacity
                     style={[
                       styles.galleryPickButton,
                       { backgroundColor: primaryAccent },
                       isPickingImage && { opacity: 0.7 },
                     ]}
-                    onPress={handlePickFromGallery}
+                    onPress={handleTakePhoto}
                     disabled={isPickingImage}
                     activeOpacity={0.85}
                   >
                     <PhosphorIcon name="Camera" size={20} color="#FFFFFF" weight="bold" />
                     <Text style={styles.galleryPickButtonText}>
-                      {selectedAvatarUrl ? 'Choose Different Photo' : 'Select Photo from Gallery'}
+                      Take Photo with Camera
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Option 2: Choose from Photo Gallery */}
+                  <TouchableOpacity
+                    style={[
+                      styles.gallerySecondaryButton,
+                      {
+                        backgroundColor: isDark ? '#1E293B' : '#EDF2F7',
+                        borderColor: isDark ? '#334155' : '#CBD5E1',
+                      },
+                      isPickingImage && { opacity: 0.7 },
+                    ]}
+                    onPress={handlePickFromGallery}
+                    disabled={isPickingImage}
+                    activeOpacity={0.85}
+                  >
+                    <PhosphorIcon name="Images" size={20} color={isDark ? '#F8FAFC' : '#1E293B'} weight="bold" />
+                    <Text
+                      style={[
+                        styles.gallerySecondaryButtonText,
+                        { color: isDark ? '#F8FAFC' : '#1E293B' },
+                      ]}
+                    >
+                      {selectedAvatarUrl ? 'Choose from Gallery' : 'Select Photo from Gallery'}
                     </Text>
                   </TouchableOpacity>
 
@@ -658,6 +720,21 @@ const styles = StyleSheet.create({
   },
   galleryPickButtonText: {
     color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  gallerySecondaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: 10,
+  },
+  gallerySecondaryButtonText: {
     fontSize: 15,
     fontWeight: '700',
   },

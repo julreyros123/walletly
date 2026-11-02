@@ -24,6 +24,7 @@
       "package": "com.julreyros123.cbudget",
       "googleServicesFile": "./google-services.json",
       "permissions": [
+        "android.permission.CAMERA",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.SCHEDULE_EXACT_ALARM",
@@ -63,7 +64,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "The app accesses your photos to allow you to set your custom profile avatar."
+          "photosPermission": "The app accesses your photos to allow you to set your custom profile avatar.",
+          "cameraPermission": "The app accesses your camera to allow you to take a profile photo."
         }
       ],
       "expo-web-browser"
