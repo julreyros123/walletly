@@ -500,16 +500,23 @@ export default function InvestDetailsScreen() {
             {ownedUnits > 0 && (
               <YStack gap={8} marginTop={6}>
                 {/* Equity progress bar */}
-                <YStack gap={6} backgroundColor="rgba(11, 19, 43, 0.6)" padding={12} borderRadius={12} borderWidth={1} borderColor="rgba(255, 255, 255, 0.06)">
+                <YStack
+                  gap={6}
+                  backgroundColor={subcardBg}
+                  padding={12}
+                  borderRadius={12}
+                  borderWidth={1}
+                  borderColor={subcardBorder}
+                >
                   <XStack justifyContent="space-between" alignItems="center">
-                    <Text color="rgba(255, 255, 255, 0.5)" fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                    <Text color={textMuted} fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
                       EQUITY WEIGHT
                     </Text>
-                    <Text color="#FFFFFF" fontSize={11} fontFamily={Fonts.bold}>
+                    <Text color={textColor} fontSize={11} fontFamily={Fonts.bold}>
                       {ownedUnits < 1 ? `${(ownedUnits * 100).toFixed(1)}% of 1 Share` : `${ownedUnits.toFixed(4)} Shares`}
                     </Text>
                   </XStack>
-                  <View height={5} backgroundColor="rgba(255, 255, 255, 0.08)" borderRadius={3} overflow="hidden">
+                  <View height={5} backgroundColor={isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'} borderRadius={3} overflow="hidden">
                     <View
                       width={`${Math.min(100, Math.max(4, ownedUnits * 100))}%`}
                       height="100%"
@@ -523,17 +530,17 @@ export default function InvestDetailsScreen() {
                 <XStack
                   justifyContent="space-between"
                   alignItems="center"
-                  backgroundColor="rgba(16, 185, 129, 0.08)"
+                  backgroundColor={isDark ? 'rgba(16, 185, 129, 0.08)' : '#ECFDF5'}
                   padding={12}
                   borderRadius={12}
                   borderWidth={1}
-                  borderColor="rgba(16, 185, 129, 0.2)"
+                  borderColor={isDark ? 'rgba(16, 185, 129, 0.2)' : '#A7F3D0'}
                 >
                   <YStack gap={2} flex={1}>
-                    <Text color="#34D399" fontSize={11} fontFamily={Fonts.bold} letterSpacing={0.4}>
+                    <Text color={isDark ? '#34D399' : '#059669'} fontSize={11} fontFamily={Fonts.bold} letterSpacing={0.4}>
                       EST. 3.5% ANNUAL DIVIDEND YIELD
                     </Text>
-                    <Text color="rgba(255, 255, 255, 0.6)" fontSize={10.5} fontFamily={Fonts.medium}>
+                    <Text color={isDark ? 'rgba(255, 255, 255, 0.6)' : '#065F46'} fontSize={10.5} fontFamily={Fonts.medium}>
                       {dividendsClaimed[asset.ticker]
                         ? 'Daily dividends collected for today'
                         : 'Daily dividend distribution ready to claim'}
@@ -544,14 +551,16 @@ export default function InvestDetailsScreen() {
                     disabled={dividendsClaimed[asset.ticker]}
                     activeOpacity={0.8}
                     style={{
-                      backgroundColor: dividendsClaimed[asset.ticker] ? 'rgba(255, 255, 255, 0.06)' : '#10B981',
+                      backgroundColor: dividendsClaimed[asset.ticker]
+                        ? (isDark ? 'rgba(255, 255, 255, 0.06)' : '#E2E8F0')
+                        : '#10B981',
                       paddingHorizontal: 14,
                       paddingVertical: 7,
                       borderRadius: 8,
                     }}
                   >
                     <Text
-                      color={dividendsClaimed[asset.ticker] ? 'rgba(255, 255, 255, 0.4)' : '#FFFFFF'}
+                      color={dividendsClaimed[asset.ticker] ? textMuted : '#FFFFFF'}
                       fontSize={11}
                       fontFamily={Fonts.bold}
                     >
@@ -575,12 +584,16 @@ export default function InvestDetailsScreen() {
                 activeOpacity={0.8}
                 style={[
                   styles.actionBtnSecondary,
+                  {
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#F1F5F9',
+                    borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : '#E2E8F0',
+                  },
                   ownedUnits === 0 && { opacity: 0.35 },
                 ]}
               >
                 <XStack alignItems="center" justifyContent="center" gap={6}>
-                  <PhosphorIcon name="MinusCircle" size={15} color="#FFFFFF" weight="bold" />
-                  <Text color="#FFFFFF" fontSize={13} fontFamily={Fonts.bold}>
+                  <PhosphorIcon name="MinusCircle" size={15} color={isDark ? '#FFFFFF' : '#475569'} weight="bold" />
+                  <Text color={isDark ? '#FFFFFF' : '#334155'} fontSize={13} fontFamily={Fonts.bold}>
                     Sell
                   </Text>
                 </XStack>
@@ -771,7 +784,7 @@ export default function InvestDetailsScreen() {
               {/* Stat 1: Market Cap */}
               <View style={[styles.statBox, { backgroundColor: subcardBg, borderColor: subcardBorder }]}>
                 <XStack gap={8} alignItems="center" marginBottom={4}>
-                  <View style={styles.statIconBadge}>
+                  <View style={[styles.statIconBadge, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)' }]}>
                     <PhosphorIcon name="ChartBar" size={14} color="#38BDF8" weight="bold" />
                   </View>
                   <Text color={textMuted} fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
@@ -786,7 +799,7 @@ export default function InvestDetailsScreen() {
               {/* Stat 2: Volume */}
               <View style={[styles.statBox, { backgroundColor: subcardBg, borderColor: subcardBorder }]}>
                 <XStack gap={8} alignItems="center" marginBottom={4}>
-                  <View style={styles.statIconBadge}>
+                  <View style={[styles.statIconBadge, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)' }]}>
                     <PhosphorIcon name="Waveform" size={14} color="#34D399" weight="bold" />
                   </View>
                   <Text color={textMuted} fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
@@ -801,7 +814,7 @@ export default function InvestDetailsScreen() {
               {/* Stat 3: P/E Ratio */}
               <View style={[styles.statBox, { backgroundColor: subcardBg, borderColor: subcardBorder }]}>
                 <XStack gap={8} alignItems="center" marginBottom={4}>
-                  <View style={styles.statIconBadge}>
+                  <View style={[styles.statIconBadge, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)' }]}>
                     <PhosphorIcon name="Tag" size={14} color="#FBBF24" weight="bold" />
                   </View>
                   <Text color={textMuted} fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
@@ -836,7 +849,7 @@ export default function InvestDetailsScreen() {
               {/* Stat 4: Risk Class */}
               <View style={[styles.statBox, { backgroundColor: subcardBg, borderColor: subcardBorder }]}>
                 <XStack gap={8} alignItems="center" marginBottom={4}>
-                  <View style={styles.statIconBadge}>
+                  <View style={[styles.statIconBadge, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)' }]}>
                     <PhosphorIcon name="ShieldCheck" size={14} color={asset.color} weight="bold" />
                   </View>
                   <Text color={textMuted} fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>

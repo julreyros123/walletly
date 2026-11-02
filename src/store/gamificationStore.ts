@@ -2118,7 +2118,8 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
 
       if (alreadyCompleted) {
         // Repeated practice: small XP bonus, no extra score unlock
-        const next = { xp: state.xp + 10 };
+        const xpUpdate = applyXpGain(state, 10);
+        const next = { ...xpUpdate };
         persistState({ ...state, ...next });
         return next;
       }
