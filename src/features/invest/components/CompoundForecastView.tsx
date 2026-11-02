@@ -5,6 +5,7 @@ import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
 import { CbudgetCard } from '@/components/ui/CbudgetCard';
 import { Fonts } from '@/constants/theme';
 import { safeHaptic } from '@/utils/haptics';
+import { useTheme } from '@/hooks/use-theme';
 import Svg, { Path, Defs, LinearGradient, Stop, Line } from 'react-native-svg';
 
 interface CompoundForecastViewProps {
@@ -34,6 +35,21 @@ export function CompoundForecastView({
   onYearsChange,
   onRateChange,
 }: CompoundForecastViewProps) {
+  const theme = useTheme();
+  const isDark = theme.mode === 'dark';
+  const cardBg = isDark ? '#1C2541' : theme.surface;
+  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : theme.border;
+  const textColor = isDark ? '#FFFFFF' : theme.text;
+  const textMuted = isDark ? '#8D99AE' : theme.textSecondary;
+  const subcardBg = isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.03)';
+  const subcardBorder = isDark ? 'rgba(255, 255, 255, 0.06)' : theme.border;
+  const barTrackBg = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)';
+  const gridLine1 = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)';
+  const gridLine2 = isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)';
+  const tabBg = isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)';
+  const tabBorder = isDark ? 'rgba(255, 255, 255, 0.07)' : theme.border;
+  const rateBadgeBg = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
+
   // Financial Compounding Math
   const monthlyRate = rate / 1200;
   const totalMonths = years * 12;
@@ -111,18 +127,18 @@ export function CompoundForecastView({
       <CbudgetCard
         padding={20}
         gap={14}
-        backgroundColor="#1C2541"
-        borderColor="rgba(255, 255, 255, 0.08)"
+        backgroundColor={cardBg}
+        borderColor={cardBorder}
         borderWidth={1}
         borderRadius={20}
         elevation={0}
       >
         <XStack justifyContent="space-between" alignItems="center">
           <YStack gap={2}>
-            <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">
+            <Text color={textMuted} fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">
               Projected Total Value
             </Text>
-            <Text color="rgba(255, 255, 255, 0.6)" fontSize={12} style={{ fontFamily: Fonts.regular }}>
+            <Text color={isDark ? 'rgba(255, 255, 255, 0.6)' : theme.textSecondary} fontSize={12} style={{ fontFamily: Fonts.regular }}>
               Horizon: {years} Years @ {rate}% p.a.
             </Text>
           </YStack>
@@ -138,7 +154,7 @@ export function CompoundForecastView({
         {/* Hero Figure */}
         <XStack alignItems="baseline" gap={4}>
           <Text color="#10B981" fontSize={24} style={{ fontFamily: Fonts.bold }}>{currencySymbol}</Text>
-          <Text color="#FFFFFF" fontSize={34} style={{ fontFamily: Fonts.bold }} letterSpacing={-0.6} lineHeight={40}>
+          <Text color={textColor} fontSize={34} style={{ fontFamily: Fonts.bold }} letterSpacing={-0.6} lineHeight={40}>
             {Math.round(futureValue).toLocaleString()}
           </Text>
         </XStack>
@@ -155,8 +171,8 @@ export function CompoundForecastView({
             </Defs>
 
             {/* Grid Horizon Lines */}
-            <Line x1="12" y1={chartHeight - 16} x2={chartWidth - 12} y2={chartHeight - 16} stroke="rgba(255, 255, 255, 0.08)" strokeWidth={1} />
-            <Line x1="12" y1={16} x2={chartWidth - 12} y2={16} stroke="rgba(255, 255, 255, 0.04)" strokeWidth={1} strokeDasharray="3 3" />
+            <Line x1="12" y1={chartHeight - 16} x2={chartWidth - 12} y2={chartHeight - 16} stroke={gridLine1} strokeWidth={1} />
+            <Line x1="12" y1={16} x2={chartWidth - 12} y2={16} stroke={gridLine2} strokeWidth={1} strokeDasharray="3 3" />
 
             {/* Bezier Path */}
             {svgPaths.area ? <Path d={svgPaths.area} fill="url(#growthAreaGrad)" /> : null}
@@ -166,7 +182,7 @@ export function CompoundForecastView({
 
         {/* Dual-Tone Capital Breakdown Bar */}
         <YStack gap={6}>
-          <View height={8} backgroundColor="rgba(255, 255, 255, 0.08)" borderRadius={4} overflow="hidden" flexDirection="row" width="100%">
+          <View height={8} backgroundColor={barTrackBg} borderRadius={4} overflow="hidden" flexDirection="row" width="100%">
             <View
               width={`${futureValue > 0 ? Math.min(100, (totalPrincipal / futureValue) * 100) : 100}%`}
               height="100%"
@@ -182,14 +198,14 @@ export function CompoundForecastView({
           <XStack justifyContent="space-between" alignItems="center">
             <XStack alignItems="center" gap={6}>
               <View width={8} height={8} borderRadius={4} backgroundColor="#64748B" />
-              <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.medium }}>
-                Principal: <Text color="#FFFFFF" style={{ fontFamily: Fonts.bold }}>{currencySymbol}{Math.round(totalPrincipal).toLocaleString()}</Text>
+              <Text color={textMuted} fontSize={11} style={{ fontFamily: Fonts.medium }}>
+                Principal: <Text color={textColor} style={{ fontFamily: Fonts.bold }}>{currencySymbol}{Math.round(totalPrincipal).toLocaleString()}</Text>
               </Text>
             </XStack>
 
             <XStack alignItems="center" gap={6}>
               <View width={8} height={8} borderRadius={4} backgroundColor="#10B981" />
-              <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.medium }}>
+              <Text color={textMuted} fontSize={11} style={{ fontFamily: Fonts.medium }}>
                 Compound Gains: <Text color="#10B981" style={{ fontFamily: Fonts.bold }}>+{currencySymbol}{Math.round(totalInterest).toLocaleString()}</Text>
               </Text>
             </XStack>
@@ -197,9 +213,9 @@ export function CompoundForecastView({
         </YStack>
 
         {/* Institutional Milestone Pill */}
-        <View style={styles.milestoneRow}>
+        <View style={[styles.milestoneRow, { backgroundColor: subcardBg, borderColor: subcardBorder }]}>
           <PhosphorIcon name="Trophy" size={15} color="#F59E0B" weight="fill" />
-          <Text color="rgba(255, 255, 255, 0.85)" fontSize={12} style={{ fontFamily: Fonts.medium }} numberOfLines={1}>
+          <Text color={isDark ? 'rgba(255, 255, 255, 0.85)' : theme.text} fontSize={12} style={{ fontFamily: Fonts.medium }} numberOfLines={1}>
             {milestoneLabel}
           </Text>
         </View>
@@ -209,17 +225,17 @@ export function CompoundForecastView({
       <CbudgetCard
         padding={16}
         gap={12}
-        backgroundColor="#1C2541"
-        borderColor="rgba(255, 255, 255, 0.08)"
+        backgroundColor={cardBg}
+        borderColor={cardBorder}
         borderWidth={1}
         borderRadius={16}
       >
         <XStack justifyContent="space-between" alignItems="center">
-          <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">
+          <Text color={textMuted} fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">
             Monthly Contribution
           </Text>
           <Text color="#10B981" fontSize={15} style={{ fontFamily: Fonts.bold }}>
-            {currencySymbol}{monthly.toLocaleString()}<Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.regular }}> / mo</Text>
+            {currencySymbol}{monthly.toLocaleString()}<Text color={textMuted} fontSize={11} style={{ fontFamily: Fonts.regular }}> / mo</Text>
           </Text>
         </XStack>
 
@@ -234,10 +250,10 @@ export function CompoundForecastView({
                   onMonthlyChange(amt);
                 }}
                 activeOpacity={0.75}
-                style={[styles.presetTab, isSelected && styles.presetTabActive]}
+                style={[styles.presetTab, { backgroundColor: tabBg, borderColor: tabBorder }, isSelected && styles.presetTabActive]}
               >
                 <Text
-                  color={isSelected ? '#FFFFFF' : '#8D99AE'}
+                  color={isSelected ? '#FFFFFF' : textMuted}
                   fontSize={12}
                   style={{ fontFamily: isSelected ? Fonts.bold : Fonts.medium }}
                 >
@@ -253,16 +269,16 @@ export function CompoundForecastView({
       <CbudgetCard
         padding={16}
         gap={12}
-        backgroundColor="#1C2541"
-        borderColor="rgba(255, 255, 255, 0.08)"
+        backgroundColor={cardBg}
+        borderColor={cardBorder}
         borderWidth={1}
         borderRadius={16}
       >
         <XStack justifyContent="space-between" alignItems="center">
-          <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">
+          <Text color={textMuted} fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">
             Investment Horizon
           </Text>
-          <Text color="#FFFFFF" fontSize={14} style={{ fontFamily: Fonts.bold }}>
+          <Text color={textColor} fontSize={14} style={{ fontFamily: Fonts.bold }}>
             {years} Years
           </Text>
         </XStack>
@@ -278,10 +294,10 @@ export function CompoundForecastView({
                   onYearsChange(yr);
                 }}
                 activeOpacity={0.75}
-                style={[styles.presetTab, isSelected && styles.presetTabActive]}
+                style={[styles.presetTab, { backgroundColor: tabBg, borderColor: tabBorder }, isSelected && styles.presetTabActive]}
               >
                 <Text
-                  color={isSelected ? '#FFFFFF' : '#8D99AE'}
+                  color={isSelected ? '#FFFFFF' : textMuted}
                   fontSize={12}
                   style={{ fontFamily: isSelected ? Fonts.bold : Fonts.medium }}
                 >
@@ -297,12 +313,12 @@ export function CompoundForecastView({
       <CbudgetCard
         padding={16}
         gap={12}
-        backgroundColor="#1C2541"
-        borderColor="rgba(255, 255, 255, 0.08)"
+        backgroundColor={cardBg}
+        borderColor={cardBorder}
         borderWidth={1}
         borderRadius={16}
       >
-        <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">
+        <Text color={textMuted} fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">
           Expected Annual Return Strategy
         </Text>
 
@@ -317,24 +333,24 @@ export function CompoundForecastView({
                   onRateChange(s.rate);
                 }}
                 activeOpacity={0.8}
-                style={[styles.strategyCard, isSelected && styles.strategyCardActive]}
+                style={[styles.strategyCard, { backgroundColor: subcardBg, borderColor: subcardBorder }, isSelected && styles.strategyCardActive]}
               >
                 <YStack gap={2} flex={1}>
                   <Text
-                    color={isSelected ? '#FFFFFF' : '#E2E8F0'}
+                    color={isSelected ? '#FFFFFF' : textColor}
                     fontSize={13}
                     style={{ fontFamily: Fonts.bold }}
                   >
                     {s.name}
                   </Text>
-                  <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.regular }}>
+                  <Text color={textMuted} fontSize={11} style={{ fontFamily: Fonts.regular }}>
                     {s.sub}
                   </Text>
                 </YStack>
 
-                <View style={[styles.rateBadge, isSelected && styles.rateBadgeActive]}>
+                <View style={[styles.rateBadge, { backgroundColor: rateBadgeBg }, isSelected && styles.rateBadgeActive]}>
                   <Text
-                    color={isSelected ? '#10B981' : '#8D99AE'}
+                    color={isSelected ? '#10B981' : textMuted}
                     fontSize={12}
                     style={{ fontFamily: Fonts.bold }}
                   >

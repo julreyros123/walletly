@@ -192,10 +192,12 @@ export default function InvestScreen() {
     return () => marqueeAnimation.stop();
   }, [tickerTrackWidth]);
 
+  const isDark = theme.mode === 'dark';
+
   useFocusEffect(
     React.useCallback(() => {
-      setStatusBarStyle('light');
-    }, [])
+      setStatusBarStyle(isDark ? 'light' : 'dark');
+    }, [isDark])
   );
   const [timeRange, setTimeRange] = useState<'1D' | '1W' | '1M' | '1Y' | 'ALL'>('1Y');
   const [chartWidth, setChartWidth] = useState(280);
@@ -596,17 +598,27 @@ export default function InvestScreen() {
     } as any);
   };
 
+  const screenBg = isDark ? '#0B132B' : theme.background;
+  const cardBg = isDark ? '#1C2541' : theme.surface;
+  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : theme.border;
+  const gridCardBg = isDark ? '#131D33' : theme.surface;
+  const textColor = isDark ? '#FFFFFF' : theme.text;
+  const textMuted = isDark ? '#8D99AE' : theme.textSecondary;
+  const textSubtle = isDark ? 'rgba(255, 255, 255, 0.55)' : theme.textSecondary;
+  const subcardBg = isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)';
+  const dividerColor = isDark ? 'rgba(255, 255, 255, 0.06)' : theme.border;
+
   return (
-    <YStack flex={1} backgroundColor="#0B132B">
+    <YStack flex={1} backgroundColor={screenBg}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         
         {/* ==================== TOP HEADER (MATCHING BUDGET.TSX) ==================== */}
         <View style={styles.topHeader}>
           <YStack gap={2} flex={1} paddingRight={8}>
-            <Text color="#FFFFFF" fontSize={24} style={{ fontFamily: Fonts.bold }} letterSpacing={-0.4} lineHeight={30}>
+            <Text color={textColor} fontSize={24} style={{ fontFamily: Fonts.bold }} letterSpacing={-0.4} lineHeight={30}>
               Investing
             </Text>
-            <Text color="rgba(255, 255, 255, 0.6)" fontSize={12.5} style={{ fontFamily: Fonts.regular }} lineHeight={17}>
+            <Text color={textMuted} fontSize={12.5} style={{ fontFamily: Fonts.regular }} lineHeight={17}>
               {activeTab === 'portfolio' ? 'Your Holdings & Returns' : activeTab === 'explore' ? 'Browse & Trade Companies' : 'Compound Wealth Model'}
             </Text>
           </YStack>
@@ -676,7 +688,7 @@ export default function InvestScreen() {
             activeId={activeTab}
             onChange={(tab) => setActiveTab(tab)}
             height={40}
-            forceDark={true}
+            forceDark={isDark}
           />
         </View>
 
@@ -690,8 +702,8 @@ export default function InvestScreen() {
                 padding={20} 
                 gap={14} 
                 marginBottom={16}
-                backgroundColor="#1C2541"
-                borderColor="rgba(255, 255, 255, 0.08)"
+                backgroundColor={cardBg}
+                borderColor={cardBorder}
                 borderWidth={1}
                 borderRadius={16}
                 elevation={0}
@@ -699,18 +711,18 @@ export default function InvestScreen() {
                 {/* Header Row: Label + Risk Archetype Chip */}
                 <XStack justifyContent="space-between" alignItems="center" width="100%">
                   <XStack alignItems="center" gap={6}>
-                    <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">
+                    <Text color={textMuted} fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">
                       Net Portfolio Value
                     </Text>
                     <View
-                      backgroundColor="rgba(255, 255, 255, 0.06)"
+                      backgroundColor={subcardBg}
                       paddingHorizontal={6}
                       paddingVertical={2}
                       borderRadius={4}
                       borderWidth={1}
-                      borderColor="rgba(255, 255, 255, 0.08)"
+                      borderColor={dividerColor}
                     >
-                      <Text color="rgba(255, 255, 255, 0.55)" fontSize={9.5} style={{ fontFamily: Fonts.medium }}>
+                      <Text color={textSubtle} fontSize={9.5} style={{ fontFamily: Fonts.medium }}>
                         Market Model
                       </Text>
                     </View>
@@ -780,7 +792,7 @@ export default function InvestScreen() {
                 <YStack alignItems="flex-start" gap={2}>
                   <XStack alignItems="baseline" gap={4}>
                     <Text color={chartAccentColor} fontSize={22} style={{ fontFamily: Fonts.bold }}>{currencySymbol}</Text>
-                    <Text color="#FFFFFF" fontSize={32} style={{ fontFamily: Fonts.bold }} letterSpacing={-0.5} lineHeight={38}>
+                    <Text color={textColor} fontSize={32} style={{ fontFamily: Fonts.bold }} letterSpacing={-0.5} lineHeight={38}>
                       {displayVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </Text>
                   </XStack>
@@ -829,7 +841,7 @@ export default function InvestScreen() {
                     )}
 
                     {activePoint && (
-                      <Text color="rgba(255, 255, 255, 0.35)" fontSize={10} style={{ fontFamily: Fonts.regular }}>
+                      <Text color={textSubtle} fontSize={10} style={{ fontFamily: Fonts.regular }}>
                         • Release to reset
                       </Text>
                     )}
@@ -838,12 +850,12 @@ export default function InvestScreen() {
 
                 {/* Segmented Time Control (Timeline Filters) */}
                 <XStack 
-                  backgroundColor="rgba(255, 255, 255, 0.04)" 
+                  backgroundColor={subcardBg} 
                   borderRadius={8} 
                   padding={3} 
                   gap={3} 
                   borderWidth={1} 
-                  borderColor="rgba(255, 255, 255, 0.08)"
+                  borderColor={dividerColor}
                   alignItems="center"
                   justifyContent="space-between"
                   marginTop={4}
@@ -868,7 +880,7 @@ export default function InvestScreen() {
                         }}
                       >
                         <Text
-                          color={isSelected ? '#FFFFFF' : '#8D99AE'}
+                          color={isSelected ? '#FFFFFF' : textMuted}
                           fontSize={11}
                           style={{ fontFamily: isSelected ? Fonts.bold : Fonts.semiBold }}
                           textAlign="center"
@@ -934,7 +946,7 @@ export default function InvestScreen() {
                               y1={8}
                               x2={cWidth * pct}
                               y2={cHeight - 8}
-                              stroke="rgba(255, 255, 255, 0.04)"
+                              stroke={isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)'}
                               strokeWidth={1}
                               strokeDasharray="4 4"
                             />
@@ -958,7 +970,7 @@ export default function InvestScreen() {
                             y1={lowY}
                             x2={cWidth}
                             y2={lowY}
-                            stroke="rgba(255, 255, 255, 0.15)"
+                            stroke={isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.12)'}
                             strokeWidth={1}
                             strokeDasharray="3 3"
                           />
@@ -988,7 +1000,7 @@ export default function InvestScreen() {
                                 y1={4}
                                 x2={cPoints[scrubbedIndex].x}
                                 y2={cHeight - 4}
-                                stroke="#FFFFFF"
+                                stroke={textColor}
                                 strokeWidth={1.5}
                                 strokeDasharray="4 3"
                                 opacity={0.65}
@@ -1004,7 +1016,7 @@ export default function InvestScreen() {
                                 cy={cPoints[scrubbedIndex].y}
                                 r={4}
                                 fill={chartAccentColor}
-                                stroke="#FFFFFF"
+                                stroke={textColor}
                                 strokeWidth={2}
                               />
                             </>
@@ -1024,7 +1036,7 @@ export default function InvestScreen() {
                                 cy={lastPoint.y}
                                 r={3.5}
                                 fill={chartAccentColor}
-                                stroke="#FFFFFF"
+                                stroke={textColor}
                                 strokeWidth={1.5}
                               />
                             </>
@@ -1082,15 +1094,15 @@ export default function InvestScreen() {
                           position="absolute"
                           top={Math.max(2, Math.min(cHeight - 28, lowY - 10))}
                           left={4}
-                          backgroundColor="rgba(255, 255, 255, 0.06)"
-                          borderColor="rgba(255, 255, 255, 0.1)"
+                          backgroundColor={subcardBg}
+                          borderColor={dividerColor}
                           borderWidth={1}
                           borderRadius={4}
                           paddingHorizontal={6}
                           paddingVertical={1.5}
                           pointerEvents="none"
                         >
-                          <Text color="rgba(255, 255, 255, 0.55)" fontSize={9.5} style={{ fontFamily: Fonts.bold }}>
+                          <Text color={textSubtle} fontSize={9.5} style={{ fontFamily: Fonts.bold }}>
                             ▼ LOW {currencySymbol}{periodLow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </Text>
                         </View>
@@ -1101,7 +1113,7 @@ export default function InvestScreen() {
                         {timelineLabels.map((lbl, idx) => (
                           <Text
                             key={`time-lbl-${idx}`}
-                            color="rgba(255, 255, 255, 0.4)"
+                            color={textSubtle}
                             fontSize={10}
                             style={{ fontFamily: Fonts.medium }}
                           >
@@ -1115,27 +1127,27 @@ export default function InvestScreen() {
                         marginTop={8} 
                         paddingTop={10} 
                         borderTopWidth={1} 
-                        borderColor="rgba(255, 255, 255, 0.07)" 
+                        borderColor={dividerColor} 
                         justifyContent="space-between" 
                         alignItems="center"
                         gap={6}
                       >
                         {/* Stat 1: Period High/Low Spread */}
                         <YStack flex={1} alignItems="flex-start" gap={1}>
-                          <Text color="rgba(255, 255, 255, 0.45)" fontSize={10} style={{ fontFamily: Fonts.medium }}>
+                          <Text color={textSubtle} fontSize={10} style={{ fontFamily: Fonts.medium }}>
                             Period High / Low
                           </Text>
-                          <Text color="#FFFFFF" fontSize={11} style={{ fontFamily: Fonts.bold }} numberOfLines={1}>
+                          <Text color={textColor} fontSize={11} style={{ fontFamily: Fonts.bold }} numberOfLines={1}>
                             {currencySymbol}{periodHigh.toLocaleString(undefined, { maximumFractionDigits: 0 })} / {currencySymbol}{periodLow.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                           </Text>
                         </YStack>
 
                         {/* Divider */}
-                        <View width={1} height={22} backgroundColor="rgba(255, 255, 255, 0.08)" />
+                        <View width={1} height={22} backgroundColor={dividerColor} />
 
                         {/* Stat 2: Spread Volatility */}
                         <YStack flex={1} alignItems="center" gap={1}>
-                          <Text color="rgba(255, 255, 255, 0.45)" fontSize={10} style={{ fontFamily: Fonts.medium }}>
+                          <Text color={textSubtle} fontSize={10} style={{ fontFamily: Fonts.medium }}>
                             Spread Range
                           </Text>
                           <Text color="#6EE7B7" fontSize={11} style={{ fontFamily: Fonts.bold }} numberOfLines={1}>
@@ -1144,14 +1156,14 @@ export default function InvestScreen() {
                         </YStack>
 
                         {/* Divider */}
-                        <View width={1} height={22} backgroundColor="rgba(255, 255, 255, 0.08)" />
+                        <View width={1} height={22} backgroundColor={dividerColor} />
 
                         {/* Stat 3: Capital Allocation */}
                         <YStack flex={1} alignItems="flex-end" gap={1}>
-                          <Text color="rgba(255, 255, 255, 0.45)" fontSize={10} style={{ fontFamily: Fonts.medium }}>
+                          <Text color={textSubtle} fontSize={10} style={{ fontFamily: Fonts.medium }}>
                             Capital Split
                           </Text>
-                          <Text color="#FFFFFF" fontSize={11} style={{ fontFamily: Fonts.bold }} numberOfLines={1}>
+                          <Text color={textColor} fontSize={11} style={{ fontFamily: Fonts.bold }} numberOfLines={1}>
                             {equitiesRatio}% Eq • {cashRatio}% Cash
                           </Text>
                         </YStack>
@@ -1198,34 +1210,34 @@ export default function InvestScreen() {
                       flex: 1,
                       height: 38,
                       borderRadius: 10,
-                      backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                      backgroundColor: subcardBg,
                       borderWidth: 1,
-                      borderColor: 'rgba(255, 255, 255, 0.12)',
+                      borderColor: dividerColor,
                       flexDirection: 'row',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: 6,
                     }}
                   >
-                    <PhosphorIcon name="MagnifyingGlass" size={15} color="#6EE7B7" weight="bold" />
-                    <Text color="#FFFFFF" fontSize={12} style={{ fontFamily: Fonts.bold }}>
+                    <PhosphorIcon name="MagnifyingGlass" size={15} color="#10B981" weight="bold" />
+                    <Text color={textColor} fontSize={12} style={{ fontFamily: Fonts.bold }}>
                       Explore Market
                     </Text>
                   </TouchableOpacity>
                 </XStack>
 
                 {/* Asset Allocation Metrics Split */}
-                <XStack justifyContent="space-between" paddingTop={14} borderTopWidth={1} borderTopColor="rgba(255, 255, 255, 0.06)">
+                <XStack justifyContent="space-between" paddingTop={14} borderTopWidth={1} borderTopColor={dividerColor}>
                   <YStack gap={2}>
-                    <Text color="#8D99AE" fontSize={12} style={{ fontFamily: Fonts.medium }} lineHeight={16}>
+                    <Text color={textMuted} fontSize={12} style={{ fontFamily: Fonts.medium }} lineHeight={16}>
                       Invested Assets
                     </Text>
-                    <Text color="#FFFFFF" fontSize={15} style={{ fontFamily: Fonts.bold }} lineHeight={20}>
+                    <Text color={textColor} fontSize={15} style={{ fontFamily: Fonts.bold }} lineHeight={20}>
                       {currencySymbol}{holdingsValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </Text>
                   </YStack>
                   <YStack alignItems="flex-end" gap={2}>
-                    <Text color="#8D99AE" fontSize={12} style={{ fontFamily: Fonts.medium }} lineHeight={16}>
+                    <Text color={textMuted} fontSize={12} style={{ fontFamily: Fonts.medium }} lineHeight={16}>
                       Buying Power
                     </Text>
                     <Text color="#10B981" fontSize={15} style={{ fontFamily: Fonts.bold }} lineHeight={20}>
@@ -1237,26 +1249,26 @@ export default function InvestScreen() {
                 {/* Asset Allocation Breakdown Bar */}
                 <YStack gap={8} marginTop={2}>
                   <XStack justifyContent="space-between" alignItems="center">
-                    <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">
+                    <Text color={textMuted} fontSize={11} style={{ fontFamily: Fonts.bold }} letterSpacing={0.8} textTransform="uppercase">
                       Asset Allocation
                     </Text>
                     <XStack gap={10}>
                       <XStack gap={4} alignItems="center">
                         <View width={6} height={6} borderRadius={3} backgroundColor="#1D8348" />
-                        <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.medium }}>
+                        <Text color={textMuted} fontSize={11} style={{ fontFamily: Fonts.medium }}>
                           Stocks ({totalPortfolioValue > 0 ? Math.round((holdingsValue / totalPortfolioValue) * 100) : 0}%)
                         </Text>
                       </XStack>
                       <XStack gap={4} alignItems="center">
                         <View width={6} height={6} borderRadius={3} backgroundColor="#10B981" />
-                        <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.medium }}>
+                        <Text color={textMuted} fontSize={11} style={{ fontFamily: Fonts.medium }}>
                           Cash ({totalPortfolioValue > 0 ? Math.round((store.virtualBalance / totalPortfolioValue) * 100) : 100}%)
                         </Text>
                       </XStack>
                     </XStack>
                   </XStack>
 
-                  <View height={6} backgroundColor="rgba(255, 255, 255, 0.08)" borderRadius={3} overflow="hidden" flexDirection="row" width="100%">
+                  <View height={6} backgroundColor={isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'} borderRadius={3} overflow="hidden" flexDirection="row" width="100%">
                     <View 
                       width={`${totalPortfolioValue > 0 ? Math.min(100, (holdingsValue / totalPortfolioValue) * 100) : 0}%`} 
                       height="100%" 
@@ -1275,10 +1287,10 @@ export default function InvestScreen() {
               <YStack gap={12} marginBottom={24}>
                 <XStack justifyContent="space-between" alignItems="center" paddingHorizontal={2}>
                   <YStack gap={1}>
-                    <Text color="#FFFFFF" fontSize={16} style={{ fontFamily: Fonts.bold }} letterSpacing={-0.3}>
+                    <Text color={textColor} fontSize={16} style={{ fontFamily: Fonts.bold }} letterSpacing={-0.3}>
                       Your Holdings
                     </Text>
-                    <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.medium }}>
+                    <Text color={textMuted} fontSize={11} style={{ fontFamily: Fonts.medium }}>
                       {ownedAssets.length === 0 ? 'No open positions' : `${ownedAssets.length} active position${ownedAssets.length === 1 ? '' : 's'}`}
                     </Text>
                   </YStack>
@@ -1302,8 +1314,8 @@ export default function InvestScreen() {
                 {ownedAssets.length === 0 ? (
                   <CbudgetCard
                     padding={22}
-                    backgroundColor="#1C2541"
-                    borderColor="rgba(255, 255, 255, 0.08)"
+                    backgroundColor={cardBg}
+                    borderColor={cardBorder}
                     borderWidth={1}
                     borderRadius={16}
                     alignItems="center"
@@ -1322,10 +1334,10 @@ export default function InvestScreen() {
                       <PhosphorIcon name="TrendUp" size={24} color="#10B981" weight="duotone" />
                     </View>
                     <YStack alignItems="center" gap={4}>
-                      <Text color="#FFFFFF" fontSize={15} style={{ fontFamily: Fonts.bold }}>
+                      <Text color={textColor} fontSize={15} style={{ fontFamily: Fonts.bold }}>
                         No Active Holdings Yet
                       </Text>
-                      <Text color="#8D99AE" fontSize={12} textAlign="center" style={{ fontFamily: Fonts.regular }} maxWidth={260} lineHeight={17}>
+                      <Text color={textMuted} fontSize={12} textAlign="center" style={{ fontFamily: Fonts.regular }} maxWidth={260} lineHeight={17}>
                         Explore vetted companies in our simulated market to start building and compounding your portfolio.
                       </Text>
                     </YStack>
@@ -1355,8 +1367,8 @@ export default function InvestScreen() {
                 ) : (
                   <CbudgetCard
                     padding={0}
-                    backgroundColor="#1C2541"
-                    borderColor="rgba(255, 255, 255, 0.08)"
+                    backgroundColor={cardBg}
+                    borderColor={cardBorder}
                     borderWidth={1}
                     borderRadius={16}
                     overflow="hidden"
@@ -1383,19 +1395,19 @@ export default function InvestScreen() {
                                   width={38}
                                   height={38}
                                   borderRadius={10}
-                                  backgroundColor="rgba(255, 255, 255, 0.05)"
+                                  backgroundColor={subcardBg}
                                   borderWidth={1}
-                                  borderColor="rgba(255, 255, 255, 0.08)"
+                                  borderColor={dividerColor}
                                   alignItems="center"
                                   justifyContent="center"
                                 >
-                                  <Text color="#FFFFFF" fontSize={12} style={{ fontFamily: Fonts.bold }}>
+                                  <Text color={textColor} fontSize={12} style={{ fontFamily: Fonts.bold }}>
                                     {asset.ticker.slice(0, 3)}
                                   </Text>
                                 </View>
                                 <YStack flex={1} gap={2}>
                                   <XStack alignItems="center" gap={6}>
-                                    <Text color="#FFFFFF" fontSize={13.5} style={{ fontFamily: Fonts.bold }} numberOfLines={1}>
+                                    <Text color={textColor} fontSize={13.5} style={{ fontFamily: Fonts.bold }} numberOfLines={1}>
                                       {asset.name}
                                     </Text>
                                     <View
@@ -1425,14 +1437,14 @@ export default function InvestScreen() {
                                       </Text>
                                     </View>
                                   </XStack>
-                                  <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.medium }}>
+                                  <Text color={textMuted} fontSize={11} style={{ fontFamily: Fonts.medium }}>
                                     {formatShares(ownedUnits)} shares · {currencySymbol}{asset.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                   </Text>
                                 </YStack>
                               </XStack>
 
                               <YStack alignItems="flex-end" gap={2}>
-                                <Text color="#FFFFFF" fontSize={13.5} style={{ fontFamily: Fonts.bold }}>
+                                <Text color={textColor} fontSize={13.5} style={{ fontFamily: Fonts.bold }}>
                                   {currencySymbol}{assetTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </Text>
                                 <View
@@ -1459,7 +1471,7 @@ export default function InvestScreen() {
                               </YStack>
                             </XStack>
                           </TouchableOpacity>
-                          {!isLast && <View height={1} backgroundColor="rgba(255, 255, 255, 0.05)" marginHorizontal={14} />}
+                          {!isLast && <View height={1} backgroundColor={dividerColor} marginHorizontal={14} />}
                         </View>
                       );
                     })}
@@ -1479,20 +1491,20 @@ export default function InvestScreen() {
                     <View
                       key={m.name}
                       style={{
-                        backgroundColor: '#1C2541',
+                        backgroundColor: cardBg,
                         paddingHorizontal: 12,
                         paddingVertical: 8,
                         borderRadius: 12,
                         borderWidth: 1,
-                        borderColor: 'rgba(255, 255, 255, 0.08)',
+                        borderColor: cardBorder,
                         flexDirection: 'row',
                         alignItems: 'center',
                         gap: 8,
                       }}
                     >
                       <YStack gap={1}>
-                        <Text color="#8D99AE" fontSize={10} style={{ fontFamily: Fonts.bold }}>{m.name}</Text>
-                        <Text color="#FFFFFF" fontSize={12} style={{ fontFamily: Fonts.bold }}>{m.val}</Text>
+                        <Text color={textMuted} fontSize={10} style={{ fontFamily: Fonts.bold }}>{m.name}</Text>
+                        <Text color={textColor} fontSize={12} style={{ fontFamily: Fonts.bold }}>{m.val}</Text>
                       </YStack>
                       <View
                         style={{
@@ -1516,10 +1528,10 @@ export default function InvestScreen() {
                 {/* Header Row: Title & Active Filters Reset */}
                 <XStack justifyContent="space-between" alignItems="center" paddingHorizontal={2}>
                   <YStack gap={1}>
-                    <Text color="#FFFFFF" fontSize={16} style={{ fontFamily: Fonts.bold }} letterSpacing={-0.3}>
+                    <Text color={textColor} fontSize={16} style={{ fontFamily: Fonts.bold }} letterSpacing={-0.3}>
                       Demo Investment Companies
                     </Text>
-                    <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.medium }}>
+                    <Text color={textMuted} fontSize={11} style={{ fontFamily: Fonts.medium }}>
                       {filteredAssets.length} of {assets.length} companies available
                     </Text>
                   </YStack>
@@ -1557,26 +1569,26 @@ export default function InvestScreen() {
                   {/* Expanded Live Search Input (Fills Available Width) */}
                   <XStack
                     flex={1}
-                    backgroundColor="#1C2541"
+                    backgroundColor={cardBg}
                     borderRadius={12}
                     borderWidth={1}
-                    borderColor="rgba(255, 255, 255, 0.08)"
+                    borderColor={cardBorder}
                     paddingHorizontal={12}
                     height={40}
                     alignItems="center"
                     gap={8}
                   >
-                    <PhosphorIcon name="MagnifyingGlass" size={16} color="#8D99AE" />
+                    <PhosphorIcon name="MagnifyingGlass" size={16} color={textMuted} />
                     <TextInput
                       placeholder="Search companies, tickers..."
-                      placeholderTextColor="#64748B"
+                      placeholderTextColor={textMuted}
                       value={searchQuery}
                       onChangeText={setSearchQuery}
-                      style={{ flex: 1, color: '#FFFFFF', fontSize: 13, fontFamily: Fonts.regular, padding: 0 }}
+                      style={{ flex: 1, color: textColor, fontSize: 13, fontFamily: Fonts.regular, padding: 0 }}
                     />
                     {searchQuery.length > 0 && (
                       <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                        <PhosphorIcon name="XCircle" size={16} color="#8D99AE" />
+                        <PhosphorIcon name="XCircle" size={16} color={textMuted} />
                       </TouchableOpacity>
                     )}
                   </XStack>
@@ -1601,7 +1613,7 @@ export default function InvestScreen() {
                       <PhosphorIcon
                         name="FunnelSimple"
                         size={20}
-                        color={showFilterTray || assetFilter !== 'ALL' || sortBy !== 'default' ? '#10B981' : '#8D99AE'}
+                        color={showFilterTray || assetFilter !== 'ALL' || sortBy !== 'default' ? '#10B981' : textMuted}
                         weight={showFilterTray || assetFilter !== 'ALL' || sortBy !== 'default' ? 'bold' : 'regular'}
                       />
                     </TouchableOpacity>
@@ -1624,7 +1636,7 @@ export default function InvestScreen() {
                       <PhosphorIcon
                         name={viewMode === 'grid' ? 'List' : 'SquaresFour'}
                         size={20}
-                        color={viewMode === 'grid' ? '#10B981' : '#8D99AE'}
+                        color={viewMode === 'grid' ? '#10B981' : textMuted}
                         weight="bold"
                       />
                     </TouchableOpacity>
@@ -1633,11 +1645,11 @@ export default function InvestScreen() {
 
                 {/* Combined Filter & Sort Tray */}
                 {showFilterTray && (
-                  <YStack backgroundColor="#1C2541" padding={14} borderRadius={14} borderWidth={1} borderColor="rgba(16, 185, 129, 0.25)" gap={12}>
+                  <YStack backgroundColor={cardBg} padding={14} borderRadius={14} borderWidth={1} borderColor={isDark ? 'rgba(16, 185, 129, 0.25)' : 'rgba(16, 185, 129, 0.4)'} gap={12}>
                     <XStack justifyContent="space-between" alignItems="center">
                       <XStack gap={6} alignItems="center">
                         <PhosphorIcon name="FunnelSimple" size={14} color="#10B981" weight="bold" />
-                        <Text color="#FFFFFF" fontSize={13} style={{ fontFamily: Fonts.bold }}>
+                        <Text color={textColor} fontSize={13} style={{ fontFamily: Fonts.bold }}>
                           Filter & Sort Watchlist
                         </Text>
                       </XStack>
@@ -1657,7 +1669,7 @@ export default function InvestScreen() {
 
                     {/* Risk Profile Section */}
                     <YStack gap={6}>
-                      <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.semiBold }}>
+                      <Text color={textMuted} fontSize={11} style={{ fontFamily: Fonts.semiBold }}>
                         Risk Profile
                       </Text>
                       <XStack gap={6} flexWrap="wrap">
@@ -1675,13 +1687,13 @@ export default function InvestScreen() {
                                 paddingHorizontal: 12,
                                 paddingVertical: 6,
                                 borderRadius: 10,
-                                backgroundColor: isSel ? '#10B981' : 'rgba(255, 255, 255, 0.05)',
+                                backgroundColor: isSel ? '#10B981' : subcardBg,
                                 borderWidth: 1,
-                                borderColor: isSel ? '#10B981' : 'rgba(255, 255, 255, 0.08)',
+                                borderColor: isSel ? '#10B981' : dividerColor,
                               }}
                             >
                               <Text
-                                color={isSel ? '#FFFFFF' : '#8D99AE'}
+                                color={isSel ? '#FFFFFF' : textMuted}
                                 fontSize={11.5}
                                 style={{ fontFamily: isSel ? Fonts.bold : Fonts.medium }}
                               >
@@ -1695,7 +1707,7 @@ export default function InvestScreen() {
 
                     {/* Sort Order Section */}
                     <YStack gap={6}>
-                      <Text color="#8D99AE" fontSize={11} style={{ fontFamily: Fonts.semiBold }}>
+                      <Text color={textMuted} fontSize={11} style={{ fontFamily: Fonts.semiBold }}>
                         Sort Order
                       </Text>
                       <XStack gap={6} flexWrap="wrap">
@@ -1719,13 +1731,13 @@ export default function InvestScreen() {
                                 paddingHorizontal: 12,
                                 paddingVertical: 6,
                                 borderRadius: 10,
-                                backgroundColor: isSel ? '#10B981' : 'rgba(255, 255, 255, 0.05)',
+                                backgroundColor: isSel ? '#10B981' : subcardBg,
                                 borderWidth: 1,
-                                borderColor: isSel ? '#10B981' : 'rgba(255, 255, 255, 0.08)',
+                                borderColor: isSel ? '#10B981' : dividerColor,
                               }}
                             >
                               <Text
-                                color={isSel ? '#FFFFFF' : '#8D99AE'}
+                                color={isSel ? '#FFFFFF' : textMuted}
                                 fontSize={11.5}
                                 style={{ fontFamily: isSel ? Fonts.bold : Fonts.medium }}
                               >
@@ -1818,11 +1830,11 @@ export default function InvestScreen() {
                             activeOpacity={0.82}
                             style={{
                               flex: 1,
-                              backgroundColor: '#131D33',
+                              backgroundColor: gridCardBg,
                               borderRadius: 18,
                               padding: 13,
                               borderWidth: 1,
-                              borderColor: 'rgba(255, 255, 255, 0.08)',
+                              borderColor: cardBorder,
                               gap: 12,
                               justifyContent: 'space-between',
                             }}
@@ -1875,20 +1887,20 @@ export default function InvestScreen() {
 
                             {/* Grid Ticker, Name & Sector */}
                             <YStack gap={2}>
-                              <Text color="#FFFFFF" fontSize={16} style={{ fontFamily: Fonts.bold, letterSpacing: -0.3 }}>
+                              <Text color={textColor} fontSize={16} style={{ fontFamily: Fonts.bold, letterSpacing: -0.3 }}>
                                 {asset.ticker}
                               </Text>
-                              <Text color="#94A3B8" fontSize={11.5} numberOfLines={1} style={{ fontFamily: Fonts.medium }}>
+                              <Text color={textMuted} fontSize={11.5} numberOfLines={1} style={{ fontFamily: Fonts.medium }}>
                                 {asset.name}
                               </Text>
-                              <Text color="rgba(148, 163, 184, 0.65)" fontSize={10} numberOfLines={1} style={{ fontFamily: Fonts.regular }}>
+                              <Text color={textSubtle} fontSize={10} numberOfLines={1} style={{ fontFamily: Fonts.regular }}>
                                 {asset.partner}
                               </Text>
                             </YStack>
 
                             {/* Price & Real-Time Change Pill with Indicator Arrow */}
                             <YStack gap={4}>
-                              <Text color="#FFFFFF" fontSize={17} style={{ fontFamily: Fonts.bold, letterSpacing: -0.4 }}>
+                              <Text color={textColor} fontSize={17} style={{ fontFamily: Fonts.bold, letterSpacing: -0.4 }}>
                                 {currencySymbol}{asset.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                               </Text>
                               <View 
@@ -1921,18 +1933,18 @@ export default function InvestScreen() {
                             {ownedUnits > 0 && (
                               <View
                                 style={{
-                                  backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                                  backgroundColor: isDark ? 'rgba(16, 185, 129, 0.08)' : 'rgba(16, 185, 129, 0.1)',
                                   paddingHorizontal: 8,
                                   paddingVertical: 5,
                                   borderRadius: 9,
                                   borderWidth: 1,
-                                  borderColor: 'rgba(16, 185, 129, 0.22)',
+                                  borderColor: isDark ? 'rgba(16, 185, 129, 0.22)' : 'rgba(16, 185, 129, 0.25)',
                                 }}
                               >
                                 <XStack alignItems="center" justifyContent="space-between" width="100%">
                                   <XStack alignItems="center" gap={4}>
                                     <View width={4} height={4} borderRadius={2} backgroundColor="#10B981" />
-                                    <Text color="#A7F3D0" fontSize={10} style={{ fontFamily: Fonts.semiBold }}>
+                                    <Text color={isDark ? '#A7F3D0' : '#065F46'} fontSize={10} style={{ fontFamily: Fonts.semiBold }}>
                                       Own: {formatShares(ownedUnits)} sh
                                     </Text>
                                   </XStack>
@@ -1966,8 +1978,8 @@ export default function InvestScreen() {
                   <CbudgetCard 
                     padding={0} 
                     borderRadius={16}
-                    backgroundColor="#1C2541"
-                    borderColor="rgba(255, 255, 255, 0.08)"
+                    backgroundColor={cardBg}
+                    borderColor={cardBorder}
                     borderWidth={1}
                     elevation={0}
                     style={{ overflow: 'hidden' }}
@@ -2016,7 +2028,7 @@ export default function InvestScreen() {
 
                                 <YStack gap={2} flex={1}>
                                   <XStack gap={6} alignItems="center">
-                                    <Text color="#FFFFFF" fontSize={15.5} style={{ fontFamily: Fonts.bold, letterSpacing: -0.3 }}>
+                                    <Text color={textColor} fontSize={15.5} style={{ fontFamily: Fonts.bold, letterSpacing: -0.3 }}>
                                       {asset.ticker}
                                     </Text>
                                     <View
@@ -2042,14 +2054,14 @@ export default function InvestScreen() {
                                       </Text>
                                     </View>
                                   </XStack>
-                                  <Text color="#94A3B8" fontSize={11.5} numberOfLines={1} style={{ fontFamily: Fonts.regular }}>
+                                  <Text color={textMuted} fontSize={11.5} numberOfLines={1} style={{ fontFamily: Fonts.regular }}>
                                     {asset.name} • {asset.partner}
                                   </Text>
                                 </YStack>
                               </XStack>
 
                               <YStack alignItems="flex-end" gap={3} minWidth={85}>
-                                <Text color="#FFFFFF" fontSize={16} style={{ fontFamily: Fonts.bold, letterSpacing: -0.3 }}>
+                                <Text color={textColor} fontSize={16} style={{ fontFamily: Fonts.bold, letterSpacing: -0.3 }}>
                                   {currencySymbol}{asset.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                 </Text>
                                 <View
@@ -2082,12 +2094,12 @@ export default function InvestScreen() {
                               <View
                                 style={{
                                   marginTop: 8,
-                                  backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                                  backgroundColor: isDark ? 'rgba(16, 185, 129, 0.08)' : 'rgba(16, 185, 129, 0.1)',
                                   paddingHorizontal: 9,
                                   paddingVertical: 5,
                                   borderRadius: 8,
                                   borderWidth: 1,
-                                  borderColor: 'rgba(16, 185, 129, 0.2)',
+                                  borderColor: isDark ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.25)',
                                   flexDirection: 'row',
                                   alignItems: 'center',
                                   justifyContent: 'space-between',
@@ -2095,7 +2107,7 @@ export default function InvestScreen() {
                               >
                                 <XStack alignItems="center" gap={4}>
                                   <View width={4} height={4} borderRadius={2} backgroundColor="#10B981" />
-                                  <Text color="#A7F3D0" fontSize={10.5} style={{ fontFamily: Fonts.medium }}>
+                                  <Text color={isDark ? '#A7F3D0' : '#065F46'} fontSize={10.5} style={{ fontFamily: Fonts.medium }}>
                                     You own: <Text color="#10B981" style={{ fontFamily: Fonts.bold }}>{formatShares(ownedUnits)} shares</Text>
                                   </Text>
                                 </XStack>
@@ -2105,7 +2117,7 @@ export default function InvestScreen() {
                               </View>
                             )}
                           </TouchableOpacity>
-                          {!isLast && <View height={1} backgroundColor="rgba(255, 255, 255, 0.05)" marginHorizontal={14} />}
+                          {!isLast && <View height={1} backgroundColor={dividerColor} marginHorizontal={14} />}
                         </View>
                       );
                     })}
@@ -2113,9 +2125,9 @@ export default function InvestScreen() {
                 )}
 
                 {filteredAssets.length === 0 && (
-                  <View backgroundColor="#1C2541" padding={24} borderRadius={14} alignItems="center" gap={6}>
-                    <Text color="#FFFFFF" fontSize={14} style={{ fontFamily: Fonts.bold }}>No Assets Match Filters</Text>
-                    <Text color="#8D99AE" fontSize={12} textAlign="center">
+                  <View backgroundColor={cardBg} padding={24} borderRadius={14} alignItems="center" gap={6} borderWidth={1} borderColor={cardBorder}>
+                    <Text color={textColor} fontSize={14} style={{ fontFamily: Fonts.bold }}>No Assets Match Filters</Text>
+                    <Text color={textMuted} fontSize={12} textAlign="center">
                       Try clearing your search query or adjusting your risk/sort filters.
                     </Text>
                     <TouchableOpacity

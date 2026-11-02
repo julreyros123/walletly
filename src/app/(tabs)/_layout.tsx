@@ -3,7 +3,7 @@ import { Tabs, useRouter, usePathname, Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/hooks/use-theme';
 import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
-import { Platform, Modal, TouchableOpacity, StyleSheet, Alert, PixelRatio } from 'react-native';
+import { Platform, Modal, TouchableOpacity, StyleSheet, Alert, PixelRatio, Easing } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/authStore';
 import { Fonts } from '@/constants/theme';
@@ -28,16 +28,22 @@ export default function TabsLayout() {
       ? 76
       : Math.max(70, Math.round(62 * Math.min(fontScale, 1.4))) + insets.bottom;
 
-  // Only tabs with persistent dark backgrounds (e.g. Invest) use light status bar in light mode
-  const isDarkHeaderTab = pathname.includes('invest');
   const isDark = theme.mode === 'dark';
-  const tabStatusBarStyle = isDark || isDarkHeaderTab ? 'light' : 'dark';
+  const tabStatusBarStyle = isDark ? 'light' : 'dark';
 
   return (
     <>
       <StatusBar style={tabStatusBarStyle} />
       <Tabs
         screenOptions={{
+          animation: 'shift',
+          transitionSpec: {
+            animation: 'timing',
+            config: {
+              duration: 220,
+              easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+            },
+          },
           sceneStyle: { backgroundColor: theme.background },
           tabBarActiveTintColor: theme.primary as any,
           tabBarInactiveTintColor: theme.textSecondary as any,

@@ -28,9 +28,25 @@ import { useMarketStore } from '@/store/marketStore';
 import { InteractiveChart } from '@/features/invest/components/InteractiveChart';
 import { Fonts } from '@/constants/theme';
 import { safeHaptic } from '@/utils/haptics';
+import { useTheme } from '@/hooks/use-theme';
 
 export default function InvestDetailsScreen() {
   const router = useRouter();
+  const theme = useTheme();
+  const isDark = theme.mode === 'dark';
+  const screenBg = isDark ? '#0B132B' : theme.background;
+  const cardBg = isDark ? '#111C35' : theme.surface;
+  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : theme.border;
+  const textColor = isDark ? '#FFFFFF' : theme.text;
+  const textMuted = isDark ? '#8D99AE' : theme.textSecondary;
+  const subcardBg = isDark ? 'rgba(11, 19, 43, 0.65)' : 'rgba(0, 0, 0, 0.03)';
+  const subcardBorder = isDark ? 'rgba(255, 255, 255, 0.06)' : theme.border;
+  const dividerColor = isDark ? 'rgba(255, 255, 255, 0.08)' : theme.border;
+
+  useEffect(() => {
+    setStatusBarStyle(isDark ? 'light' : 'dark');
+  }, [isDark]);
+
   const store = useGamificationStore();
   const market = useMarketStore();
   const params = useLocalSearchParams<{ ticker?: string }>();
@@ -200,7 +216,7 @@ export default function InvestDetailsScreen() {
   const currentPos = Math.min(Math.max(((asset.price - asset.low52) / rangeSpan) * 100, 0), 100);
 
   return (
-    <View style={styles.screenContainer}>
+    <View style={[styles.screenContainer, { backgroundColor: screenBg }]}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
         {/* ==================== EXECUTIVE HEADER ==================== */}
         <XStack
@@ -209,7 +225,7 @@ export default function InvestDetailsScreen() {
           paddingHorizontal={16}
           paddingVertical={12}
           borderBottomWidth={1}
-          borderBottomColor="rgba(255, 255, 255, 0.08)"
+          borderBottomColor={dividerColor}
         >
           <TouchableOpacity
             onPress={() => {
@@ -221,15 +237,15 @@ export default function InvestDetailsScreen() {
             <XStack
               gap={6}
               alignItems="center"
-              backgroundColor="rgba(255, 255, 255, 0.06)"
+              backgroundColor={isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)'}
               paddingHorizontal={14}
               paddingVertical={8}
               borderRadius={999}
               borderWidth={1}
-              borderColor="rgba(255, 255, 255, 0.1)"
+              borderColor={dividerColor}
             >
-              <PhosphorIcon name="CaretLeft" size={15} color="#FFFFFF" weight="bold" />
-              <Text color="#FFFFFF" fontSize={12} fontFamily={Fonts.bold}>
+              <PhosphorIcon name="CaretLeft" size={15} color={textColor} weight="bold" />
+              <Text color={textColor} fontSize={12} fontFamily={Fonts.bold}>
                 Back
               </Text>
             </XStack>
@@ -421,18 +437,18 @@ export default function InvestDetailsScreen() {
           </YStack>
 
           {/* ==================== PERFORMANCE CHART CARD ==================== */}
-          <View style={styles.fintechCard}>
+          <View style={[styles.fintechCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
             <XStack justifyContent="space-between" alignItems="center" marginBottom={12}>
-              <Text color="#FFFFFF" fontSize={14} fontFamily={Fonts.bold} letterSpacing={-0.2}>
+              <Text color={textColor} fontSize={14} fontFamily={Fonts.bold} letterSpacing={-0.2}>
                 Performance History
               </Text>
               <XStack
                 gap={4}
-                backgroundColor="rgba(11, 19, 43, 0.8)"
+                backgroundColor={subcardBg}
                 borderRadius={10}
                 padding={3}
                 borderWidth={1}
-                borderColor="rgba(255, 255, 255, 0.08)"
+                borderColor={dividerColor}
               >
                 {(['1D', '1W', '1M'] as const).map((tf) => (
                   <TouchableOpacity
@@ -450,7 +466,7 @@ export default function InvestDetailsScreen() {
                     ]}
                   >
                     <Text
-                      color={chartTimeframe === tf ? '#FFFFFF' : 'rgba(255, 255, 255, 0.6)'}
+                      color={chartTimeframe === tf ? '#FFFFFF' : textMuted}
                       fontSize={10.5}
                       fontFamily={Fonts.bold}
                     >
@@ -465,18 +481,18 @@ export default function InvestDetailsScreen() {
               data={activeHistory}
               color={asset.color}
               onChangePrice={setScrubbedPrice}
-              theme={{ mode: 'dark' }}
-              forceDark={true}
+              theme={theme}
+              forceDark={isDark}
             />
           </View>
 
           {/* ==================== PORTFOLIO POSITION & ACTIONS ==================== */}
-          <View style={styles.fintechCard}>
+          <View style={[styles.fintechCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
             <XStack justifyContent="space-between" alignItems="center" marginBottom={8}>
-              <Text color="rgba(255, 255, 255, 0.5)" fontSize={11} fontFamily={Fonts.bold} letterSpacing={0.8} textTransform="uppercase">
+              <Text color={textMuted} fontSize={11} fontFamily={Fonts.bold} letterSpacing={0.8} textTransform="uppercase">
                 Portfolio Position
               </Text>
-              <Text color="#FFFFFF" fontSize={14} fontFamily={Fonts.bold}>
+              <Text color={textColor} fontSize={14} fontFamily={Fonts.bold}>
                 {ownedUnits.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 4 })} units (~{currencySymbol}{assetTotalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
               </Text>
             </XStack>
@@ -591,7 +607,7 @@ export default function InvestDetailsScreen() {
           </View>
 
           {/* ==================== STRATEGIC THESIS & MARKET ANALYSIS ==================== */}
-          <View style={styles.fintechCard}>
+          <View style={[styles.fintechCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
             <XStack justifyContent="space-between" alignItems="center" marginBottom={12}>
               <XStack gap={8} alignItems="center">
                 <View
@@ -604,7 +620,7 @@ export default function InvestDetailsScreen() {
                 >
                   <PhosphorIcon name="Lightbulb" size={16} color="#FBBF24" weight="fill" />
                 </View>
-                <Text color="#FFFFFF" fontSize={14} fontFamily={Fonts.bold} letterSpacing={-0.2}>
+                <Text color={textColor} fontSize={14} fontFamily={Fonts.bold} letterSpacing={-0.2}>
                   Strategic Thesis & Outlook
                 </Text>
               </XStack>
@@ -617,14 +633,14 @@ export default function InvestDetailsScreen() {
                 activeOpacity={0.8}
               >
                 <View
-                  backgroundColor="rgba(255, 255, 255, 0.08)"
+                  backgroundColor={subcardBg}
                   paddingHorizontal={10}
                   paddingVertical={5}
                   borderRadius={8}
                   borderWidth={1}
-                  borderColor="rgba(255, 255, 255, 0.12)"
+                  borderColor={dividerColor}
                 >
-                  <Text color="#FFFFFF" fontSize={10.5} fontFamily={Fonts.bold}>
+                  <Text color={textColor} fontSize={10.5} fontFamily={Fonts.bold}>
                     {thesisViewMode === 'thesis' ? 'SIMPLIFIED' : 'ANALYST'}
                   </Text>
                 </View>
@@ -637,55 +653,55 @@ export default function InvestDetailsScreen() {
                   <Text color="#38BDF8" fontSize={11} fontFamily={Fonts.bold} letterSpacing={0.5} textTransform="uppercase">
                     Core Business Model
                   </Text>
-                  <Text color="rgba(255, 255, 255, 0.85)" fontSize={13} lineHeight={19} fontFamily={Fonts.medium}>
+                  <Text color={textColor} fontSize={13} lineHeight={19} fontFamily={Fonts.medium}>
                     {thesis.businessModel}
                   </Text>
                 </YStack>
 
-                <View height={1} backgroundColor="rgba(255, 255, 255, 0.06)" />
+                <View height={1} backgroundColor={dividerColor} />
 
                 <YStack gap={4}>
                   <Text color="#34D399" fontSize={11} fontFamily={Fonts.bold} letterSpacing={0.5} textTransform="uppercase">
                     Growth Catalysts
                   </Text>
-                  <Text color="rgba(255, 255, 255, 0.85)" fontSize={13} lineHeight={19} fontFamily={Fonts.medium}>
+                  <Text color={textColor} fontSize={13} lineHeight={19} fontFamily={Fonts.medium}>
                     {thesis.catalysts}
                   </Text>
                 </YStack>
 
-                <View height={1} backgroundColor="rgba(255, 255, 255, 0.06)" />
+                <View height={1} backgroundColor={dividerColor} />
 
                 <XStack
                   gap={10}
                   alignItems="flex-start"
-                  backgroundColor="rgba(11, 19, 43, 0.6)"
+                  backgroundColor={subcardBg}
                   padding={12}
                   borderRadius={10}
                   borderWidth={1}
-                  borderColor="rgba(255, 255, 255, 0.06)"
+                  borderColor={dividerColor}
                 >
                   <PhosphorIcon name="Warning" size={16} color="#FBBF24" weight="fill" style={{ marginTop: 2 }} />
-                  <Text color="rgba(255, 255, 255, 0.75)" fontSize={12} lineHeight={18} fontFamily={Fonts.medium} flex={1}>
+                  <Text color={textColor} fontSize={12} lineHeight={18} fontFamily={Fonts.medium} flex={1}>
                     {thesis.riskExplanation}
                   </Text>
                 </XStack>
               </YStack>
             ) : (
               <YStack gap={10}>
-                <Text color="rgba(255, 255, 255, 0.85)" fontSize={13.5} lineHeight={20} fontFamily={Fonts.medium}>
+                <Text color={textColor} fontSize={13.5} lineHeight={20} fontFamily={Fonts.medium}>
                   {simpleGuide.analogy}
                 </Text>
                 <XStack
                   gap={10}
                   alignItems="flex-start"
-                  backgroundColor="rgba(11, 19, 43, 0.6)"
+                  backgroundColor={subcardBg}
                   padding={12}
                   borderRadius={10}
                   borderWidth={1}
-                  borderColor="rgba(255, 255, 255, 0.06)"
+                  borderColor={dividerColor}
                 >
                   <PhosphorIcon name="Info" size={16} color="#38BDF8" weight="fill" style={{ marginTop: 2 }} />
-                  <Text color="rgba(255, 255, 255, 0.75)" fontSize={12} lineHeight={18} fontFamily={Fonts.medium} flex={1}>
+                  <Text color={textColor} fontSize={12} lineHeight={18} fontFamily={Fonts.medium} flex={1}>
                     {simpleGuide.riskExplanation}
                   </Text>
                 </XStack>
@@ -694,13 +710,13 @@ export default function InvestDetailsScreen() {
           </View>
 
           {/* ==================== 52-WEEK PRICE RANGE GAUGE ==================== */}
-          <View style={styles.fintechCard}>
-            <Text color="#FFFFFF" fontSize={14} fontFamily={Fonts.bold} letterSpacing={-0.2} marginBottom={12}>
+          <View style={[styles.fintechCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <Text color={textColor} fontSize={14} fontFamily={Fonts.bold} letterSpacing={-0.2} marginBottom={12}>
               52-Week Price Range
             </Text>
 
             <YStack gap={10}>
-              <View height={8} backgroundColor="rgba(255, 255, 255, 0.08)" borderRadius={6} position="relative" width="100%">
+              <View height={8} backgroundColor={isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'} borderRadius={6} position="relative" width="100%">
                 <View
                   position="absolute"
                   top={0}
@@ -719,25 +735,25 @@ export default function InvestDetailsScreen() {
                   borderRadius={8}
                   backgroundColor="#FFFFFF"
                   borderWidth={3}
-                  borderColor="#0B132B"
+                  borderColor={isDark ? '#0B132B' : '#E2E8F0'}
                   style={{ marginLeft: -8 } as any}
                 />
               </View>
 
               <XStack justifyContent="space-between" alignItems="center">
                 <YStack gap={2}>
-                  <Text color="rgba(255, 255, 255, 0.45)" fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                  <Text color={textMuted} fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
                     52-WEEK LOW
                   </Text>
-                  <Text color="#FFFFFF" fontSize={13.5} fontFamily={Fonts.bold}>
+                  <Text color={textColor} fontSize={13.5} fontFamily={Fonts.bold}>
                     {currencySymbol}{asset.low52.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </Text>
                 </YStack>
                 <YStack alignItems="flex-end" gap={2}>
-                  <Text color="rgba(255, 255, 255, 0.45)" fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                  <Text color={textMuted} fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
                     52-WEEK HIGH
                   </Text>
-                  <Text color="#FFFFFF" fontSize={13.5} fontFamily={Fonts.bold}>
+                  <Text color={textColor} fontSize={13.5} fontFamily={Fonts.bold}>
                     {currencySymbol}{asset.high52.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </Text>
                 </YStack>
@@ -746,54 +762,54 @@ export default function InvestDetailsScreen() {
           </View>
 
           {/* ==================== KEY STATISTICS BENTO GRID ==================== */}
-          <View style={styles.fintechCard}>
-            <Text color="#FFFFFF" fontSize={14} fontFamily={Fonts.bold} letterSpacing={-0.2} marginBottom={12}>
+          <View style={[styles.fintechCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <Text color={textColor} fontSize={14} fontFamily={Fonts.bold} letterSpacing={-0.2} marginBottom={12}>
               Key Statistics
             </Text>
 
             <XStack justifyContent="space-between" flexWrap="wrap" gap={10}>
               {/* Stat 1: Market Cap */}
-              <View style={styles.statBox}>
+              <View style={[styles.statBox, { backgroundColor: subcardBg, borderColor: subcardBorder }]}>
                 <XStack gap={8} alignItems="center" marginBottom={4}>
                   <View style={styles.statIconBadge}>
                     <PhosphorIcon name="ChartBar" size={14} color="#38BDF8" weight="bold" />
                   </View>
-                  <Text color="rgba(255, 255, 255, 0.5)" fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                  <Text color={textMuted} fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
                     MARKET CAP
                   </Text>
                 </XStack>
-                <Text color="#FFFFFF" fontSize={15} fontFamily={Fonts.bold}>
+                <Text color={textColor} fontSize={15} fontFamily={Fonts.bold}>
                   {asset.marketCap}
                 </Text>
               </View>
 
               {/* Stat 2: Volume */}
-              <View style={styles.statBox}>
+              <View style={[styles.statBox, { backgroundColor: subcardBg, borderColor: subcardBorder }]}>
                 <XStack gap={8} alignItems="center" marginBottom={4}>
                   <View style={styles.statIconBadge}>
                     <PhosphorIcon name="Waveform" size={14} color="#34D399" weight="bold" />
                   </View>
-                  <Text color="rgba(255, 255, 255, 0.5)" fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                  <Text color={textMuted} fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
                     24H VOLUME
                   </Text>
                 </XStack>
-                <Text color="#FFFFFF" fontSize={15} fontFamily={Fonts.bold}>
+                <Text color={textColor} fontSize={15} fontFamily={Fonts.bold}>
                   {asset.volume}
                 </Text>
               </View>
 
               {/* Stat 3: P/E Ratio */}
-              <View style={styles.statBox}>
+              <View style={[styles.statBox, { backgroundColor: subcardBg, borderColor: subcardBorder }]}>
                 <XStack gap={8} alignItems="center" marginBottom={4}>
                   <View style={styles.statIconBadge}>
                     <PhosphorIcon name="Tag" size={14} color="#FBBF24" weight="bold" />
                   </View>
-                  <Text color="rgba(255, 255, 255, 0.5)" fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                  <Text color={textMuted} fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
                     P/E RATIO
                   </Text>
                 </XStack>
                 <XStack gap={6} alignItems="center">
-                  <Text color="#FFFFFF" fontSize={15} fontFamily={Fonts.bold}>
+                  <Text color={textColor} fontSize={15} fontFamily={Fonts.bold}>
                     {getLivePE(asset.price, asset.eps)}
                   </Text>
                   <View
@@ -818,12 +834,12 @@ export default function InvestDetailsScreen() {
               </View>
 
               {/* Stat 4: Risk Class */}
-              <View style={styles.statBox}>
+              <View style={[styles.statBox, { backgroundColor: subcardBg, borderColor: subcardBorder }]}>
                 <XStack gap={8} alignItems="center" marginBottom={4}>
                   <View style={styles.statIconBadge}>
                     <PhosphorIcon name="ShieldCheck" size={14} color={asset.color} weight="bold" />
                   </View>
-                  <Text color="rgba(255, 255, 255, 0.5)" fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                  <Text color={textMuted} fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
                     RISK CLASS
                   </Text>
                 </XStack>
@@ -835,11 +851,11 @@ export default function InvestDetailsScreen() {
           </View>
 
           {/* ==================== CORPORATE PROFILE CARD ==================== */}
-          <View style={styles.fintechCard}>
-            <Text color="#FFFFFF" fontSize={14} fontFamily={Fonts.bold} letterSpacing={-0.2} marginBottom={8}>
+          <View style={[styles.fintechCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <Text color={textColor} fontSize={14} fontFamily={Fonts.bold} letterSpacing={-0.2} marginBottom={8}>
               Corporate Profile
             </Text>
-            <Text color="rgba(255, 255, 255, 0.75)" fontSize={13} lineHeight={20} fontFamily={Fonts.regular}>
+            <Text color={textColor} fontSize={13} lineHeight={20} fontFamily={Fonts.regular}>
               {asset.description}
             </Text>
           </View>
@@ -857,30 +873,30 @@ export default function InvestDetailsScreen() {
               behavior={Platform.OS === 'ios' ? 'padding' : undefined}
               style={styles.modalKeyboardAvoid}
             >
-              <View style={styles.tradeModalCard}>
+              <View style={[styles.tradeModalCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
                 <XStack justifyContent="space-between" alignItems="center" marginBottom={14}>
                   <YStack gap={2}>
-                    <Text color="#FFFFFF" fontSize={17} fontFamily={Fonts.bold} letterSpacing={-0.3}>
+                    <Text color={textColor} fontSize={17} fontFamily={Fonts.bold} letterSpacing={-0.3}>
                       {allocationType === 'buy' ? `Invest in ${asset.ticker}` : `Sell ${asset.ticker}`}
                     </Text>
-                    <Text color="rgba(255, 255, 255, 0.6)" fontSize={12} fontFamily={Fonts.medium}>
+                    <Text color={textMuted} fontSize={12} fontFamily={Fonts.medium}>
                       Current Market Price: {currencySymbol}{asset.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </Text>
                   </YStack>
                   <TouchableOpacity onPress={() => setIsTrading(false)}>
-                    <PhosphorIcon name="XCircle" size={22} color="rgba(255, 255, 255, 0.6)" weight="fill" />
+                    <PhosphorIcon name="XCircle" size={22} color={textMuted} weight="fill" />
                   </TouchableOpacity>
                 </XStack>
 
                 {/* Buy / Sell Switch */}
                 <XStack
                   gap={6}
-                  backgroundColor="rgba(11, 19, 43, 0.8)"
+                  backgroundColor={subcardBg}
                   borderRadius={12}
                   padding={4}
                   marginBottom={12}
                   borderWidth={1}
-                  borderColor="rgba(255, 255, 255, 0.08)"
+                  borderColor={dividerColor}
                 >
                   <TouchableOpacity
                     onPress={() => {
@@ -1076,16 +1092,16 @@ export default function InvestDetailsScreen() {
           onRequestClose={() => setShowJargonModal(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.jargonModalCard}>
+            <View style={[styles.jargonModalCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
               <XStack justifyContent="space-between" alignItems="center" marginBottom={14}>
                 <XStack gap={8} alignItems="center">
                   <PhosphorIcon name="Lightbulb" size={18} color="#60A5FA" weight="fill" />
-                  <Text color="#FFFFFF" fontSize={16} fontFamily={Fonts.bold}>
+                  <Text color={textColor} fontSize={16} fontFamily={Fonts.bold}>
                     Financial Insights Glossary
                   </Text>
                 </XStack>
                 <TouchableOpacity onPress={() => setShowJargonModal(false)}>
-                  <PhosphorIcon name="XCircle" size={20} color="rgba(255, 255, 255, 0.6)" weight="fill" />
+                  <PhosphorIcon name="XCircle" size={20} color={textMuted} weight="fill" />
                 </TouchableOpacity>
               </XStack>
 

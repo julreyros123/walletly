@@ -52,6 +52,7 @@ function CheckedInCelebrationModal({
   onDismiss: () => void;
 }) {
   const theme = useTheme();
+  const isDark = theme.mode === 'dark';
   const rotateSunburst = useRef(new Animated.Value(0)).current;
   const checkScale = useRef(new Animated.Value(0)).current;
   const contentFade = useRef(new Animated.Value(0)).current;
@@ -192,13 +193,13 @@ function CheckedInCelebrationModal({
                 {/* Earned Reward Badges */}
                 <XStack alignItems="center" gap={8} marginTop={12}>
                   <View style={getStyles(theme).earnedPillXp}>
-                    <Text color="#FBBF24" fontSize={13} fontFamily={Fonts.bold}>
+                    <Text color={isDark ? '#FBBF24' : '#D97706'} fontSize={13} fontFamily={Fonts.bold}>
                       +{xp} XP
                     </Text>
                   </View>
                   {cash > 0 && (
                     <View style={getStyles(theme).earnedPillCash}>
-                      <Text color="#34D399" fontSize={13} fontFamily={Fonts.bold}>
+                      <Text color={isDark ? '#34D399' : '#059669'} fontSize={13} fontFamily={Fonts.bold}>
                         +{currencySymbol}{cash} Sim Cash
                       </Text>
                     </View>
@@ -228,6 +229,10 @@ function CheckedInCelebrationModal({
 
 export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
   const theme = useTheme();
+  const isDark = theme.mode === 'dark';
+  const cashColor = isDark ? '#34D399' : '#059669';
+  const blueColor = isDark ? '#60A5FA' : '#2563EB';
+  const greenText = isDark ? '#34D399' : '#059669';
   const store = useGamificationStore();
   const { symbol: currencySymbol } = useCurrency();
   const [claimedReward, setClaimedReward] = useState<{ xp: number; cash: number; day: number } | null>(null);
@@ -429,25 +434,25 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                             </View>
                             <YStack gap={2}>
                               <View style={getStyles(theme).day7Badge}>
-                                <Text color="#34D399" fontSize={8.5} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                                <Text color={isDark ? '#FBBF24' : '#B45309'} fontSize={8.5} fontFamily={Fonts.bold} letterSpacing={0.5}>
                                   DAY 7 • BONUS REWARD
                                 </Text>
                               </View>
                               <Text color={theme.text} fontSize={12.5} fontFamily={Fonts.bold}>
-                                +70 XP & <Text color="#34D399">+{currencySymbol}2,000 Cash</Text>
+                                +70 XP & <Text color={cashColor}>+{currencySymbol}2,000 Cash</Text>
                               </Text>
                             </YStack>
                           </XStack>
                           {isClaimed && (
                             <View style={getStyles(theme).claimedBadgeMini}>
-                              <Text color="#10B981" fontSize={10} fontFamily={Fonts.bold}>
+                              <Text color={greenText} fontSize={10} fontFamily={Fonts.bold}>
                                 Claimed ✓
                               </Text>
                             </View>
                           )}
                           {isNextUp && (
                             <View style={getStyles(theme).nextUpBadgeMini}>
-                              <Text color="#60A5FA" fontSize={9.5} fontFamily={Fonts.bold}>
+                              <Text color={blueColor} fontSize={9.5} fontFamily={Fonts.bold}>
                                 Tomorrow
                               </Text>
                             </View>
@@ -478,7 +483,7 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                           ]}
                         >
                           <Text
-                            color={isReadyToClaim ? '#FFFFFF' : isClaimed ? '#10B981' : isNextUp ? '#60A5FA' : theme.textSecondary}
+                            color={isReadyToClaim ? '#FFFFFF' : isClaimed ? greenText : isNextUp ? blueColor : theme.textSecondary}
                             fontSize={8.5}
                             fontFamily={Fonts.bold}
                           >
@@ -494,14 +499,14 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                         {/* Reward Details Text */}
                         <YStack alignItems="center" gap={1}>
                           <Text
-                            color={isReadyToClaim ? theme.text : isClaimed ? '#10B981' : isNextUp ? '#60A5FA' : theme.textSecondary}
+                            color={isReadyToClaim ? theme.text : isClaimed ? greenText : isNextUp ? blueColor : theme.textSecondary}
                             fontSize={11}
                             fontFamily={Fonts.bold}
                           >
                             +{item.xp} XP
                           </Text>
                           {item.cash > 0 && (
-                            <Text color="#34D399" fontSize={9.5} fontFamily={Fonts.bold}>
+                            <Text color={cashColor} fontSize={9.5} fontFamily={Fonts.bold}>
                               +{currencySymbol}{item.cash}
                             </Text>
                           )}
@@ -525,11 +530,23 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                   }
                   accessibilityState={{ disabled: isAlreadyClaimedToday }}
                 >
-                  <Text color={isAlreadyClaimedToday ? '#10B981' : '#FFFFFF'} fontSize={14.5} fontFamily={Fonts.bold}>
-                    {isAlreadyClaimedToday
-                      ? `Day ${currentDayInCycle} Claimed ✓ (Day ${nextDayInCycle} Unlocks Tomorrow)`
-                      : `Claim Day ${currentDayInCycle} Reward ✨`}
-                  </Text>
+                  {isAlreadyClaimedToday ? (
+                    <YStack alignItems="center" gap={2}>
+                      <XStack alignItems="center" gap={6}>
+                        <PhosphorIcon name="CheckCircle" size={16} color={greenText} weight="fill" />
+                        <Text color={greenText} fontSize={14.5} fontFamily={Fonts.bold}>
+                          Day {currentDayInCycle} Claimed ✓
+                        </Text>
+                      </XStack>
+                      <Text color={isDark ? '#94A3B8' : '#64748B'} fontSize={11.5} fontFamily={Fonts.medium}>
+                        Day {nextDayInCycle} unlocks tomorrow
+                      </Text>
+                    </YStack>
+                  ) : (
+                    <Text color="#FFFFFF" fontSize={14.5} fontFamily={Fonts.bold}>
+                      Claim Day {currentDayInCycle} Reward ✨
+                    </Text>
+                  )}
                 </TouchableOpacity>
 
                 {/* Developer Fast-Forward Streak Testing Shortcut */}
@@ -631,7 +648,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
@@ -674,7 +691,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     justifyContent: 'center',
   },
   day7Badge: {
-    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+    backgroundColor: theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(245, 158, 11, 0.15)',
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 4,
@@ -706,7 +723,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     opacity: 0.6,
   },
   dayTagPill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -731,9 +748,9 @@ const getStyles = (theme: any) => StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
     alignItems: 'center',
     width: '100%',
   },
@@ -756,9 +773,10 @@ const getStyles = (theme: any) => StyleSheet.create({
     marginTop: 4,
   },
   claimButtonChecked: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    backgroundColor: theme.mode === 'dark' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(16, 185, 129, 0.1)',
     borderWidth: 1.5,
-    borderColor: 'rgba(16, 185, 129, 0.35)',
+    borderColor: theme.mode === 'dark' ? 'rgba(16, 185, 129, 0.35)' : 'rgba(16, 185, 129, 0.25)',
+    paddingVertical: 10,
   },
   sunburstHeroBox: {
     width: 140,
