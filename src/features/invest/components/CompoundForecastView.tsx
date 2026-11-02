@@ -333,24 +333,44 @@ export function CompoundForecastView({
                   onRateChange(s.rate);
                 }}
                 activeOpacity={0.8}
-                style={[styles.strategyCard, { backgroundColor: subcardBg, borderColor: subcardBorder }, isSelected && styles.strategyCardActive]}
+                style={[
+                  styles.strategyCard,
+                  { backgroundColor: subcardBg, borderColor: subcardBorder },
+                  isSelected && {
+                    borderColor: '#10B981',
+                    backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : '#ECFDF5',
+                  },
+                ]}
               >
                 <YStack gap={2} flex={1}>
                   <Text
-                    color={isSelected ? '#FFFFFF' : textColor}
+                    color={isSelected ? (isDark ? '#34D399' : '#065F46') : textColor}
                     fontSize={13}
                     style={{ fontFamily: Fonts.bold }}
                   >
                     {s.name}
                   </Text>
-                  <Text color={textMuted} fontSize={11} style={{ fontFamily: Fonts.regular }}>
+                  <Text
+                    color={isSelected ? (isDark ? '#94A3B8' : '#047857') : textMuted}
+                    fontSize={11}
+                    style={{ fontFamily: Fonts.regular }}
+                  >
                     {s.sub}
                   </Text>
                 </YStack>
 
-                <View style={[styles.rateBadge, { backgroundColor: rateBadgeBg }, isSelected && styles.rateBadgeActive]}>
+                <View
+                  style={[
+                    styles.rateBadge,
+                    {
+                      backgroundColor: isSelected
+                        ? (isDark ? 'rgba(16, 185, 129, 0.2)' : '#D1FAE5')
+                        : rateBadgeBg,
+                    },
+                  ]}
+                >
                   <Text
-                    color={isSelected ? '#10B981' : textMuted}
+                    color={isSelected ? (isDark ? '#10B981' : '#047857') : textMuted}
                     fontSize={12}
                     style={{ fontFamily: Fonts.bold }}
                   >

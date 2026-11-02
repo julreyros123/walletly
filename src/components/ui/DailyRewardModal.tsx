@@ -360,15 +360,15 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
           <View style={getStyles(theme).modalCardWrapper}>
             <View style={getStyles(theme).modalCard}>
               {/* Top Glowing Header Accent */}
-              <Svg width="100%" height={80} viewBox="0 0 340 80" fill="none" style={StyleSheet.absoluteFill}>
+              <Svg width="100%" height={90} viewBox="0 0 340 90" fill="none" style={StyleSheet.absoluteFill}>
                 <Defs>
-                  <LinearGradient id="rewardHdrGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <Stop offset="0%" stopColor="#10B981" stopOpacity={0.25} />
-                    <Stop offset="50%" stopColor="#3B82F6" stopOpacity={0.15} />
-                    <Stop offset="100%" stopColor="#0F172A" stopOpacity={0} />
+                  <LinearGradient id="rewardHdrGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <Stop offset="0%" stopColor="#10B981" stopOpacity={isDark ? 0.22 : 0.08} />
+                    <Stop offset="60%" stopColor="#10B981" stopOpacity={isDark ? 0.06 : 0.02} />
+                    <Stop offset="100%" stopColor={isDark ? '#0F172A' : '#FFFFFF'} stopOpacity={0} />
                   </LinearGradient>
                 </Defs>
-                <Rect width="340" height="80" fill="url(#rewardHdrGrad)" />
+                <Rect width="340" height="90" fill="url(#rewardHdrGrad)" />
               </Svg>
 
               {/* Close Button Top Right */}
@@ -587,37 +587,40 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
   );
 }
 
-const getStyles = (theme: any) => StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 18,
-  },
-  modalCardWrapper: {
-    width: '100%',
-    maxWidth: 350,
-  },
-  modalCard: {
-    backgroundColor: theme.surface,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    overflow: 'hidden',
-    position: 'relative',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.35,
-        shadowRadius: 20,
-      },
-      android: {
-        elevation: 12,
-      },
-    }),
-  },
+const getStyles = (theme: any) => {
+  const isDark = theme.mode === 'dark';
+  return StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(15, 23, 42, 0.78)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 18,
+    },
+    modalCardWrapper: {
+      width: '100%',
+      maxWidth: 350,
+      zIndex: 100,
+    },
+    modalCard: {
+      backgroundColor: theme.surface,
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
+      overflow: 'hidden',
+      position: 'relative',
+      ...Platform.select({
+        ios: {
+          shadowColor: '#000000',
+          shadowOffset: { width: 0, height: 16 },
+          shadowOpacity: 0.35,
+          shadowRadius: 24,
+        },
+        android: {
+          elevation: 16,
+        },
+      }),
+    },
   celebrationCardWrapper: {
     width: '100%',
     maxWidth: 320,
@@ -843,6 +846,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     width: '100%',
     alignItems: 'center',
   },
-});
+  });
+};
 
 export default DailyRewardModal;

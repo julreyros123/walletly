@@ -153,7 +153,13 @@ export default function LearnScreen() {
           {screenState === 'roadmap' && (
             <View style={styles.roadmapContent}>
               {/* Progress Summary Card */}
-              <CbudgetCard padding={18} gap={14} backgroundColor={`${theme.primary}08` as any}>
+              <CbudgetCard
+                padding={18}
+                gap={14}
+                backgroundColor={theme.mode === 'dark' ? 'rgba(16, 185, 129, 0.08)' : '#F0FDF4'}
+                borderColor={theme.mode === 'dark' ? 'rgba(16, 185, 129, 0.2)' : '#DCFCE7'}
+                elevation={0}
+              >
                 <View style={styles.summaryTop}>
                   <View style={styles.summaryTextGroup}>
                     <View style={styles.summaryBadgeRow}>

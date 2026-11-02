@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { YStack, XStack, Text as TamaguiText } from 'tamagui';
 import { useRouter } from 'expo-router';
 import { Fonts } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { BackgroundSystem } from '@/components/ui/BackgroundSystem';
 import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
 import { MotionIcon } from '@/components/ui/MotionIcon';
@@ -15,6 +16,8 @@ const Text = (props: any) => <TamaguiText {...props} />;
 
 export default function ArcadeScreen() {
   const router = useRouter();
+  const theme = useTheme();
+  const isDark = theme.mode === 'dark';
   const store = useGamificationStore();
 
   const hasAlphaGuru = store.achievements.some((a) => a.id === 'alpha_guru');
@@ -22,7 +25,7 @@ export default function ArcadeScreen() {
   const hasStreakChamp = store.achievements.some((a) => a.id === 'streak_champion');
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <BackgroundSystem />
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         {/* Top Navigation Header */}
@@ -32,17 +35,23 @@ export default function ArcadeScreen() {
               safeHaptic('light');
               router.back();
             }}
-            style={styles.backBtn}
+            style={[
+              styles.backBtn,
+              {
+                backgroundColor: isDark ? '#131D31' : '#FFFFFF',
+                borderColor: theme.border,
+              },
+            ]}
             activeOpacity={0.7}
           >
-            <PhosphorIcon name="ArrowLeft" size={18} color="#FFFFFF" />
+            <PhosphorIcon name="ArrowLeft" size={18} color={theme.text} />
           </TouchableOpacity>
 
           <YStack alignItems="center">
-            <Text color="#FFFFFF" fontSize={17} fontFamily={Fonts.bold}>
+            <Text color={theme.text} fontSize={17} fontFamily={Fonts.bold}>
               Arcade & Mini-Games
             </Text>
-            <Text color="#94A3B8" fontSize={11} fontFamily={Fonts.medium}>
+            <Text color={theme.textSecondary} fontSize={11} fontFamily={Fonts.medium}>
               Choose a Game & Level Up
             </Text>
           </YStack>
@@ -66,7 +75,7 @@ export default function ArcadeScreen() {
           {/* Section: Arcade Trophies & Milestones */}
           <YStack gap={12} marginTop={26}>
             <XStack justifyContent="space-between" alignItems="center">
-              <Text color="#94A3B8" fontSize={11} fontFamily={Fonts.bold} letterSpacing={0.6} textTransform="uppercase">
+              <Text color={theme.textSecondary} fontSize={11} fontFamily={Fonts.bold} letterSpacing={0.6} textTransform="uppercase">
                 🏆 Trophies & Milestones
               </Text>
               <Text color="#FBBF24" fontSize={11} fontFamily={Fonts.bold}>
@@ -75,21 +84,29 @@ export default function ArcadeScreen() {
             </XStack>
 
             {/* Trophy 1 */}
-            <View style={[styles.trophyCard, hasAlphaGuru && { borderColor: '#10B981' }]}>
+            <View
+              style={[
+                styles.trophyCard,
+                {
+                  backgroundColor: isDark ? '#131D31' : '#FFFFFF',
+                  borderColor: hasAlphaGuru ? '#10B981' : theme.border,
+                },
+              ]}
+            >
               <XStack alignItems="center" gap={12}>
                 <View style={[styles.trophyIconBox, hasAlphaGuru && { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
                   <Text fontSize={22}>🏆</Text>
                 </View>
                 <YStack flex={1} gap={2}>
-                  <Text color="#FFFFFF" fontSize={14.5} fontFamily={Fonts.bold}>
+                  <Text color={theme.text} fontSize={14.5} fontFamily={Fonts.bold}>
                     Alpha Guru
                   </Text>
-                  <Text color="#94A3B8" fontSize={11.5} fontFamily={Fonts.medium}>
+                  <Text color={theme.textSecondary} fontSize={11.5} fontFamily={Fonts.medium}>
                     Predict 5/5 headlines in Headline Trader
                   </Text>
                 </YStack>
                 <View style={[styles.unlockedPill, !hasAlphaGuru && styles.lockedPill]}>
-                  <Text color={hasAlphaGuru ? '#10B981' : '#94A3B8'} fontSize={10} fontFamily={Fonts.bold}>
+                  <Text color={hasAlphaGuru ? '#10B981' : theme.textSecondary} fontSize={10} fontFamily={Fonts.bold}>
                     {hasAlphaGuru ? 'UNLOCKED 🏆' : '+100 XP'}
                   </Text>
                 </View>
@@ -97,21 +114,29 @@ export default function ArcadeScreen() {
             </View>
 
             {/* Trophy 2 */}
-            <View style={[styles.trophyCard, hasMoonShot && { borderColor: '#10B981' }]}>
+            <View
+              style={[
+                styles.trophyCard,
+                {
+                  backgroundColor: isDark ? '#131D31' : '#FFFFFF',
+                  borderColor: hasMoonShot ? '#10B981' : theme.border,
+                },
+              ]}
+            >
               <XStack alignItems="center" gap={12}>
                 <View style={[styles.trophyIconBox, hasMoonShot && { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
                   <Text fontSize={22}>🚀</Text>
                 </View>
                 <YStack flex={1} gap={2}>
-                  <Text color="#FFFFFF" fontSize={14.5} fontFamily={Fonts.bold}>
+                  <Text color={theme.text} fontSize={14.5} fontFamily={Fonts.bold}>
                     Moon Shot Master
                   </Text>
-                  <Text color="#94A3B8" fontSize={11.5} fontFamily={Fonts.medium}>
+                  <Text color={theme.textSecondary} fontSize={11.5} fontFamily={Fonts.medium}>
                     Cash out Crypto Rocket at 3.00x or higher
                   </Text>
                 </YStack>
                 <View style={[styles.unlockedPill, !hasMoonShot && styles.lockedPill]}>
-                  <Text color={hasMoonShot ? '#10B981' : '#94A3B8'} fontSize={10} fontFamily={Fonts.bold}>
+                  <Text color={hasMoonShot ? '#10B981' : theme.textSecondary} fontSize={10} fontFamily={Fonts.bold}>
                     {hasMoonShot ? 'UNLOCKED 🏆' : '+150 XP'}
                   </Text>
                 </View>
@@ -119,21 +144,29 @@ export default function ArcadeScreen() {
             </View>
 
             {/* Trophy 3 */}
-            <View style={[styles.trophyCard, hasStreakChamp && { borderColor: '#10B981' }]}>
+            <View
+              style={[
+                styles.trophyCard,
+                {
+                  backgroundColor: isDark ? '#131D31' : '#FFFFFF',
+                  borderColor: hasStreakChamp ? '#10B981' : theme.border,
+                },
+              ]}
+            >
               <XStack alignItems="center" gap={12}>
                 <View style={[styles.trophyIconBox, hasStreakChamp && { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
                   <Text fontSize={22}>⚡</Text>
                 </View>
                 <YStack flex={1} gap={2}>
-                  <Text color="#FFFFFF" fontSize={14.5} fontFamily={Fonts.bold}>
+                  <Text color={theme.text} fontSize={14.5} fontFamily={Fonts.bold}>
                     Streak Champion
                   </Text>
-                  <Text color="#94A3B8" fontSize={11.5} fontFamily={Fonts.medium}>
+                  <Text color={theme.textSecondary} fontSize={11.5} fontFamily={Fonts.medium}>
                     Activate 2x Fire Streak in any mini-game
                   </Text>
                 </YStack>
                 <View style={[styles.unlockedPill, !hasStreakChamp && styles.lockedPill]}>
-                  <Text color={hasStreakChamp ? '#10B981' : '#94A3B8'} fontSize={10} fontFamily={Fonts.bold}>
+                  <Text color={hasStreakChamp ? '#10B981' : theme.textSecondary} fontSize={10} fontFamily={Fonts.bold}>
                     {hasStreakChamp ? 'UNLOCKED 🏆' : '+80 XP'}
                   </Text>
                 </View>

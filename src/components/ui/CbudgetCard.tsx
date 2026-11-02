@@ -8,7 +8,7 @@ interface CbudgetCardProps extends YStackProps {
   variant?: 'surface' | 'dark';
 }
 
-export function CbudgetCard({ children, variant = 'surface', style, ...props }: CbudgetCardProps) {
+export function CbudgetCard({ children, variant = 'surface', style, elevation, ...props }: CbudgetCardProps) {
   const theme = useTheme();
   const bg = variant === 'dark' ? (theme.surfaceDark || '#0F172A') : theme.surface;
 
@@ -21,9 +21,12 @@ export function CbudgetCard({ children, variant = 'surface', style, ...props }: 
       borderColor={variant === 'dark' ? 'rgba(255, 255, 255, 0.08)' : (theme.border as any)}
       style={[
         styles.floatingCard,
-        theme.mode === 'hybrid' || theme.mode === 'light'
+        elevation === 0
+          ? { elevation: 0, shadowOpacity: 0 }
+          : theme.mode === 'hybrid' || theme.mode === 'light'
           ? styles.lightShadow
           : styles.darkShadow,
+        elevation !== undefined ? { elevation } : null,
         style as any,
       ]}
       {...props}

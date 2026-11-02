@@ -13,6 +13,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '@/hooks/use-theme';
 import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
 import { Fonts } from '@/constants/theme';
 import { useGamificationStore, getCycleMetrics } from '@/store/gamificationStore';
@@ -29,6 +30,8 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export function DepositFundsModal({ visible, onClose }: DepositFundsModalProps) {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
+  const isDark = theme.mode === 'dark';
   const { currency: currencyCode, symbol: currencySymbol } = useCurrency();
   const store = useGamificationStore();
   const [amount, setAmount] = useState('');
@@ -97,15 +100,29 @@ export function DepositFundsModal({ visible, onClose }: DepositFundsModalProps) 
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.keyboardContainer}
           >
-            <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+            <View
+              style={[
+                styles.sheet,
+                {
+                  backgroundColor: isDark ? '#111827' : '#FFFFFF',
+                  borderColor: isDark ? 'rgba(255, 255, 255, 0.09)' : '#E2E8F0',
+                  paddingBottom: Math.max(insets.bottom, 24),
+                },
+              ]}
+            >
               {/* iOS Drag Handle */}
-              <View style={styles.dragPill} />
+              <View
+                style={[
+                  styles.dragPill,
+                  { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.22)' : 'rgba(0, 0, 0, 0.15)' },
+                ]}
+              />
 
               {/* Header Navigation Bar */}
               <View style={styles.header}>
                 <View style={styles.headerTitleGroup}>
-                  <Text style={styles.headerTitle}>Fund Brokerage</Text>
-                  <Text style={styles.headerSubtitle}>
+                  <Text style={[styles.headerTitle, { color: theme.text }]}>Fund Brokerage</Text>
+                  <Text style={[styles.headerSubtitle, { color: theme.textSecondary }]}>
                     Instant transfer to trading buying power
                   </Text>
                 </View>
@@ -114,23 +131,34 @@ export function DepositFundsModal({ visible, onClose }: DepositFundsModalProps) 
                     safeHaptic('light');
                     onClose();
                   }}
-                  style={styles.closeBtn}
+                  style={[
+                    styles.closeBtn,
+                    { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)' },
+                  ]}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 >
-                  <PhosphorIcon name="X" size={16} color="#8D99AE" weight="bold" />
+                  <PhosphorIcon name="X" size={16} color={theme.textSecondary} weight="bold" />
                 </TouchableOpacity>
               </View>
 
               {/* Interactive Transfer Route Architecture (From -> To) */}
-              <View style={styles.routeContainer}>
+              <View
+                style={[
+                  styles.routeContainer,
+                  {
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#F8FAFC',
+                    borderColor: isDark ? 'rgba(255, 255, 255, 0.07)' : '#E2E8F0',
+                  },
+                ]}
+              >
                 {/* Source Account Card */}
                 <View style={styles.accountCard}>
                   <View style={styles.accountIconWrap}>
                     <PhosphorIcon name="Wallet" size={18} color="#10B981" weight="fill" />
                   </View>
                   <View style={styles.accountInfo}>
-                    <Text style={styles.accountName}>Allowance Wallet</Text>
-                    <Text style={styles.accountDesc}>
+                    <Text style={[styles.accountName, { color: theme.text }]}>Allowance Wallet</Text>
+                    <Text style={[styles.accountDesc, { color: theme.textSecondary }]}>
                       {currencySymbol}{Math.round(availableToTransfer).toLocaleString()} available
                     </Text>
                   </View>
@@ -141,11 +169,31 @@ export function DepositFundsModal({ visible, onClose }: DepositFundsModalProps) 
 
                 {/* Linking Directional Arrow */}
                 <View style={styles.routeConnector}>
-                  <View style={styles.routeLine} />
-                  <View style={styles.arrowCircle}>
-                    <PhosphorIcon name="ArrowsDownUp" size={13} color="#6EE7B7" weight="bold" />
+                  <View
+                    style={[
+                      styles.routeLine,
+                      { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : '#E2E8F0' },
+                    ]}
+                  />
+                  <View
+                    style={[
+                      styles.arrowCircle,
+                      { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.2)' : '#D1FAE5' },
+                    ]}
+                  >
+                    <PhosphorIcon
+                      name="ArrowsDownUp"
+                      size={13}
+                      color={isDark ? '#6EE7B7' : '#059669'}
+                      weight="bold"
+                    />
                   </View>
-                  <View style={styles.routeLine} />
+                  <View
+                    style={[
+                      styles.routeLine,
+                      { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : '#E2E8F0' },
+                    ]}
+                  />
                 </View>
 
                 {/* Destination Account Card */}
@@ -154,8 +202,8 @@ export function DepositFundsModal({ visible, onClose }: DepositFundsModalProps) 
                     <PhosphorIcon name="ChartLineUp" size={18} color="#3B82F6" weight="fill" />
                   </View>
                   <View style={styles.accountInfo}>
-                    <Text style={styles.accountName}>Trading Buying Power</Text>
-                    <Text style={styles.accountDesc}>
+                    <Text style={[styles.accountName, { color: theme.text }]}>Trading Buying Power</Text>
+                    <Text style={[styles.accountDesc, { color: theme.textSecondary }]}>
                       Current: {currencySymbol}{store.virtualBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </Text>
                   </View>
@@ -166,12 +214,21 @@ export function DepositFundsModal({ visible, onClose }: DepositFundsModalProps) 
               </View>
 
               {/* Large Hero Currency Display & Input */}
-              <View style={[styles.heroInputCard, isOverAllowance && styles.heroInputCardError]}>
+              <View
+                style={[
+                  styles.heroInputCard,
+                  {
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : '#F8FAFC',
+                    borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#E2E8F0',
+                  },
+                  isOverAllowance && styles.heroInputCardError,
+                ]}
+              >
                 <Text style={styles.heroPrefix}>{currencySymbol}</Text>
                 <TextInput
-                  style={styles.heroInput}
+                  style={[styles.heroInput, { color: theme.text }]}
                   placeholder="0.00"
-                  placeholderTextColor="rgba(255, 255, 255, 0.25)"
+                  placeholderTextColor={isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.25)'}
                   keyboardType="numeric"
                   value={amount}
                   onChangeText={setAmount}
@@ -192,50 +249,96 @@ export function DepositFundsModal({ visible, onClose }: DepositFundsModalProps) 
               {/* Quick Amount Preset Chips */}
               <View style={styles.presetsRow}>
                 <TouchableOpacity
-                  style={styles.presetChip}
+                  style={[
+                    styles.presetChip,
+                    {
+                      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : '#F1F5F9',
+                      borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0',
+                    },
+                  ]}
                   onPress={() => handleQuickFill(100)}
                 >
-                  <Text style={styles.presetText}>+{currencySymbol}100</Text>
+                  <Text style={[styles.presetText, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>
+                    +{currencySymbol}100
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={styles.presetChip}
+                  style={[
+                    styles.presetChip,
+                    {
+                      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : '#F1F5F9',
+                      borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0',
+                    },
+                  ]}
                   onPress={() => handleQuickFill(500)}
                 >
-                  <Text style={styles.presetText}>+{currencySymbol}500</Text>
+                  <Text style={[styles.presetText, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>
+                    +{currencySymbol}500
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={styles.presetChip}
+                  style={[
+                    styles.presetChip,
+                    {
+                      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : '#F1F5F9',
+                      borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0',
+                    },
+                  ]}
                   onPress={() => handleQuickFill(1000)}
                 >
-                  <Text style={styles.presetText}>+{currencySymbol}1,000</Text>
+                  <Text style={[styles.presetText, { color: isDark ? '#FFFFFF' : '#1E293B' }]}>
+                    +{currencySymbol}1,000
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.presetChip, styles.presetChipMax]}
+                  style={[
+                    styles.presetChip,
+                    styles.presetChipMax,
+                    !isDark && {
+                      backgroundColor: '#DCFCE7',
+                      borderColor: '#86EFAC',
+                    },
+                  ]}
                   onPress={handleFillMax}
                 >
-                  <Text style={styles.presetTextMax}>Max</Text>
+                  <Text style={[styles.presetTextMax, !isDark && { color: '#059669' }]}>Max</Text>
                 </TouchableOpacity>
               </View>
 
               {/* Financial Transaction Metadata Table */}
-              <View style={styles.metaTable}>
+              <View
+                style={[
+                  styles.metaTable,
+                  {
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : '#F8FAFC',
+                    borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : '#E2E8F0',
+                  },
+                ]}
+              >
                 <View style={styles.metaRow}>
-                  <Text style={styles.metaLabel}>Settlement Speed</Text>
-                  <Text style={styles.metaValueHighlight}>Instant Execution</Text>
+                  <Text style={[styles.metaLabel, { color: theme.textSecondary }]}>Settlement Speed</Text>
+                  <Text style={[styles.metaValueHighlight, !isDark && { color: '#059669' }]}>
+                    Instant Execution
+                  </Text>
                 </View>
                 <View style={styles.metaRow}>
-                  <Text style={styles.metaLabel}>Transfer Fee</Text>
-                  <Text style={styles.metaValueFree}>{currencySymbol}0.00 (Zero Fee)</Text>
+                  <Text style={[styles.metaLabel, { color: theme.textSecondary }]}>Transfer Fee</Text>
+                  <Text style={[styles.metaValueFree, !isDark && { color: '#059669' }]}>
+                    {currencySymbol}0.00 (Zero Fee)
+                  </Text>
                 </View>
                 <View style={styles.metaRow}>
-                  <Text style={styles.metaLabel}>Available for Trading</Text>
-                  <Text style={styles.metaValue}>Immediately</Text>
+                  <Text style={[styles.metaLabel, { color: theme.textSecondary }]}>Available for Trading</Text>
+                  <Text style={[styles.metaValue, { color: theme.text }]}>Immediately</Text>
                 </View>
               </View>
 
               {/* Primary Action Button */}
               <TouchableOpacity
-                style={[styles.primaryCta, !canDeposit && styles.primaryCtaDisabled]}
+                style={[
+                  styles.primaryCta,
+                  !canDeposit && (isDark ? styles.primaryCtaDisabled : { backgroundColor: '#E2E8F0' }),
+                ]}
                 onPress={handleDepositFromAllowance}
                 activeOpacity={0.8}
                 disabled={!canDeposit}
@@ -243,10 +346,15 @@ export function DepositFundsModal({ visible, onClose }: DepositFundsModalProps) 
                 <PhosphorIcon
                   name="CheckCircle"
                   size={18}
-                  color={canDeposit ? '#FFFFFF' : 'rgba(255, 255, 255, 0.4)'}
+                  color={canDeposit ? '#FFFFFF' : isDark ? 'rgba(255, 255, 255, 0.4)' : '#94A3B8'}
                   weight="bold"
                 />
-                <Text style={[styles.primaryCtaText, !canDeposit && styles.primaryCtaTextDisabled]}>
+                <Text
+                  style={[
+                    styles.primaryCtaText,
+                    !canDeposit && (isDark ? styles.primaryCtaTextDisabled : { color: '#94A3B8' }),
+                  ]}
+                >
                   {numericAmount > 0
                     ? `Transfer ${currencySymbol}${numericAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
                     : 'Enter Transfer Amount'}

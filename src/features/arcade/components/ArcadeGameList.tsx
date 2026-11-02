@@ -3,6 +3,7 @@ import { StyleSheet, View, ScrollView, TouchableOpacity, Dimensions } from 'reac
 import { YStack, XStack, Text as TamaguiText } from 'tamagui';
 import { useRouter } from 'expo-router';
 import { Fonts } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { GameSceneIllustration, GameSceneType } from '@/features/arcade/components/GameSceneIllustration';
 import { safeHaptic } from '@/utils/haptics';
 
@@ -91,6 +92,8 @@ export const MINI_GAMES_LIST: MiniGameItem[] = [
 
 export function ArcadeGameList() {
   const router = useRouter();
+  const theme = useTheme();
+  const isDark = theme.mode === 'dark';
 
   const handleGamePress = (game: MiniGameItem) => {
     safeHaptic('medium');
@@ -101,7 +104,7 @@ export function ArcadeGameList() {
     <View>
       {/* Row Header */}
       <XStack justifyContent="space-between" alignItems="center" marginBottom={14} marginTop={4}>
-        <Text color="#94A3B8" fontSize={12} fontFamily={Fonts.bold} letterSpacing={0.6} textTransform="uppercase">
+        <Text color={theme.textSecondary} fontSize={12} fontFamily={Fonts.bold} letterSpacing={0.6} textTransform="uppercase">
           FEATURED MINI-GAMES
         </Text>
         <Text color="#10B981" fontSize={11.5} fontFamily={Fonts.bold}>
@@ -125,8 +128,9 @@ export function ArcadeGameList() {
             style={[
               styles.gameCardItem,
               {
-                borderColor: game.borderColor,
-                shadowColor: game.borderColor,
+                backgroundColor: isDark ? '#131D31' : '#FFFFFF',
+                borderColor: isDark ? game.borderColor : (game.borderColor + '99'),
+                shadowColor: isDark ? game.borderColor : '#0F172A',
               },
             ]}
           >
@@ -147,22 +151,29 @@ export function ArcadeGameList() {
             {/* 2. CARD INFO DETAILS */}
             <YStack gap={2} marginTop={8}>
               <XStack justifyContent="space-between" alignItems="center">
-                <Text color="#FFFFFF" fontSize={15} fontFamily={Fonts.bold}>
+                <Text color={theme.text} fontSize={15} fontFamily={Fonts.bold}>
                   {game.title}
                 </Text>
-                <Text color="#94A3B8" fontSize={10} fontFamily={Fonts.bold} textTransform="uppercase">
+                <Text color={theme.textSecondary} fontSize={10} fontFamily={Fonts.bold} textTransform="uppercase">
                   {game.category}
                 </Text>
               </XStack>
 
-              <Text color="#94A3B8" fontSize={11} fontFamily={Fonts.medium} lineHeight={15} numberOfLines={2}>
+              <Text color={theme.textSecondary} fontSize={11} fontFamily={Fonts.medium} lineHeight={15} numberOfLines={2}>
                 {game.description}
               </Text>
             </YStack>
 
             {/* 3. CARD FOOTER */}
-            <XStack justifyContent="space-between" alignItems="center" paddingTop={8} borderTopWidth={1} borderTopColor="#1E293B" marginTop={8}>
-              <Text color="#64748B" fontSize={11} fontFamily={Fonts.medium}>
+            <XStack
+              justifyContent="space-between"
+              alignItems="center"
+              paddingTop={8}
+              borderTopWidth={1}
+              borderTopColor={isDark ? '#1E293B' : '#F1F5F9'}
+              marginTop={8}
+            >
+              <Text color={theme.textSecondary} fontSize={11} fontFamily={Fonts.medium}>
                 {game.timeEstimate}
               </Text>
 

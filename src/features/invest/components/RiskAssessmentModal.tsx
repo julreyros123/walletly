@@ -9,6 +9,7 @@ import {
   Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '@/hooks/use-theme';
 import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
 import { Fonts } from '@/constants/theme';
 import { InteractivePressable } from '@/components/ui/InteractivePressable';
@@ -164,6 +165,8 @@ export function RiskAssessmentModal({
     setAnswers([]);
   };
 
+  const theme = useTheme();
+  const isDark = theme.mode === 'dark';
   const question = QUESTIONS[currentStep];
 
   return (
@@ -179,19 +182,26 @@ export function RiskAssessmentModal({
           style={[
             styles.sheetContainer,
             {
+              backgroundColor: isDark ? '#0F172A' : '#FFFFFF',
+              borderColor: isDark ? '#334155' : '#E2E8F0',
               paddingBottom: Math.max(insets.bottom, 24) + 20,
               marginBottom: Platform.OS === 'android' ? Math.max(insets.bottom, 16) : 0,
             },
           ]}
         >
           {/* Header */}
-          <View style={styles.sheetHandle} />
+          <View
+            style={[
+              styles.sheetHandle,
+              { backgroundColor: isDark ? '#475569' : '#CBD5E1' },
+            ]}
+          />
           <View style={styles.headerRow}>
             <View>
-              <Text style={styles.modalTitle}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>
                 {currentStep === 4 ? 'Your Investor Profile' : 'Investor Risk Profiler'}
               </Text>
-              <Text style={styles.modalSubtitle}>
+              <Text style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
                 {currentStep === 4
                   ? 'Personalized asset allocation & strategy'
                   : `Question ${currentStep + 1} of ${QUESTIONS.length}`}
@@ -201,7 +211,7 @@ export function RiskAssessmentModal({
               <PhosphorIcon
                 name="XCircle"
                 size={22}
-                color="#64748B"
+                color={theme.textSecondary}
                 weight="fill"
               />
             </InteractivePressable>
@@ -209,7 +219,12 @@ export function RiskAssessmentModal({
 
           {/* Progress bar for questions */}
           {currentStep < 4 && (
-            <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressTrack,
+                { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' },
+              ]}
+            >
               <View
                 style={[
                   styles.progressFill,
@@ -223,15 +238,22 @@ export function RiskAssessmentModal({
           {currentStep < 4 && question && (
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
               <View style={styles.questionBox}>
-                <Text style={styles.questionTitle}>{question.title}</Text>
-                <Text style={styles.questionSubtitle}>{question.subtitle}</Text>
+                <Text style={[styles.questionTitle, { color: theme.text }]}>{question.title}</Text>
+                <Text style={[styles.questionSubtitle, { color: theme.textSecondary }]}>{question.subtitle}</Text>
 
                 <View style={styles.optionsList}>
                   {question.options.map((opt, idx) => (
                     <InteractivePressable
                       key={idx}
                       onPress={() => handleSelectOption(opt.score)}
-                      style={styles.optionCard}
+                      style={[
+                        styles.optionCard,
+                        {
+                          backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
+                          borderColor: isDark ? '#334155' : '#E2E8F0',
+                          borderWidth: 1,
+                        },
+                      ]}
                     >
                       <View style={styles.optionHeader}>
                         <View style={styles.optionBadge}>
@@ -239,9 +261,9 @@ export function RiskAssessmentModal({
                             {String.fromCharCode(65 + idx)}
                           </Text>
                         </View>
-                        <Text style={styles.optionLabel}>{opt.label}</Text>
+                        <Text style={[styles.optionLabel, { color: theme.text }]}>{opt.label}</Text>
                       </View>
-                      <Text style={styles.optionDesc}>{opt.desc}</Text>
+                      <Text style={[styles.optionDesc, { color: theme.textSecondary }]}>{opt.desc}</Text>
                     </InteractivePressable>
                   ))}
                 </View>
@@ -252,7 +274,15 @@ export function RiskAssessmentModal({
           {/* Results View */}
           {currentStep === 4 && (
             <View style={styles.resultsBox}>
-              <View style={styles.resultBadgeContainer}>
+              <View
+                style={[
+                  styles.resultBadgeContainer,
+                  {
+                    backgroundColor: isDark ? '#1E293B' : '#F8FAFC',
+                    borderColor: isDark ? '#334155' : '#E2E8F0',
+                  },
+                ]}
+              >
                 <PhosphorIcon
                   name={
                     calculatedProfile === 'Conservative'
@@ -286,7 +316,7 @@ export function RiskAssessmentModal({
                 >
                   {calculatedProfile} Investor
                 </Text>
-                <Text style={styles.resultProfileDesc}>
+                <Text style={[styles.resultProfileDesc, { color: theme.textSecondary }]}>
                   {calculatedProfile === 'Conservative'
                     ? 'Capital Protector: Focus on stable blue-chip companies, utilities, and high cash reserves.'
                     : calculatedProfile === 'Moderate'
@@ -296,11 +326,19 @@ export function RiskAssessmentModal({
               </View>
 
               {/* Recommended Target Allocation */}
-              <View style={styles.allocationBox}>
-                <Text style={styles.allocationTitle}>RECOMMENDED TARGET ALLOCATION</Text>
+              <View
+                style={[
+                  styles.allocationBox,
+                  {
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : '#F1F5F9',
+                    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0',
+                  },
+                ]}
+              >
+                <Text style={[styles.allocationTitle, { color: isDark ? '#A7F3D0' : '#059669' }]}>RECOMMENDED TARGET ALLOCATION</Text>
                 <View style={styles.allocationBars}>
                   <View style={styles.allocationRow}>
-                    <Text style={styles.allocLabel}>
+                    <Text style={[styles.allocLabel, { color: theme.text }]}>
                       {calculatedProfile === 'Conservative'
                         ? 'Blue Chip & Core (APEX, SOLR)'
                         : calculatedProfile === 'Moderate'
@@ -312,7 +350,7 @@ export function RiskAssessmentModal({
                     </Text>
                   </View>
                   <View style={styles.allocationRow}>
-                    <Text style={styles.allocLabel}>
+                    <Text style={[styles.allocLabel, { color: theme.text }]}>
                       {calculatedProfile === 'Conservative'
                         ? 'Steady Consumer (BREW)'
                         : calculatedProfile === 'Moderate'
@@ -324,7 +362,7 @@ export function RiskAssessmentModal({
                     </Text>
                   </View>
                   <View style={styles.allocationRow}>
-                    <Text style={styles.allocLabel}>Sandbox Cash Reserve</Text>
+                    <Text style={[styles.allocLabel, { color: theme.text }]}>Sandbox Cash Reserve</Text>
                     <Text style={styles.allocVal}>
                       {calculatedProfile === 'Aggressive' ? '10%' : '20%'}
                     </Text>
