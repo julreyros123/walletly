@@ -2006,6 +2006,41 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         return next;
       }
     });
+
+    if (success) {
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (session?.user?.id && session.user.id !== 'guest') {
+            const currentQty = get().portfolioAllocations[ticker] || 0;
+            if (currentQty > 0) {
+              await syncQueue.enqueue({
+                table: 'user_investments',
+                action: 'upsert',
+                payload: {
+                  user_id: session.user.id,
+                  ticker,
+                  asset_class: ticker === 'BTC' || ticker === 'ETH' || ticker === 'SOL' ? 'crypto' : 'stock',
+                  quantity: currentQty,
+                  average_buy_price: price,
+                  updated_at: new Date().toISOString(),
+                },
+                options: { onConflict: 'user_id,ticker' },
+              });
+            } else {
+              await syncQueue.enqueue({
+                table: 'user_investments',
+                action: 'delete',
+                match: { user_id: session.user.id, ticker },
+              });
+            }
+          }
+        } catch (tradeSyncErr) {
+          console.warn('[GamificationStore] executeTrade investments sync error:', tradeSyncErr);
+        }
+      })();
+    }
+
     return success;
   },
 
@@ -2426,6 +2461,96 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         syncQueue.process().catch((err) => {
           console.warn('[GamificationStore] Error processing sync queue post-hydration:', err);
         });
+
+        // Auto-populate Supabase relational tables if empty so all tables (transactions,
+        // budgets, saving_challenges, user_investments) contain active data in Supabase dashboard
+        (async () => {
+          try {
+            // 1. Transactions: if remote is empty and we have local expenses, sync them
+            const currentExpenses = get().loggedExpenses || [];
+            if ((!txRes || (txRes.status === 'fulfilled' && (!txRes.value.data || txRes.value.data.length === 0))) && currentExpenses.length > 0) {
+              const txRows = currentExpenses.map((e) => ({
+                transaction_id: e.id,
+                user_id: userId,
+                owner_id: userId,
+                type: e.type || 'expense',
+                category: e.category || 'Other',
+                category_id: e.category || 'Other',
+                amount: Math.max(0.01, e.amount || 0),
+                description: e.notes ? `${e.name} - ${e.notes}` : e.name,
+                transaction_date: toISODate(e.date),
+                date: toISODate(e.date),
+              }));
+              await supabase.from('transactions').upsert(txRows, { onConflict: 'transaction_id' });
+            }
+
+            // 2. Budgets: if remote is empty and we have budget configured, sync them
+            const currentTotal = get().totalBudget || 0;
+            const currentLimits = get().categoryLimits || {};
+            if ((!budgetRes || (budgetRes.status === 'fulfilled' && (!budgetRes.value.data || budgetRes.value.data.length === 0))) && (currentTotal > 0 || Object.keys(currentLimits).length > 0)) {
+              const currentMonth = new Date().toISOString().slice(0, 7);
+              const bRows = [
+                {
+                  user_id: userId,
+                  owner_id: userId,
+                  category: '__total__',
+                  category_id: '__total__',
+                  allocated_amount: currentTotal,
+                  limit_amount: currentTotal,
+                  month: currentMonth,
+                  period: currentMonth,
+                  updated_at: new Date().toISOString(),
+                },
+                ...Object.entries(currentLimits).map(([cat, limit]) => ({
+                  user_id: userId,
+                  owner_id: userId,
+                  category: cat,
+                  category_id: cat,
+                  allocated_amount: limit,
+                  limit_amount: limit,
+                  month: currentMonth,
+                  period: currentMonth,
+                  updated_at: new Date().toISOString(),
+                })),
+              ];
+              await supabase.from('budgets').upsert(bRows, { onConflict: 'user_id,category,month' });
+            }
+
+            // 3. Saving Challenges: if remote is empty and we have goals, sync them
+            const currentGoals = get().savingsGoals || [];
+            if ((!goalsRes || (goalsRes.status === 'fulfilled' && (!goalsRes.value.data || goalsRes.value.data.length === 0))) && currentGoals.length > 0) {
+              const goalRows = currentGoals.map((g) => ({
+                challenge_id: g.id,
+                user_id: userId,
+                title: g.name,
+                target_amount: g.targetAmount,
+                current_amount: g.currentSavings || 0,
+                end_date: g.targetDate ? toISODate(g.targetDate) : null,
+                icon: g.category || 'PiggyBank',
+                color: '#10B981',
+                is_completed: (g.currentSavings || 0) >= g.targetAmount,
+                updated_at: new Date().toISOString(),
+              }));
+              await supabase.from('saving_challenges').upsert(goalRows, { onConflict: 'challenge_id' });
+            }
+
+            // 4. User Investments: sync active portfolio allocations
+            const currentAllocations = get().portfolioAllocations || {};
+            if (Object.keys(currentAllocations).length > 0) {
+              const investRows = Object.entries(currentAllocations).map(([ticker, qty]) => ({
+                user_id: userId,
+                ticker,
+                asset_class: ticker === 'BTC' || ticker === 'ETH' || ticker === 'SOL' ? 'crypto' : 'stock',
+                quantity: qty,
+                average_buy_price: 100.0,
+                updated_at: new Date().toISOString(),
+              }));
+              await supabase.from('user_investments').upsert(investRows, { onConflict: 'user_id,ticker' });
+            }
+          } catch (populateErr) {
+            console.warn('[GamificationStore] Relational auto-seed note:', populateErr);
+          }
+        })();
       }
     } catch (e) {
       console.warn('[GamificationStore] Failed to hydrate gamification state:', e);

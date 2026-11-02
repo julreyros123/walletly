@@ -149,8 +149,8 @@ export default function RootLayout() {
       colors: {
         ...baseTheme.colors,
         primary: '#10B981',
-        background: isDark ? '#0F172A' : '#F5F5F5',
-        card: isDark ? '#0F172A' : '#FFFFFF',
+        background: isDark ? '#0A0F1D' : '#F8FAFC',
+        card: isDark ? '#0A0F1D' : '#FFFFFF',
         text: isDark ? '#FFFFFF' : '#0F172A',
         border: isDark ? '#1E293B' : '#E2E8F0',
         notification: '#EF4444',
