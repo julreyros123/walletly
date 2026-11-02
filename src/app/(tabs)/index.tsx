@@ -7,7 +7,7 @@ import { Image } from 'expo-image';
 import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
 
 import { useAuthStore } from '@/store/authStore';
-import { useGamificationStore, getLocalDateString, getCycleMetrics } from '@/store/gamificationStore';
+import { useGamificationStore, getLocalDateString, getCycleMetrics, getLevelProgress } from '@/store/gamificationStore';
 import { useTheme } from '@/hooks/use-theme';
 import { Fonts } from '@/constants/theme';
 import { toast } from '@/store/toastStore';
@@ -162,10 +162,9 @@ export default function DashboardScreen() {
       ? (isFilipino ? "LINGGUHANG BAON" : "THIS WEEK'S ALLOWANCE")
       : (isFilipino ? "KASALUKUYANG BALANSE" : 'CURRENT BALANCE');
 
-  const currentLevelXP = (store.level - 1) * 100;
-  const nextLevelThreshold = store.level * 100;
-  const xpInCurrentLevel = Math.max(0, store.xp - currentLevelXP);
-  const xpProgressRatio = Math.min(1, Math.max(0, xpInCurrentLevel / 100));
+  const levelInfo = getLevelProgress(store.xp);
+  const xpProgressRatio = levelInfo.progressRatio;
+  const nextLevelThreshold = levelInfo.nextCeil;
 
   const firstName = user?.name ? user.name.split(' ')[0] : 'Explorer';
 
@@ -230,7 +229,7 @@ export default function DashboardScreen() {
                 <View style={styles.xpRow}>
                   <View style={styles.headerLevelBadge}>
                     <Text style={styles.headerLevelText} numberOfLines={1}>
-                      LVL {store.level}
+                      LVL {levelInfo.level}
                     </Text>
                   </View>
                   <View style={[styles.headerXpTrack, { backgroundColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(15, 23, 42, 0.08)' }]}>

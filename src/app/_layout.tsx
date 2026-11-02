@@ -23,6 +23,7 @@ import { CbudgetSplashScreen } from '@/components/CbudgetSplashScreen';
 import tamaguiConfig from '../../tamagui.config';
 import { CustomAlertProvider } from '@/components/ui/CustomAlert';
 import { ToastProvider } from '@/components/ui/Toast';
+import { LevelUpModal } from '@/components/ui/LevelUpModal';
 import {
   registerForPushNotificationsAsync,
   syncScheduledNotificationsAsync,
@@ -169,6 +170,7 @@ export default function RootLayout() {
             {isAuthInitially && <CbudgetSplashScreen />}
             <CustomAlertProvider />
             <ToastProvider />
+            <LevelUpModal />
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: navTheme.colors.background } }}>
               <Stack.Screen name="index" />
               <Stack.Screen name="auth/callback" options={{ headerShown: false }} />

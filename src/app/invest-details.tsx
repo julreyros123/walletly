@@ -323,18 +323,18 @@ export default function InvestDetailsScreen() {
               </View>
               <YStack gap={4} flex={1}>
                 <XStack alignItems="center" gap={8} flexWrap="wrap">
-                  <Text color="#FFFFFF" fontSize={20} fontFamily={Fonts.bold} letterSpacing={-0.3} numberOfLines={1}>
+                  <Text color={textColor} fontSize={20} fontFamily={Fonts.bold} letterSpacing={-0.3} numberOfLines={1}>
                     {asset.name}
                   </Text>
                   <View
-                    backgroundColor="rgba(255, 255, 255, 0.08)"
+                    backgroundColor={isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)'}
                     paddingHorizontal={7}
                     paddingVertical={2.5}
                     borderRadius={6}
                     borderWidth={1}
-                    borderColor="rgba(255, 255, 255, 0.12)"
+                    borderColor={isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}
                   >
-                    <Text color="rgba(255, 255, 255, 0.85)" fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
+                    <Text color={textColor} fontSize={10} fontFamily={Fonts.bold} letterSpacing={0.5}>
                       {asset.ticker}
                     </Text>
                   </View>
@@ -342,14 +342,14 @@ export default function InvestDetailsScreen() {
 
                 <XStack gap={6} flexWrap="wrap" alignItems="center">
                   <View
-                    backgroundColor="rgba(255, 255, 255, 0.04)"
+                    backgroundColor={isDark ? 'rgba(255, 255, 255, 0.04)' : '#F1F5F9'}
                     paddingHorizontal={8}
                     paddingVertical={3}
                     borderRadius={6}
                     borderWidth={1}
-                    borderColor="rgba(255, 255, 255, 0.08)"
+                    borderColor={isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0'}
                   >
-                    <Text color="rgba(255, 255, 255, 0.6)" fontSize={11} fontFamily={Fonts.medium}>
+                    <Text color={textMuted} fontSize={11} fontFamily={Fonts.medium}>
                       {asset.partner}
                     </Text>
                   </View>
@@ -377,10 +377,10 @@ export default function InvestDetailsScreen() {
                     <Text
                       color={
                         asset.riskProfile === 'Conservative'
-                          ? '#34D399'
+                          ? '#10B981'
                           : asset.riskProfile === 'Moderate'
-                          ? '#FBBF24'
-                          : '#F87171'
+                          ? '#D97706'
+                          : '#EF4444'
                       }
                       fontSize={11}
                       fontFamily={Fonts.bold}
@@ -399,7 +399,7 @@ export default function InvestDetailsScreen() {
             {/* Price & Change Row */}
             <XStack justifyContent="space-between" alignItems="baseline" flexWrap="wrap" gap={8} marginTop={12}>
               <XStack alignItems="baseline" gap={4}>
-                <Text color="#FFFFFF" fontSize={34} fontFamily={Fonts.bold} letterSpacing={-0.8} lineHeight={40}>
+                <Text color={textColor} fontSize={34} fontFamily={Fonts.bold} letterSpacing={-0.8} lineHeight={40}>
                   {currencySymbol}
                   {(scrubbedPrice ? scrubbedPrice : asset.price).toLocaleString(undefined, {
                     minimumFractionDigits: 2,
@@ -891,7 +891,7 @@ export default function InvestDetailsScreen() {
                 {/* Buy / Sell Switch */}
                 <XStack
                   gap={6}
-                  backgroundColor={subcardBg}
+                  backgroundColor={isDark ? 'rgba(255, 255, 255, 0.05)' : '#F1F5F9'}
                   borderRadius={12}
                   padding={4}
                   marginBottom={12}
@@ -910,7 +910,7 @@ export default function InvestDetailsScreen() {
                     ]}
                   >
                     <Text
-                      color={allocationType === 'buy' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.6)'}
+                      color={allocationType === 'buy' ? '#FFFFFF' : textMuted}
                       fontSize={12}
                       fontFamily={Fonts.bold}
                     >
@@ -929,7 +929,7 @@ export default function InvestDetailsScreen() {
                     ]}
                   >
                     <Text
-                      color={allocationType === 'sell' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.6)'}
+                      color={allocationType === 'sell' ? '#FFFFFF' : textMuted}
                       fontSize={12}
                       fontFamily={Fonts.bold}
                     >
@@ -941,12 +941,12 @@ export default function InvestDetailsScreen() {
                 {/* Mode Selector */}
                 <XStack
                   gap={6}
-                  backgroundColor="rgba(11, 19, 43, 0.8)"
+                  backgroundColor={isDark ? 'rgba(11, 19, 43, 0.8)' : '#F1F5F9'}
                   borderRadius={10}
                   padding={3}
                   marginBottom={14}
                   borderWidth={1}
-                  borderColor="rgba(255, 255, 255, 0.08)"
+                  borderColor={dividerColor}
                 >
                   <TouchableOpacity
                     onPress={() => {
@@ -956,11 +956,11 @@ export default function InvestDetailsScreen() {
                     }}
                     style={[
                       styles.modeSwitchBtn,
-                      tradeMode === 'pesos' && { backgroundColor: 'rgba(255, 255, 255, 0.12)' },
+                      tradeMode === 'pesos' && { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.12)' : '#FFFFFF' },
                     ]}
                   >
                     <Text
-                      color={tradeMode === 'pesos' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.5)'}
+                      color={tradeMode === 'pesos' ? textColor : textMuted}
                       fontSize={11}
                       fontFamily={Fonts.bold}
                     >
@@ -975,11 +975,11 @@ export default function InvestDetailsScreen() {
                     }}
                     style={[
                       styles.modeSwitchBtn,
-                      tradeMode === 'shares' && { backgroundColor: 'rgba(255, 255, 255, 0.12)' },
+                      tradeMode === 'shares' && { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.12)' : '#FFFFFF' },
                     ]}
                   >
                     <Text
-                      color={tradeMode === 'shares' ? '#FFFFFF' : 'rgba(255, 255, 255, 0.5)'}
+                      color={tradeMode === 'shares' ? textColor : textMuted}
                       fontSize={11}
                       fontFamily={Fonts.bold}
                     >
@@ -990,12 +990,20 @@ export default function InvestDetailsScreen() {
 
                 {/* Amount Input */}
                 <YStack gap={6} marginBottom={12}>
-                  <Text color="rgba(255, 255, 255, 0.6)" fontSize={11} fontFamily={Fonts.bold} letterSpacing={0.5} textTransform="uppercase">
+                  <Text color={textMuted} fontSize={11} fontFamily={Fonts.bold} letterSpacing={0.5} textTransform="uppercase">
                     {tradeMode === 'pesos'
                       ? allocationType === 'buy' ? 'Amount to Invest' : 'Amount to Liquidate'
                       : allocationType === 'buy' ? 'Shares to Buy' : 'Shares to Sell'}
                   </Text>
-                  <View style={styles.tradeInputRow}>
+                  <View
+                    style={[
+                      styles.tradeInputRow,
+                      {
+                        backgroundColor: isDark ? 'rgba(11, 19, 43, 0.8)' : '#F8FAFC',
+                        borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#E2E8F0',
+                      },
+                    ]}
+                  >
                     <Text color="#10B981" fontSize={18} fontFamily={Fonts.bold} marginRight={8}>
                       {tradeMode === 'pesos' ? currencySymbol : 'Qty'}
                     </Text>
@@ -1009,9 +1017,9 @@ export default function InvestDetailsScreen() {
                         }
                       }}
                       placeholder="0.00"
-                      placeholderTextColor="rgba(255, 255, 255, 0.3)"
+                      placeholderTextColor={isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.25)'}
                       keyboardType="numeric"
-                      style={styles.tradeTextInput}
+                      style={[styles.tradeTextInput, { color: textColor }]}
                     />
                   </View>
                 </YStack>
@@ -1022,9 +1030,15 @@ export default function InvestDetailsScreen() {
                     <TouchableOpacity
                       key={pct}
                       onPress={() => handleQuickPercent(pct)}
-                      style={styles.percentChip}
+                      style={[
+                        styles.percentChip,
+                        {
+                          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : '#F1F5F9',
+                          borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0',
+                        },
+                      ]}
                     >
-                      <Text color="#FFFFFF" fontSize={11} fontFamily={Fonts.bold}>
+                      <Text color={textColor} fontSize={11} fontFamily={Fonts.bold}>
                         {pct === 1.0 ? 'MAX' : `${pct * 100}%`}
                       </Text>
                     </TouchableOpacity>
@@ -1032,22 +1046,30 @@ export default function InvestDetailsScreen() {
                 </XStack>
 
                 {/* Order Summary */}
-                <YStack backgroundColor="rgba(11, 19, 43, 0.8)" padding={12} borderRadius={12} gap={8} marginBottom={16} borderWidth={1} borderColor="rgba(255, 255, 255, 0.06)">
+                <YStack
+                  backgroundColor={isDark ? 'rgba(11, 19, 43, 0.8)' : '#F8FAFC'}
+                  padding={12}
+                  borderRadius={12}
+                  gap={8}
+                  marginBottom={16}
+                  borderWidth={1}
+                  borderColor={isDark ? 'rgba(255, 255, 255, 0.06)' : '#E2E8F0'}
+                >
                   <XStack justifyContent="space-between">
-                    <Text color="rgba(255, 255, 255, 0.5)" fontSize={11.5} fontFamily={Fonts.medium}>
+                    <Text color={textMuted} fontSize={11.5} fontFamily={Fonts.medium}>
                       {allocationType === 'buy' ? 'Estimated Shares' : 'Gross Proceeds'}
                     </Text>
-                    <Text color="#FFFFFF" fontSize={12.5} fontFamily={Fonts.bold}>
+                    <Text color={textColor} fontSize={12.5} fontFamily={Fonts.bold}>
                       {allocationType === 'buy'
                         ? `${typedUnits.toFixed(4)} units`
                         : `${currencySymbol}${estimatedCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                     </Text>
                   </XStack>
                   <XStack justifyContent="space-between">
-                    <Text color="rgba(255, 255, 255, 0.5)" fontSize={11.5} fontFamily={Fonts.medium}>
+                    <Text color={textMuted} fontSize={11.5} fontFamily={Fonts.medium}>
                       {allocationType === 'buy' ? 'Available Buying Power' : 'Units in Portfolio'}
                     </Text>
-                    <Text color="#FFFFFF" fontSize={12.5} fontFamily={Fonts.bold}>
+                    <Text color={textColor} fontSize={12.5} fontFamily={Fonts.bold}>
                       {allocationType === 'buy'
                         ? `${currencySymbol}${store.virtualBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
                         : `${ownedUnits.toFixed(4)} units`}
@@ -1111,40 +1133,40 @@ export default function InvestDetailsScreen() {
                     <Text color="#38BDF8" fontSize={12} fontFamily={Fonts.bold}>
                       Fractional Shares
                     </Text>
-                    <Text color="rgba(255, 255, 255, 0.75)" fontSize={11.5} lineHeight={16.5} fontFamily={Fonts.regular}>
+                    <Text color={textMuted} fontSize={11.5} lineHeight={16.5} fontFamily={Fonts.regular}>
                       Allows you to purchase an exact slice of a share for as little as {currencySymbol}10. You do not need to afford a full share to participate in price growth.
                     </Text>
                   </YStack>
 
-                  <View height={1} backgroundColor="rgba(255, 255, 255, 0.08)" />
+                  <View height={1} backgroundColor={dividerColor} />
 
                   <YStack gap={3}>
-                    <Text color="#34D399" fontSize={12} fontFamily={Fonts.bold}>
+                    <Text color="#10B981" fontSize={12} fontFamily={Fonts.bold}>
                       Dividend Yield
                     </Text>
-                    <Text color="rgba(255, 255, 255, 0.75)" fontSize={11.5} lineHeight={16.5} fontFamily={Fonts.regular}>
+                    <Text color={textMuted} fontSize={11.5} lineHeight={16.5} fontFamily={Fonts.regular}>
                       Periodic cash payments distributed to shareholders directly from corporate profits, providing passive income simply by holding ownership.
                     </Text>
                   </YStack>
 
-                  <View height={1} backgroundColor="rgba(255, 255, 255, 0.08)" />
+                  <View height={1} backgroundColor={dividerColor} />
 
                   <YStack gap={3}>
-                    <Text color="#FBBF24" fontSize={12} fontFamily={Fonts.bold}>
+                    <Text color="#F59E0B" fontSize={12} fontFamily={Fonts.bold}>
                       P/E Ratio (Price-to-Earnings)
                     </Text>
-                    <Text color="rgba(255, 255, 255, 0.75)" fontSize={11.5} lineHeight={16.5} fontFamily={Fonts.regular}>
+                    <Text color={textMuted} fontSize={11.5} lineHeight={16.5} fontFamily={Fonts.regular}>
                       Compares the share price against annual earnings per share. A lower ratio often suggests undervalued assets, while higher ratios reflect strong anticipated future growth.
                     </Text>
                   </YStack>
 
-                  <View height={1} backgroundColor="rgba(255, 255, 255, 0.08)" />
+                  <View height={1} backgroundColor={dividerColor} />
 
                   <YStack gap={3}>
-                    <Text color="#A855F7" fontSize={12} fontFamily={Fonts.bold}>
+                    <Text color="#8B5CF6" fontSize={12} fontFamily={Fonts.bold}>
                       Market Capitalization
                     </Text>
-                    <Text color="rgba(255, 255, 255, 0.75)" fontSize={11.5} lineHeight={16.5} fontFamily={Fonts.regular}>
+                    <Text color={textMuted} fontSize={11.5} lineHeight={16.5} fontFamily={Fonts.regular}>
                       The total market valuation of all circulating corporate shares combined, indicating company size and overall stability.
                     </Text>
                   </YStack>

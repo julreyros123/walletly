@@ -4,6 +4,7 @@ import { storage } from '@/utils/storage';
 import { supabase } from '@/utils/supabase';
 import { syncQueue } from '@/utils/syncQueue';
 import { applyRemoteRows, getLocalRows } from '@/db/localRepository';
+import { safeHaptic } from '@/utils/haptics';
 import { useExchangeRateStore } from './exchangeRateStore';
 
 export const CURRENT_GAMIFICATION_VERSION = 2;
@@ -382,6 +383,8 @@ interface GamificationState {
   lastDividendClaimDates: Record<string, string>; // ticker -> YYYY-MM-DD
   guestSessionDate?: string;
   currency?: string;
+  pendingLevelUp: number | null;
+  dismissLevelUp: () => void;
 
   // Core Actions
   addXP: (amount: number) => void;
@@ -437,7 +440,68 @@ interface GamificationState {
   hydrate: (targetUserId?: string | null) => Promise<void>;
 }
 
-const LEVEL_THRESHOLDS = [0, 100, 250, 500, 1000, 2000, 3500, 5000];
+export const LEVEL_THRESHOLDS = [
+  0,     // Level 1: 0 - 99 XP
+  100,   // Level 2: 100 - 199 XP
+  200,   // Level 3: 200 - 299 XP
+  300,   // Level 4: 300 - 449 XP
+  450,   // Level 5: 450 - 599 XP
+  600,   // Level 6: 600 - 799 XP
+  800,   // Level 7: 800 - 1099 XP
+  1100,  // Level 8: 1100 - 1499 XP
+  1500,  // Level 9: 1500 - 1999 XP
+  2000,  // Level 10: 2000 - 2599 XP
+  2600,  // Level 11: 2600 - 3299 XP
+  3300,  // Level 12: 3300 - 4099 XP
+  4100,  // Level 13: 4100 - 4999 XP
+  5000,  // Level 14: 5000+ XP
+];
+
+export function calculateLevelFromXP(xp: number): number {
+  let level = 1;
+  for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (xp >= LEVEL_THRESHOLDS[i]) {
+      level = i + 1;
+      break;
+    }
+  }
+  return level;
+}
+
+export function getLevelProgress(xp: number) {
+  const level = calculateLevelFromXP(xp);
+  const currentFloor = LEVEL_THRESHOLDS[level - 1] ?? 0;
+  const nextCeil = LEVEL_THRESHOLDS[level] ?? currentFloor + 100;
+  const xpInLevel = Math.max(0, xp - currentFloor);
+  const xpNeeded = Math.max(1, nextCeil - currentFloor);
+  const progressRatio = Math.min(1, Math.max(0, xpInLevel / xpNeeded));
+
+  return {
+    level,
+    currentFloor,
+    nextCeil,
+    xpInLevel,
+    xpNeeded,
+    progressRatio,
+  };
+}
+
+export function applyXpGain(
+  state: { xp: number; level: number; pendingLevelUp?: number | null },
+  xpGain: number
+) {
+  const newXp = state.xp + xpGain;
+  const newLevel = calculateLevelFromXP(newXp);
+  const leveledUp = newLevel > state.level;
+  if (leveledUp) {
+    safeHaptic('success');
+  }
+  return {
+    xp: newXp,
+    level: Math.max(state.level, newLevel),
+    pendingLevelUp: leveledUp ? newLevel : (state.pendingLevelUp ?? null),
+  };
+}
 
 export const ALL_ACHIEVEMENTS: Achievement[] = [
   {
@@ -582,6 +646,7 @@ async function persistState(state: GamificationState, specificUserId?: string | 
 export type GamificationDataState = {
   xp: number;
   level: number;
+  pendingLevelUp: number | null;
   streakDays: number;
   lastActiveDate: string | null;
   lastClaimedRewardDate: string | null;
@@ -641,22 +706,20 @@ export const DEFAULT_GAMIFICATION_DATA: GamificationDataState = {
   lastDividendClaimDates: {},
   guestSessionDate: undefined,
   currency: 'PHP',
+  pendingLevelUp: null,
 };
 
 export const useGamificationStore = create<GamificationState>()((set, get) => ({
   ...DEFAULT_GAMIFICATION_DATA,
 
+  dismissLevelUp: () => set({ pendingLevelUp: null }),
+
   addXP: (amount) => {
     set((state) => {
-      const newXp = state.xp + amount;
-      let newLevel = 1;
-      for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
-        if (newXp >= LEVEL_THRESHOLDS[i]) {
-          newLevel = i + 1;
-          break;
-        }
-      }
-      const next = { xp: newXp, level: newLevel };
+      const xpUpdate = applyXpGain(state, amount);
+      const next = {
+        ...xpUpdate,
+      };
       persistState({ ...state, ...next });
       return next;
     });
@@ -753,12 +816,10 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       result = { success: true, xp: xpReward, cash: cashReward, day: dayInCycle };
 
       const newXp = state.xp + xpReward;
-      let newLevel = 1;
-      for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
-        if (newXp >= LEVEL_THRESHOLDS[i]) {
-          newLevel = i + 1;
-          break;
-        }
+      const newLevel = calculateLevelFromXP(newXp);
+      const leveledUp = newLevel > state.level;
+      if (leveledUp) {
+        safeHaptic('success');
       }
 
       let updatedAchievements = [...state.achievements];
@@ -795,6 +856,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         lastActiveDate: today,
         xp: newXp,
         level: newLevel,
+        pendingLevelUp: leveledUp ? newLevel : state.pendingLevelUp,
         virtualBalance: state.virtualBalance + cashReward,
         loggedExpenses: updatedExpenses,
         learningScore: Math.min(100, state.learningScore + dayInCycle * 2),
@@ -929,6 +991,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         if (ach) updatedAchievements.push({ ...ach, unlockedAt: new Date().toISOString() });
       }
 
+      const xpUpdate = applyXpGain(state, 30);
       const next = {
         isBudgetSetupComplete: true,
         budgetType: type,
@@ -937,7 +1000,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         categoryLimits: limits,
         budgetingScore: 80,
         achievements: updatedAchievements,
-        xp: state.xp + 30,
+        ...xpUpdate,
       };
       persistState({ ...state, ...next });
 
@@ -1090,13 +1153,14 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       const cents = amount % 100;
       const roundUp = cents === 0 ? 0 : 100 - cents;
       const nextSpareChange = state.spareChangeAccumulated + roundUp;
+      const xpUpdate = applyXpGain(state, 10);
 
       const next = {
         loggedExpenses: updatedExpenses,
         budgetingScore: nextBudgetingScore,
         achievements: updatedAchievements,
-        xp: state.xp + 10,
         spareChangeAccumulated: nextSpareChange,
+        ...xpUpdate,
       };
       persistState({ ...state, ...next });
 
@@ -1234,9 +1298,10 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         type: 'income',
       };
       const updatedExpenses = [newIncome, ...state.loggedExpenses];
+      const xpUpdate = applyXpGain(state, 10);
       const next = {
         loggedExpenses: updatedExpenses,
-        xp: state.xp + 10,
+        ...xpUpdate,
       };
       persistState({ ...state, ...next });
 
@@ -1334,10 +1399,11 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         category,
       };
       const updatedGoals = [...state.savingsGoals, newGoal];
+      const xpUpdate = applyXpGain(state, 15);
       const next = {
         savingsGoals: updatedGoals,
         savingScore: Math.min(100, state.savingScore + 5),
-        xp: state.xp + 15,
+        ...xpUpdate,
       };
       persistState({ ...state, ...next });
 
@@ -1432,13 +1498,14 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         type: 'expense',
       };
       const updatedExpenses = [savingsExpense, ...state.loggedExpenses];
+      const xpUpdate = applyXpGain(state, 15);
 
       const next = {
         savingsGoals: updatedGoals,
         loggedExpenses: updatedExpenses,
         savingScore: Math.min(100, nextSavingScore),
         achievements: updatedAchievements,
-        xp: state.xp + 15,
+        ...xpUpdate,
       };
       persistState({ ...state, ...next });
 
@@ -1681,13 +1748,14 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       const updatedRecords = [newRecord, ...(state.savingsRecords || [])];
       const updatedExpenses = [savingsExpense, ...state.loggedExpenses];
       const nextVault = (state.unspentSavingsVault || 0) + amount;
+      const xpUpdate = applyXpGain(state, 15);
 
       const next = {
         unspentSavingsVault: nextVault,
         savingsRecords: updatedRecords,
         loggedExpenses: updatedExpenses,
-        xp: state.xp + 15,
         savingScore: Math.min(100, state.savingScore + 5),
+        ...xpUpdate,
       };
       persistState({ ...state, ...next });
 
@@ -1794,10 +1862,11 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
     set((state) => {
       const amount = state.spareChangeAccumulated;
       if (amount <= 0) return state;
+      const xpUpdate = applyXpGain(state, 10);
       const next = {
         spareChangeAccumulated: 0,
         virtualBalance: state.virtualBalance + amount,
-        xp: state.xp + 10,
+        ...xpUpdate,
       };
       persistState({ ...state, ...next });
       return next;
@@ -1825,11 +1894,12 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         type: 'expense',
       };
       const updatedExpenses = [investExpense, ...state.loggedExpenses];
+      const xpUpdate = applyXpGain(state, 10);
 
       const next = {
         loggedExpenses: updatedExpenses,
         virtualBalance: state.virtualBalance + amount,
-        xp: state.xp + 10,
+        ...xpUpdate,
       };
       persistState({ ...state, ...next });
 
@@ -1865,9 +1935,10 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
 
   grantOnboardingCash: (amount) => {
     set((state) => {
+      const xpUpdate = applyXpGain(state, 25);
       const next = {
         virtualBalance: state.virtualBalance + amount,
-        xp: state.xp + 25,
+        ...xpUpdate,
       };
       persistState({ ...state, ...next });
       return next;
@@ -1876,9 +1947,10 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
 
   addSimulationCash: (amount, xpReward = 10) => {
     set((state) => {
+      const xpUpdate = applyXpGain(state, xpReward);
       const next = {
         virtualBalance: state.virtualBalance + amount,
-        xp: state.xp + xpReward,
+        ...xpUpdate,
       };
       persistState({ ...state, ...next });
       return next;
@@ -1901,19 +1973,11 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
 
   creditGameReward: (xpEarned, cashProfit) => {
     set((state) => {
-      const newXp = state.xp + xpEarned;
-      let newLevel = 1;
-      for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
-        if (newXp >= LEVEL_THRESHOLDS[i]) {
-          newLevel = i + 1;
-          break;
-        }
-      }
+      const xpUpdate = applyXpGain(state, xpEarned);
       const nextBalance = Math.max(0, state.virtualBalance + cashProfit);
       const next = {
-        xp: newXp,
-        level: newLevel,
         virtualBalance: nextBalance,
+        ...xpUpdate,
       };
       persistState({ ...state, ...next });
       return next;
@@ -1928,13 +1992,14 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         return state;
       }
       success = true;
+      const xpUpdate = applyXpGain(state, 5);
       const next = {
         virtualBalance: state.virtualBalance + amount,
-        xp: state.xp + 5,
         lastDividendClaimDates: {
           ...state.lastDividendClaimDates,
           [ticker]: today,
         },
+        ...xpUpdate,
       };
       persistState({ ...state, ...next });
       return next;
@@ -1973,12 +2038,13 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
           if (ach) updatedAchievements.push({ ...ach, unlockedAt: new Date().toISOString() });
         }
 
+        const xpUpdate = applyXpGain(state, 15);
         const next = {
           virtualBalance: state.virtualBalance - totalCost,
           portfolioAllocations: newAllocations,
           investingScore: nextInvestingScore,
           achievements: updatedAchievements,
-          xp: state.xp + 15,
+          ...xpUpdate,
         };
         persistState({ ...state, ...next });
         return next;
@@ -1997,10 +2063,11 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
           delete newAllocations[ticker];
         }
 
+        const xpUpdate = applyXpGain(state, 10);
         const next = {
           virtualBalance: state.virtualBalance + totalCost,
           portfolioAllocations: newAllocations,
-          xp: state.xp + 10,
+          ...xpUpdate,
         };
         persistState({ ...state, ...next });
         return next;
@@ -2078,11 +2145,12 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         if (ach) updatedAchievements.push({ ...ach, unlockedAt: new Date().toISOString() });
       }
 
+      const xpUpdate = applyXpGain(state, 50);
       const next = {
         learningScore: nextLearningScore,
         completedLessonIds: nextCompleted,
         achievements: updatedAchievements,
-        xp: state.xp + 50,
+        ...xpUpdate,
       };
       persistState({ ...state, ...next });
       return next;
@@ -2097,10 +2165,11 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         if (ach) updatedAchievements.push({ ...ach, unlockedAt: new Date().toISOString() });
       }
 
+      const xpUpdate = applyXpGain(state, 10);
       const next = {
         customAvatar: avatar,
         achievements: updatedAchievements,
-        xp: state.xp + 10,
+        ...xpUpdate,
       };
       persistState({ ...state, ...next });
       return next;
@@ -2596,9 +2665,16 @@ function buildStateFromSnapshot(
     }
   }
 
+  const xpVal = parsed.xp ?? 45;
+  const computedLevel = calculateLevelFromXP(xpVal);
+  const storedLevel = parsed.level ?? 1;
+  const effectiveLevel = Math.max(storedLevel, computedLevel);
+  const pendingLevelUp = computedLevel > storedLevel ? computedLevel : null;
+
   return {
-    xp: parsed.xp ?? 45,
-    level: parsed.level ?? 1,
+    xp: xpVal,
+    level: effectiveLevel,
+    pendingLevelUp,
     streakDays: parsed.streakDays ?? 1,
     lastActiveDate: parsed.lastActiveDate ?? null,
     lastClaimedRewardDate: parsed.lastClaimedRewardDate ?? null,
