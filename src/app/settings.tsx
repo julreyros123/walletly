@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, Href } from 'expo-router';
+import { Image } from 'expo-image';
 import { useTheme } from '@/hooks/use-theme';
 import { useThemeStore } from '@/store/themeStore';
 import { usePreferencesStore, SupportedCurrency } from '@/store/preferencesStore';
@@ -21,6 +22,7 @@ import { useGamificationStore, ALL_ACHIEVEMENTS } from '@/store/gamificationStor
 import { PhosphorIcon, PhosphorIconName } from '@/components/ui/PhosphorIcon';
 import { LegalPolicyModal } from '@/features/profile/components/LegalPolicyModal';
 import { LegalTabId } from '@/constants/legalPolicies';
+import { AvatarPickerModal } from '@/components/ui/AvatarPickerModal';
 import { safeHaptic } from '@/utils/haptics';
 import { sendGuardianReport } from '@/utils/guardianReport';
 import { Fonts } from '@/constants/theme';
@@ -85,6 +87,10 @@ export default function SettingsScreen() {
   const [cityInput, setCityInput] = useState(user?.city || '');
   const [schoolGradeInput, setSchoolGradeInput] = useState(user?.schoolGrade || '');
   const [guardianInput, setGuardianInput] = useState(guardianEmail || '');
+  const [editAvatarUrl, setEditAvatarUrl] = useState<string | null>(user?.avatarUrl || null);
+  const [editAvatarEmoji, setEditAvatarEmoji] = useState<string>(user?.avatarEmoji || '💼');
+  const [editAvatarColor, setEditAvatarColor] = useState<string>(user?.avatarColor || '#10B981');
+  const [avatarPickerVisible, setAvatarPickerVisible] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   const unlockedCount = unlockedAchievements.length;
@@ -98,6 +104,9 @@ export default function SettingsScreen() {
     setCityInput(user?.city || '');
     setSchoolGradeInput(user?.schoolGrade || '');
     setGuardianInput(guardianEmail || '');
+    setEditAvatarUrl(user?.avatarUrl || null);
+    setEditAvatarEmoji(user?.avatarEmoji || '💼');
+    setEditAvatarColor(user?.avatarColor || primaryAccent);
     setEditProfileModalVisible(true);
   };
 
@@ -120,11 +129,14 @@ export default function SettingsScreen() {
       await updateProfile(
         cleanName,
         cleanEmail || user?.email || '',
-        user?.avatarColor,
-        user?.avatarEmoji,
+        editAvatarColor,
+        editAvatarEmoji,
         cleanPhone,
         cleanCity,
-        cleanSchoolGrade
+        cleanSchoolGrade,
+        user?.age,
+        user?.isOnboarded,
+        editAvatarUrl
       );
       if (cleanGuardian !== guardianEmail) {
         await setGuardianInfo(cleanGuardian, Boolean(cleanGuardian));
@@ -421,13 +433,20 @@ export default function SettingsScreen() {
             style={[
               styles.avatarContainer,
               {
-                backgroundColor: user?.avatarColor || primaryAccent,
+                backgroundColor: user?.avatarUrl ? '#0F172A' : (user?.avatarColor || primaryAccent),
                 borderColor: isDark ? '#1E293B' : '#FFFFFF',
                 shadowColor: primaryAccent,
               },
             ]}
           >
-            {user?.avatarEmoji ? (
+            {user?.avatarUrl ? (
+              <Image
+                source={{ uri: user.avatarUrl }}
+                style={styles.avatarImage}
+                contentFit="cover"
+                transition={200}
+              />
+            ) : user?.avatarEmoji ? (
               <Text style={styles.avatarEmoji}>{user.avatarEmoji}</Text>
             ) : (
               <Text style={styles.avatarInitials}>
@@ -617,23 +636,55 @@ export default function SettingsScreen() {
 
             {/* Avatar Centered in Edit View */}
             <View style={styles.editAvatarWrapper}>
-              <View
-                style={[
-                  styles.avatarContainerLarge,
-                  {
-                    backgroundColor: user?.avatarColor || primaryAccent,
-                    borderColor: isDark ? '#1E293B' : '#FFFFFF',
-                  },
-                ]}
+              <TouchableOpacity
+                onPress={() => {
+                  safeHaptic('light');
+                  setAvatarPickerVisible(true);
+                }}
+                activeOpacity={0.85}
+                style={styles.editAvatarTouch}
               >
-                {user?.avatarEmoji ? (
-                  <Text style={styles.avatarEmojiLarge}>{user.avatarEmoji}</Text>
-                ) : (
-                  <Text style={styles.avatarInitialsLarge}>
-                    {(user?.name || 'U').slice(0, 2).toUpperCase()}
-                  </Text>
-                )}
-              </View>
+                <View
+                  style={[
+                    styles.avatarContainerLarge,
+                    {
+                      backgroundColor: editAvatarUrl ? '#0F172A' : (editAvatarColor || primaryAccent),
+                      borderColor: isDark ? '#1E293B' : '#FFFFFF',
+                    },
+                  ]}
+                >
+                  {editAvatarUrl ? (
+                    <Image
+                      source={{ uri: editAvatarUrl }}
+                      style={styles.avatarImageLarge}
+                      contentFit="cover"
+                      transition={200}
+                    />
+                  ) : editAvatarEmoji ? (
+                    <Text style={styles.avatarEmojiLarge}>{editAvatarEmoji}</Text>
+                  ) : (
+                    <Text style={styles.avatarInitialsLarge}>
+                      {(nameInput || user?.name || 'U').slice(0, 2).toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+                <View style={[styles.avatarCameraBadge, { backgroundColor: primaryAccent }]}>
+                  <PhosphorIcon name="Camera" size={14} color="#FFFFFF" weight="bold" />
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  safeHaptic('light');
+                  setAvatarPickerVisible(true);
+                }}
+                style={styles.changePhotoButton}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.changePhotoText, { color: primaryAccent }]}>
+                  Change Avatar / Photo
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={styles.editFormScroll}>
@@ -811,6 +862,20 @@ export default function SettingsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ==================== AVATAR PICKER MODAL (App Presets or Gallery) ==================== */}
+      <AvatarPickerModal
+        visible={avatarPickerVisible}
+        onClose={() => setAvatarPickerVisible(false)}
+        initialAvatarUrl={editAvatarUrl}
+        initialEmoji={editAvatarEmoji}
+        initialColor={editAvatarColor}
+        onSelectAvatar={(selection) => {
+          setEditAvatarUrl(selection.avatarUrl);
+          setEditAvatarEmoji(selection.avatarEmoji);
+          setEditAvatarColor(selection.avatarColor);
+        }}
+      />
 
       {/* ==================== ACHIEVEMENTS MODAL ==================== */}
       <Modal
@@ -1275,6 +1340,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 3,
     marginBottom: 6,
+    overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowOffset: { width: 0, height: 6 },
@@ -1288,6 +1354,10 @@ const styles = StyleSheet.create({
         boxShadow: '0 6px 16px rgba(16, 185, 129, 0.25)',
       } as any,
     }),
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarInitials: {
     color: '#FFFFFF',
@@ -1444,6 +1514,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: 12,
   },
+  editAvatarTouch: {
+    position: 'relative',
+  },
   avatarContainerLarge: {
     width: 84,
     height: 84,
@@ -1451,6 +1524,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
+    overflow: 'hidden',
+  },
+  avatarImageLarge: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarCameraBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+  },
+  changePhotoButton: {
+    marginTop: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+  },
+  changePhotoText: {
+    fontSize: 13,
+    fontFamily: Fonts.semiBold,
   },
   avatarInitialsLarge: {
     color: '#FFFFFF',

@@ -117,11 +117,17 @@ import {
   ShieldWarning,
   Bank,
   Shield,
+  Camera,
+  Image as ImageIcon,
+  Images,
 } from 'phosphor-react-native';
 import type { StyleProp, ViewStyle, ColorValue } from 'react-native';
 
 // ── Icon registry (maps string names → components) ───────────────────
 const ICON_MAP = {
+  Camera,
+  Image: ImageIcon,
+  Images,
   SignOut: SignOut || Power,
   Logout: SignOut || Power,
   Exit: SignOut || Power,

@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, View, Text, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, Href, useFocusEffect } from 'expo-router';
 import { StatusBar, setStatusBarStyle } from 'expo-status-bar';
+import { Image } from 'expo-image';
 import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
 
 import { useAuthStore } from '@/store/authStore';
@@ -199,13 +200,20 @@ export default function DashboardScreen() {
                 style={[
                   styles.headerAvatarContainer,
                   {
-                    backgroundColor: user?.avatarColor || theme.primary,
+                    backgroundColor: user?.avatarUrl ? '#0F172A' : (user?.avatarColor || theme.primary),
                     borderColor: theme.mode === 'dark' ? theme.border : '#FFFFFF',
                   },
                 ]}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                {user?.avatarEmoji ? (
+                {user?.avatarUrl ? (
+                  <Image
+                    source={{ uri: user.avatarUrl }}
+                    style={styles.avatarImage}
+                    contentFit="cover"
+                    transition={200}
+                  />
+                ) : user?.avatarEmoji ? (
                   <Text style={styles.avatarEmoji}>{user.avatarEmoji}</Text>
                 ) : (
                   <Text style={styles.avatarInitials}>
@@ -498,6 +506,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
+    overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#000000',
@@ -512,6 +521,10 @@ const styles = StyleSheet.create({
         boxShadow: '0 2px 6px rgba(0, 0, 0, 0.12)',
       } as any,
     }),
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarEmoji: {
     fontSize: 21,

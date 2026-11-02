@@ -78,6 +78,7 @@ export interface User {
   email: string;
   avatarColor?: string;
   avatarEmoji?: string;
+  avatarUrl?: string | null;
   phone?: string;
   city?: string;
   schoolGrade?: string;
@@ -107,7 +108,8 @@ interface AuthState {
     city?: string,
     schoolGrade?: string,
     age?: number,
-    isOnboarded?: boolean
+    isOnboarded?: boolean,
+    avatarUrl?: string | null
   ) => Promise<void>;
   sendPasswordReset: (email: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
@@ -476,6 +478,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             email: session.user.email || '',
             avatarColor: '#0EA5E9',
             avatarEmoji: '💼',
+            avatarUrl: meta.avatar_url || meta.picture || undefined,
             age: meta.age ? Number(meta.age) : undefined,
             isOnboarded: Boolean(meta.is_onboarded),
           };
@@ -509,6 +512,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                   name: initialUser.name,
                   avatar_color: initialUser.avatarColor,
                   avatar_emoji: initialUser.avatarEmoji,
+                  avatar_url: initialUser.avatarUrl || null,
                 });
               } else {
                 const profileAny = profile as Record<string, unknown>;
@@ -525,6 +529,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                         name: profile.name || state.user.name,
                         avatarColor: profile.avatar_color || state.user.avatarColor,
                         avatarEmoji: profile.avatar_emoji || state.user.avatarEmoji,
+                        avatarUrl: (profileAny.avatar_url as string) || state.user.avatarUrl,
                         age: resolvedAge,
                         isOnboarded: resolvedOnboarded,
                       }
@@ -571,7 +576,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     city?: string,
     schoolGrade?: string,
     age?: number,
-    isOnboarded?: boolean
+    isOnboarded?: boolean,
+    avatarUrl?: string | null
   ) => {
     const currentUser = get().user;
     if (!currentUser) return;
@@ -581,6 +587,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       email,
       avatarColor: avatarColor !== undefined ? avatarColor : currentUser.avatarColor,
       avatarEmoji: avatarEmoji !== undefined ? avatarEmoji : currentUser.avatarEmoji,
+      avatarUrl: avatarUrl !== undefined ? (avatarUrl || undefined) : currentUser.avatarUrl,
       phone: phone !== undefined ? phone : currentUser.phone,
       city: city !== undefined ? city : currentUser.city,
       schoolGrade: schoolGrade !== undefined ? schoolGrade : currentUser.schoolGrade,
@@ -608,6 +615,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           name,
           age: updatedFields.age,
           is_onboarded: updatedFields.isOnboarded,
+          avatar_url: updatedFields.avatarUrl || null,
         },
       });
     } catch (authMetaErr) {
@@ -621,6 +629,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         email,
         avatar_color: updatedFields.avatarColor,
         avatar_emoji: updatedFields.avatarEmoji,
+        avatar_url: updatedFields.avatarUrl || null,
         phone: updatedFields.phone,
         city: updatedFields.city,
         school_grade: updatedFields.schoolGrade,
@@ -647,6 +656,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             email,
             avatar_color: updatedFields.avatarColor,
             avatar_emoji: updatedFields.avatarEmoji,
+            avatar_url: updatedFields.avatarUrl || null,
             phone: updatedFields.phone,
             city: updatedFields.city,
             school_grade: updatedFields.schoolGrade,

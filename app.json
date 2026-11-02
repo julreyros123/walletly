@@ -60,6 +60,12 @@
       "expo-notifications",
       "expo-asset",
       "expo-image",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to allow you to set your custom profile avatar."
+        }
+      ],
       "expo-web-browser"
     ],
     "experiments": {
