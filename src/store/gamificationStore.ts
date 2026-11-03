@@ -936,6 +936,22 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
                 },
                 options: { onConflict: 'transaction_id' },
               });
+
+              // Log check-in entry for calendar streak heatmap & analytics
+              await syncQueue.enqueue({
+                table: 'daily_checkin_logs',
+                action: 'upsert',
+                payload: {
+                  user_id: session.user.id,
+                  checkin_date: toISODate(today),
+                  streak_count: nextStreak,
+                  day_in_cycle: dayInCycle,
+                  xp_reward: result.xp,
+                  cash_reward: cashReward,
+                  claimed_at: new Date().toISOString(),
+                },
+                options: { onConflict: 'user_id,checkin_date' },
+              });
             }
           } catch (err) {
             console.warn('[GamificationStore] Daily reward transaction sync enqueue error:', err);
@@ -2030,6 +2046,31 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         ...xpUpdate,
       };
       persistState({ ...state, ...next });
+
+      if (xpEarned > 0 || cashProfit > 0) {
+        (async () => {
+          try {
+            const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+            if (session?.user?.id && session.user.id !== 'guest') {
+              await syncQueue.enqueue({
+                table: 'arcade_scores',
+                action: 'insert',
+                payload: {
+                  user_id: session.user.id,
+                  game_id: 'arcade_session',
+                  score: xpEarned,
+                  xp_earned: xpEarned,
+                  cash_profit: cashProfit,
+                  played_at: new Date().toISOString(),
+                },
+              });
+            }
+          } catch (e) {
+            console.warn('[GamificationStore] Arcade score sync error:', e);
+          }
+        })();
+      }
+
       return next;
     });
   },
@@ -2151,6 +2192,24 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
                 match: { user_id: session.user.id, ticker },
               });
             }
+
+            // Record trade in persistent investment_orders ledger
+            const TRADE_SPREAD_PCT = 0.0025;
+            const effectivePrice = type === 'buy' ? price * (1 + TRADE_SPREAD_PCT) : price * (1 - TRADE_SPREAD_PCT);
+            const totalCost = qty * effectivePrice;
+            await syncQueue.enqueue({
+              table: 'investment_orders',
+              action: 'insert',
+              payload: {
+                user_id: session.user.id,
+                ticker,
+                side: type,
+                shares: qty,
+                price: effectivePrice,
+                total_amount: totalCost,
+                executed_at: new Date().toISOString(),
+              },
+            });
           }
         } catch (tradeSyncErr) {
           console.warn('[GamificationStore] executeTrade investments sync error:', tradeSyncErr);
@@ -2219,6 +2278,19 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
                 completed_at: new Date().toISOString(),
               },
               options: { onConflict: 'user_id,lesson_id' },
+            });
+
+            // Log quiz mastery attempt in relational table
+            await syncQueue.enqueue({
+              table: 'quiz_attempts',
+              action: 'insert',
+              payload: {
+                user_id: session.user.id,
+                lesson_id: id,
+                score_percent: 100,
+                passed: 1,
+                attempted_at: new Date().toISOString(),
+              },
             });
           }
         } catch (lessonSyncErr) {

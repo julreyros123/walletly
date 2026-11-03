@@ -14,6 +14,8 @@ const NATURAL_KEYS: Partial<Record<SyncedTable, string[]>> = {
   budgets: ['user_id', 'category', 'month'],
   user_investments: ['user_id', 'ticker'],
   user_lessons: ['user_id', 'lesson_id'],
+  user_achievements: ['user_id', 'achievement_id'],
+  daily_checkin_logs: ['user_id', 'checkin_date'],
 };
 
 export function isSyncedTable(name: string): name is SyncedTable {

@@ -557,18 +557,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               console.warn('[Auth] Background profile sync warning:', err);
             }
           })();
+        } else if (event === 'SIGNED_OUT') {
+          // Explicit sign out: clear user session and transition to guest mode
+          setActiveGamificationUser('guest');
+          set({
+            token: null,
+            user: null,
+            isAuthenticated: false,
+            isLoading: false,
+          });
+          useGamificationStore.getState().hydrate('guest');
         } else {
-          // If we have an existing authenticated session locally, check if session is genuinely gone
+          // Device is offline or Supabase session token is refreshing during INITIAL_SESSION.
+          // NEVER wipe authenticated user data or force-downgrade to guest when offline!
           const current = get();
           if (current.isAuthenticated && current.user && current.user.id !== 'guest') {
-            const { data: { session: probeSession } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
-            if (probeSession) {
-              set({ token: probeSession.access_token, isLoading: false });
-              return;
-            }
+            // Keep user logged in with local offline credentials
+            set({ isLoading: false });
+            return;
           }
 
-          if (!isGuestToken(get().token)) {
+          // Unauthenticated initial state (no saved credentials exist)
+          if (!current.isAuthenticated && !isGuestToken(current.token)) {
             setActiveGamificationUser('guest');
             set({
               token: null,

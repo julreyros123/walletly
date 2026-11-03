@@ -12,7 +12,7 @@
 export const LOCAL_DB_NAME = 'cbudget.db';
 
 /** Bump this and add a step in MIGRATIONS whenever the local schema changes. */
-export const LOCAL_DB_VERSION = 2;
+export const LOCAL_DB_VERSION = 3;
 
 export type SyncedTable =
   | 'profiles'
@@ -22,7 +22,13 @@ export type SyncedTable =
   | 'user_investments'
   | 'guardian_reports'
   | 'user_app_state'
-  | 'user_lessons';
+  | 'user_lessons'
+  | 'investment_orders'
+  | 'user_achievements'
+  | 'daily_checkin_logs'
+  | 'arcade_scores'
+  | 'quiz_attempts'
+  | 'savings_vault_history';
 
 /** Primary key column(s) of each synced table — must match Supabase. */
 export const TABLE_PRIMARY_KEYS: Record<SyncedTable, string[]> = {
@@ -34,6 +40,12 @@ export const TABLE_PRIMARY_KEYS: Record<SyncedTable, string[]> = {
   guardian_reports: ['id'],
   user_app_state: ['user_id'],
   user_lessons: ['id'],
+  investment_orders: ['id'],
+  user_achievements: ['id'],
+  daily_checkin_logs: ['id'],
+  arcade_scores: ['id'],
+  quiz_attempts: ['id'],
+  savings_vault_history: ['id'],
 };
 
 /** Columns that exist in Supabase for each table (local-only sync columns excluded). */
@@ -65,9 +77,26 @@ export const TABLE_COLUMNS: Record<SyncedTable, string[]> = {
   ],
   user_app_state: ['user_id', 'state', 'updated_at'],
   user_lessons: ['id', 'user_id', 'lesson_id', 'completed_at'],
+  investment_orders: [
+    'id', 'user_id', 'ticker', 'side', 'shares', 'price', 'total_amount', 'executed_at',
+  ],
+  user_achievements: ['id', 'user_id', 'achievement_id', 'unlocked_at'],
+  daily_checkin_logs: [
+    'id', 'user_id', 'checkin_date', 'streak_count', 'day_in_cycle', 'xp_reward',
+    'cash_reward', 'claimed_at',
+  ],
+  arcade_scores: [
+    'id', 'user_id', 'game_id', 'score', 'xp_earned', 'cash_profit', 'played_at',
+  ],
+  quiz_attempts: [
+    'id', 'user_id', 'lesson_id', 'score_percent', 'passed', 'attempted_at',
+  ],
+  savings_vault_history: [
+    'id', 'user_id', 'amount', 'cycle', 'note', 'rolled_over_at',
+  ],
 };
 
-export const BOOLEAN_COLUMNS = new Set(['is_onboarded', 'guardian_linked', 'is_completed']);
+export const BOOLEAN_COLUMNS = new Set(['is_onboarded', 'guardian_linked', 'is_completed', 'passed']);
 
 const SYNC_COLS = `
     sync_status TEXT NOT NULL DEFAULT 'synced' CHECK (sync_status IN ('synced', 'pending')),
@@ -198,5 +227,85 @@ export const MIGRATIONS: string[] = [
     UNIQUE (user_id, lesson_id)
   );
   CREATE INDEX IF NOT EXISTS idx_user_lessons_user ON user_lessons (user_id);
+  `,
+
+  // v2 -> v3: expanded tables for investment orders, user achievements, daily check-in logs, arcade scores, quiz attempts, and savings vault history
+  `
+  CREATE TABLE IF NOT EXISTS investment_orders (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL,
+    ticker TEXT NOT NULL,
+    side TEXT NOT NULL CHECK (side IN ('buy', 'sell')),
+    shares REAL NOT NULL,
+    price REAL NOT NULL,
+    total_amount REAL NOT NULL,
+    executed_at TEXT NOT NULL,
+    sync_status TEXT NOT NULL DEFAULT 'synced' CHECK (sync_status IN ('synced', 'pending')),
+    local_updated_at INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_investment_orders_user ON investment_orders (user_id, executed_at DESC);
+
+  CREATE TABLE IF NOT EXISTS user_achievements (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL,
+    achievement_id TEXT NOT NULL,
+    unlocked_at TEXT NOT NULL,
+    sync_status TEXT NOT NULL DEFAULT 'synced' CHECK (sync_status IN ('synced', 'pending')),
+    local_updated_at INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (user_id, achievement_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_user_achievements_user ON user_achievements (user_id);
+
+  CREATE TABLE IF NOT EXISTS daily_checkin_logs (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL,
+    checkin_date TEXT NOT NULL,
+    streak_count INTEGER NOT NULL,
+    day_in_cycle INTEGER NOT NULL,
+    xp_reward INTEGER NOT NULL,
+    cash_reward REAL NOT NULL,
+    claimed_at TEXT NOT NULL,
+    sync_status TEXT NOT NULL DEFAULT 'synced' CHECK (sync_status IN ('synced', 'pending')),
+    local_updated_at INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (user_id, checkin_date)
+  );
+  CREATE INDEX IF NOT EXISTS idx_daily_checkin_logs_user ON daily_checkin_logs (user_id, checkin_date DESC);
+
+  CREATE TABLE IF NOT EXISTS arcade_scores (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL,
+    game_id TEXT NOT NULL,
+    score INTEGER NOT NULL,
+    xp_earned INTEGER NOT NULL,
+    cash_profit REAL NOT NULL DEFAULT 0,
+    played_at TEXT NOT NULL,
+    sync_status TEXT NOT NULL DEFAULT 'synced' CHECK (sync_status IN ('synced', 'pending')),
+    local_updated_at INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_arcade_scores_user ON arcade_scores (user_id, played_at DESC);
+
+  CREATE TABLE IF NOT EXISTS quiz_attempts (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL,
+    lesson_id TEXT NOT NULL,
+    score_percent INTEGER NOT NULL,
+    passed INTEGER NOT NULL DEFAULT 1,
+    attempted_at TEXT NOT NULL,
+    sync_status TEXT NOT NULL DEFAULT 'synced' CHECK (sync_status IN ('synced', 'pending')),
+    local_updated_at INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_quiz_attempts_user ON quiz_attempts (user_id, lesson_id);
+
+  CREATE TABLE IF NOT EXISTS savings_vault_history (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL,
+    amount REAL NOT NULL,
+    cycle TEXT NOT NULL,
+    note TEXT,
+    rolled_over_at TEXT NOT NULL,
+    sync_status TEXT NOT NULL DEFAULT 'synced' CHECK (sync_status IN ('synced', 'pending')),
+    local_updated_at INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_savings_vault_history_user ON savings_vault_history (user_id, rolled_over_at DESC);
   `,
 ];

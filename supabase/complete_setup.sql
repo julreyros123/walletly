@@ -308,7 +308,126 @@ CREATE POLICY "Users can manage their own completed lessons" ON public.user_less
 CREATE INDEX IF NOT EXISTS idx_user_lessons_user ON public.user_lessons (user_id);
 
 -- ==============================================================================
--- 10. ACCOUNT DELETION FUNCTION (GDPR / Right-to-be-forgotten)
+-- 10. INVESTMENT ORDERS TABLE (public.investment_orders)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.investment_orders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    ticker TEXT NOT NULL,
+    side TEXT NOT NULL CHECK (side IN ('buy', 'sell')),
+    shares NUMERIC(16, 6) NOT NULL CHECK (shares > 0),
+    price NUMERIC(12, 2) NOT NULL CHECK (price >= 0),
+    total_amount NUMERIC(12, 2) NOT NULL CHECK (total_amount >= 0),
+    executed_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.investment_orders ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage their own investment orders" ON public.investment_orders;
+CREATE POLICY "Users can manage their own investment orders" ON public.investment_orders FOR ALL
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+CREATE INDEX IF NOT EXISTS idx_investment_orders_user ON public.investment_orders (user_id, executed_at DESC);
+
+-- ==============================================================================
+-- 11. USER ACHIEVEMENTS / BADGES TABLE (public.user_achievements)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.user_achievements (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    achievement_id TEXT NOT NULL,
+    unlocked_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    UNIQUE (user_id, achievement_id)
+);
+
+ALTER TABLE public.user_achievements ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage their own achievements" ON public.user_achievements;
+CREATE POLICY "Users can manage their own achievements" ON public.user_achievements FOR ALL
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+CREATE INDEX IF NOT EXISTS idx_user_achievements_user ON public.user_achievements (user_id);
+
+-- ==============================================================================
+-- 12. DAILY CHECK-IN LOGS TABLE (public.daily_checkin_logs)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.daily_checkin_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    checkin_date DATE NOT NULL,
+    streak_count INTEGER NOT NULL DEFAULT 1,
+    day_in_cycle INTEGER NOT NULL DEFAULT 1,
+    xp_reward INTEGER NOT NULL DEFAULT 15,
+    cash_reward NUMERIC(12, 2) NOT NULL DEFAULT 100.00,
+    claimed_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    UNIQUE (user_id, checkin_date)
+);
+
+ALTER TABLE public.daily_checkin_logs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage their own checkin logs" ON public.daily_checkin_logs;
+CREATE POLICY "Users can manage their own checkin logs" ON public.daily_checkin_logs FOR ALL
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+CREATE INDEX IF NOT EXISTS idx_daily_checkin_logs_user ON public.daily_checkin_logs (user_id, checkin_date DESC);
+
+-- ==============================================================================
+-- 13. ARCADE SCORES & MINIGAME SESSIONS (public.arcade_scores)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.arcade_scores (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    game_id TEXT NOT NULL,
+    score INTEGER NOT NULL DEFAULT 0,
+    xp_earned INTEGER NOT NULL DEFAULT 0,
+    cash_profit NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    played_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.arcade_scores ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage their own arcade scores" ON public.arcade_scores;
+CREATE POLICY "Users can manage their own arcade scores" ON public.arcade_scores FOR ALL
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+CREATE INDEX IF NOT EXISTS idx_arcade_scores_user ON public.arcade_scores (user_id, played_at DESC);
+
+-- ==============================================================================
+-- 14. QUIZ ATTEMPTS & MASTERY (public.quiz_attempts)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.quiz_attempts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    lesson_id TEXT NOT NULL,
+    score_percent INTEGER NOT NULL CHECK (score_percent BETWEEN 0 AND 100),
+    passed BOOLEAN NOT NULL DEFAULT TRUE,
+    attempted_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.quiz_attempts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage their own quiz attempts" ON public.quiz_attempts;
+CREATE POLICY "Users can manage their own quiz attempts" ON public.quiz_attempts FOR ALL
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_attempts_user ON public.quiz_attempts (user_id, lesson_id);
+
+-- ==============================================================================
+-- 15. SAVINGS VAULT HISTORY (public.savings_vault_history)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.savings_vault_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    amount NUMERIC(12, 2) NOT NULL CHECK (amount > 0),
+    cycle TEXT NOT NULL DEFAULT 'daily',
+    note TEXT,
+    rolled_over_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.savings_vault_history ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can manage their own savings vault history" ON public.savings_vault_history;
+CREATE POLICY "Users can manage their own savings vault history" ON public.savings_vault_history FOR ALL
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+CREATE INDEX IF NOT EXISTS idx_savings_vault_history_user ON public.savings_vault_history (user_id, rolled_over_at DESC);
+
+-- ==============================================================================
+-- 16. ACCOUNT DELETION FUNCTION (GDPR / Right-to-be-forgotten)
 -- ==============================================================================
 CREATE OR REPLACE FUNCTION public.delete_user()
 RETURNS void
