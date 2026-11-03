@@ -2,8 +2,8 @@
   "expo": {
     "name": "Cbudget",
     "slug": "cbudget",
-    "version": "1.0.8",
-    "runtimeVersion": "1.0.8",
+    "version": "1.0.9",
+    "runtimeVersion": "1.0.9",
     "updates": {
       "url": "https://u.expo.dev/9cdb044d-ef95-4b1a-9a6a-183275403052",
       "fallbackToCacheTimeout": 0
@@ -21,7 +21,7 @@
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": true,
-      "versionCode": 9,
+      "versionCode": 10,
       "package": "com.julreyros123.cbudget",
       "googleServicesFile": "./google-services.json",
       "permissions": [

@@ -35,15 +35,17 @@ export default function TabsLayout() {
     <View style={{ flex: 1, backgroundColor: isDark ? '#0A0F1D' : '#F8FAFC' }}>
       <StatusBar style={tabStatusBarStyle} />
       <Tabs
+        detachInactiveScreens={false}
         screenOptions={{
-          animation: 'shift',
+          animation: 'fade',
           transitionSpec: {
             animation: 'timing',
             config: {
-              duration: 220,
-              easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+              duration: 180,
+              easing: Easing.out(Easing.ease),
             },
           },
+          freezeOnBlur: false,
           sceneStyle: { backgroundColor: isDark ? '#0A0F1D' : '#F8FAFC' },
           tabBarActiveTintColor: theme.primary as any,
           tabBarInactiveTintColor: theme.textSecondary as any,
