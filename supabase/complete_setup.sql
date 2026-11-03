@@ -103,7 +103,15 @@ ALTER TABLE public.budgets ADD COLUMN IF NOT EXISTS category_id TEXT;
 ALTER TABLE public.budgets ADD COLUMN IF NOT EXISTS limit_amount NUMERIC(12, 2);
 ALTER TABLE public.budgets ADD COLUMN IF NOT EXISTS period TEXT;
 
+-- Clean up any duplicates before applying unique constraint
+DELETE FROM public.budgets a USING public.budgets b
+WHERE a.ctid < b.ctid
+  AND a.user_id = b.user_id
+  AND a.category = b.category
+  AND a.month = b.month;
+
 DO $$ BEGIN
+    ALTER TABLE public.budgets DROP CONSTRAINT IF EXISTS budgets_user_category_month_key;
     ALTER TABLE public.budgets ADD CONSTRAINT budgets_user_category_month_key UNIQUE (user_id, category, month);
 EXCEPTION WHEN OTHERS THEN NULL;
 END $$;

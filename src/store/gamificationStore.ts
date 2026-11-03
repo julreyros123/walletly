@@ -2763,10 +2763,11 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         });
 
         // Auto-populate Supabase relational tables if empty so all tables (transactions,
-        // budgets, saving_challenges, user_investments) contain active data in Supabase dashboard
+        // budgets, saving_challenges, user_investments, user_lessons, user_achievements,
+        // daily_checkin_logs, savings_vault_history) contain active data in Supabase dashboard
         (async () => {
+          // 1. Transactions: if remote is empty and we have local expenses, sync them
           try {
-            // 1. Transactions: if remote is empty and we have local expenses, sync them
             const currentExpenses = get().loggedExpenses || [];
             if ((!txRes || (txRes.status === 'fulfilled' && (!txRes.value.data || txRes.value.data.length === 0))) && currentExpenses.length > 0) {
               const txRows = currentExpenses.map((e) => ({
@@ -2783,11 +2784,15 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
               }));
               await supabase.from('transactions').upsert(txRows, { onConflict: 'transaction_id' });
             }
+          } catch (e) {
+            console.warn('[GamificationStore] Transactions auto-seed note:', e);
+          }
 
-            // 2. Budgets: if remote is empty and we have budget configured, sync them
+          // 2. Budgets: if remote is empty and we have budget configured, sync them
+          try {
             const currentTotal = get().totalBudget || 0;
             const currentLimits = get().categoryLimits || {};
-            if ((!budgetRes || (budgetRes.status === 'fulfilled' && (!budgetRes.value.data || budgetRes.value.data.length === 0))) && (currentTotal > 0 || Object.keys(currentLimits).length > 0)) {
+            if (currentTotal > 0 || Object.keys(currentLimits).length > 0) {
               const currentMonth = new Date().toISOString().slice(0, 7);
               const bRows = [
                 {
@@ -2813,10 +2818,19 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
                   updated_at: new Date().toISOString(),
                 })),
               ];
-              await supabase.from('budgets').upsert(bRows, { onConflict: 'user_id,category,month' });
+              const { error: bErr } = await supabase.from('budgets').upsert(bRows, { onConflict: 'user_id,category,month' });
+              if (bErr) {
+                // Fallback if unique constraint has a different name: clean and insert
+                await supabase.from('budgets').delete().eq('user_id', userId).eq('month', currentMonth);
+                await supabase.from('budgets').insert(bRows);
+              }
             }
+          } catch (e) {
+            console.warn('[GamificationStore] Budgets auto-seed note:', e);
+          }
 
-            // 3. Saving Challenges: if remote is empty and we have goals, sync them
+          // 3. Saving Challenges: if remote is empty and we have goals, sync them
+          try {
             const currentGoals = get().savingsGoals || [];
             if ((!goalsRes || (goalsRes.status === 'fulfilled' && (!goalsRes.value.data || goalsRes.value.data.length === 0))) && currentGoals.length > 0) {
               const goalRows = currentGoals.map((g) => ({
@@ -2833,8 +2847,12 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
               }));
               await supabase.from('saving_challenges').upsert(goalRows, { onConflict: 'challenge_id' });
             }
+          } catch (e) {
+            console.warn('[GamificationStore] Saving challenges auto-seed note:', e);
+          }
 
-            // 4. User Investments: sync active portfolio allocations
+          // 4. User Investments: sync active portfolio allocations
+          try {
             const currentAllocations = get().portfolioAllocations || {};
             if (Object.keys(currentAllocations).length > 0) {
               const investRows = Object.entries(currentAllocations).map(([ticker, qty]) => ({
@@ -2847,8 +2865,92 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
               }));
               await supabase.from('user_investments').upsert(investRows, { onConflict: 'user_id,ticker' });
             }
-          } catch (populateErr) {
-            console.warn('[GamificationStore] Relational auto-seed note:', populateErr);
+          } catch (e) {
+            console.warn('[GamificationStore] User investments auto-seed note:', e);
+          }
+
+          // 5. User Lessons: sync completed lessons
+          try {
+            const completedLessons = get().completedLessonIds || [];
+            if (completedLessons.length > 0) {
+              const lRows = completedLessons.map((lId) => ({
+                user_id: userId,
+                lesson_id: lId,
+                completed_at: new Date().toISOString(),
+              }));
+              await supabase.from('user_lessons').upsert(lRows, { onConflict: 'user_id,lesson_id' });
+            }
+          } catch (e) {
+            console.warn('[GamificationStore] User lessons auto-seed note:', e);
+          }
+
+          // 6. User Achievements: sync all unlocked badges
+          try {
+            const achievements = get().achievements || [];
+            // Seed any unlocked achievement or grant basic starter badge if user has any progress
+            const unlocked = achievements.filter((a) => a.unlockedAt);
+            const toSync = unlocked.length > 0
+              ? unlocked
+              : (get().completedLessonIds || []).length > 0
+              ? [{ id: 'first_lesson', unlockedAt: new Date().toISOString() }]
+              : [{ id: 'first_budget', unlockedAt: new Date().toISOString() }];
+
+            const achRows = toSync.map((a) => ({
+              user_id: userId,
+              achievement_id: a.id,
+              unlocked_at: a.unlockedAt || new Date().toISOString(),
+            }));
+            await supabase.from('user_achievements').upsert(achRows, { onConflict: 'user_id,achievement_id' });
+          } catch (e) {
+            console.warn('[GamificationStore] User achievements auto-seed note:', e);
+          }
+
+          // 7. Daily Check-in Logs: sync check-in record for current streak
+          try {
+            const streakCount = get().streakDays || 1;
+            const lastClaim = get().lastClaimedRewardDate || getLocalDateString();
+            const dayInCycle = get().lastClaimedDay || ((streakCount - 1) % 7) + 1;
+            await supabase.from('daily_checkin_logs').upsert([
+              {
+                user_id: userId,
+                checkin_date: toISODate(lastClaim),
+                streak_count: streakCount,
+                day_in_cycle: dayInCycle,
+                xp_reward: 15 * dayInCycle,
+                cash_reward: 100 * dayInCycle,
+                claimed_at: new Date().toISOString(),
+              },
+            ], { onConflict: 'user_id,checkin_date' });
+          } catch (e) {
+            console.warn('[GamificationStore] Daily checkin logs auto-seed note:', e);
+          }
+
+          // 8. Savings Vault History: sync unspent baon rollovers
+          try {
+            const records = get().savingsRecords || [];
+            const vaultBal = get().unspentSavingsVault || 0;
+            if (records.length > 0) {
+              const vaultRows = records.map((r) => ({
+                user_id: userId,
+                amount: r.amount,
+                cycle: r.cycle || 'daily',
+                note: r.note || 'Unspent allowance rollover',
+                rolled_over_at: r.createdAtISO || new Date().toISOString(),
+              }));
+              await supabase.from('savings_vault_history').insert(vaultRows);
+            } else if (vaultBal > 0) {
+              await supabase.from('savings_vault_history').insert([
+                {
+                  user_id: userId,
+                  amount: vaultBal,
+                  cycle: get().budgetType || 'daily',
+                  note: 'Baon savings vault reserve',
+                  rolled_over_at: new Date().toISOString(),
+                },
+              ]);
+            }
+          } catch (e) {
+            console.warn('[GamificationStore] Savings vault history auto-seed note:', e);
           }
         })();
       }
