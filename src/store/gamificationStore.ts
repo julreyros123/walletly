@@ -3,7 +3,7 @@ import { AppState } from 'react-native';
 import { storage } from '@/utils/storage';
 import { supabase } from '@/utils/supabase';
 import { syncQueue } from '@/utils/syncQueue';
-import { applyRemoteRows, getLocalRows, saveLocalAppState, loadLocalAppState } from '@/db/localRepository';
+import { applyRemoteRows, getLocalRows, saveLocalAppState, loadLocalAppState, getLatestLocalAppState } from '@/db/localRepository';
 import { safeHaptic } from '@/utils/haptics';
 import { useExchangeRateStore } from './exchangeRateStore';
 
@@ -15,6 +15,8 @@ let currentActiveUserId: string | null = null;
 let lastHydratedTarget: string | null | undefined = undefined;
 let hydrationGeneration = 0;
 let isHydrationComplete = false;
+let activeHydrationPromise: Promise<void> | null = null;
+let activeHydratingUserId: string | null | undefined = undefined;
 
 export function setActiveGamificationUser(userId: string | null) {
   currentActiveUserId = userId;
@@ -2388,66 +2390,136 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
   },
 
   hydrate: async (targetUserId?: string | null) => {
-    try {
-      const generation = ++hydrationGeneration;
-      let resolvedUserId = targetUserId;
-      if (resolvedUserId === undefined) {
-        // Probe Supabase session
-        const { data: { session } } = await supabase.auth.getSession().catch((err) => {
-          console.warn('[GamificationStore] Probe session warning:', err);
-          return { data: { session: null } };
-        });
-        resolvedUserId = session?.user?.id || null;
-      }
+    // 1. Concurrency deduplication: reuse active hydration if already running for this user
+    if (activeHydrationPromise && activeHydratingUserId === targetUserId) {
+      return activeHydrationPromise;
+    }
+    if (targetUserId !== undefined && targetUserId === lastHydratedTarget && isHydrationComplete) {
+      return;
+    }
 
-      if (resolvedUserId !== undefined && resolvedUserId === lastHydratedTarget) {
-        return;
-      }
-      lastHydratedTarget = resolvedUserId;
-      currentActiveUserId = resolvedUserId;
-      isHydrationComplete = false;
-
-      const userKey = getUserStorageKey(resolvedUserId);
-      const isGuestMode = resolvedUserId === null || resolvedUserId === 'guest';
-      const todayISO = getLocalDateString();
-
-      // 1. Read from local cache for instant offline load (SQLite local_app_state first, then storage)
-      let stored = (await loadLocalAppState(userKey)) || (await storage.getItem(userKey));
-      if (!stored && isGuestMode) {
-        // Migration: check legacy un-scoped key only for guest/unauthenticated sessions
-        stored = (await loadLocalAppState(BASE_GAMIFICATION_KEY)) || (await storage.getItem(BASE_GAMIFICATION_KEY));
-      } else if (!stored && resolvedUserId && resolvedUserId !== 'guest') {
-        // Migration: If newly signed-in user has no local cache yet, inherit guest progress
-        const guestStored = (await loadLocalAppState(`${BASE_GAMIFICATION_KEY}_guest`)) || (await storage.getItem(`${BASE_GAMIFICATION_KEY}_guest`));
-        if (guestStored) {
-          stored = guestStored;
-          // Store under active user's key immediately in both SQLite and storage
-          await saveLocalAppState(userKey, guestStored);
-          await storage.setItem(userKey, guestStored);
+    const runHydration = async () => {
+      try {
+        let resolvedUserId = targetUserId;
+        if (resolvedUserId === undefined) {
+          // Probe Supabase session
+          const { data: { session } } = await supabase.auth.getSession().catch((err) => {
+            console.warn('[GamificationStore] Probe session warning:', err);
+            return { data: { session: null } };
+          });
+          resolvedUserId = session?.user?.id || null;
         }
-      }
 
-      if (generation !== hydrationGeneration) {
-        return;
-      }
+        const generation = ++hydrationGeneration;
+        currentActiveUserId = resolvedUserId;
+        isHydrationComplete = false;
 
-      let localSavedAt = 0;
-      let hasLocalCache = false;
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          localSavedAt = Number(parsed._savedAt) || 0;
-          hasLocalCache = true;
-          set(buildStateFromSnapshot(parsed, isGuestMode, todayISO));
-        } catch (parseErr) {
-          console.warn('[GamificationStore] Error parsing cached state:', parseErr);
+        const userKey = getUserStorageKey(resolvedUserId);
+        const isGuestMode = resolvedUserId === null || resolvedUserId === 'guest';
+        const todayISO = getLocalDateString();
+
+        // 1. Read from local cache for instant offline load (SQLite local_app_state first, then storage)
+        let stored = (await loadLocalAppState(userKey)) || (await storage.getItem(userKey));
+        if (!stored && isGuestMode) {
+          // Migration: check legacy un-scoped key only for guest/unauthenticated sessions
+          stored = (await loadLocalAppState(BASE_GAMIFICATION_KEY)) || (await storage.getItem(BASE_GAMIFICATION_KEY));
+
+          // Auto-recovery across APK updates: If guest state is empty, search SQLite for ANY previous progress!
+          if (!stored) {
+            const latest = await getLatestLocalAppState();
+            if (latest && latest.state) {
+              try {
+                const parsedLatest = JSON.parse(latest.state);
+                const hasProgress =
+                  (parsedLatest.completedLessonIds || []).length > 0 ||
+                  Object.keys(parsedLatest.portfolioAllocations || {}).length > 0 ||
+                  (parsedLatest.virtualBalance || 0) > 0 ||
+                  (parsedLatest.xp || 0) > 45 ||
+                  (parsedLatest.streakDays || 1) > 1;
+                if (hasProgress) {
+                  console.log(`[GamificationStore] Auto-recovered saved progress from ${latest.key} across app update!`);
+                  stored = latest.state;
+                  await saveLocalAppState(userKey, stored);
+                  await storage.setItem(userKey, stored);
+                }
+              } catch (err) {
+                console.warn('[GamificationStore] Error parsing latest local state:', err);
+              }
+            }
+          }
+        } else if (!stored && resolvedUserId && resolvedUserId !== 'guest') {
+          // Migration: If newly signed-in user has no local cache yet, inherit guest progress or latest local progress
+          const guestStored = (await loadLocalAppState(`${BASE_GAMIFICATION_KEY}_guest`)) || (await storage.getItem(`${BASE_GAMIFICATION_KEY}_guest`));
+          if (guestStored) {
+            stored = guestStored;
+            await saveLocalAppState(userKey, guestStored);
+            await storage.setItem(userKey, guestStored);
+          } else {
+            const latest = await getLatestLocalAppState();
+            if (latest && latest.state) {
+              stored = latest.state;
+              await saveLocalAppState(userKey, stored);
+              await storage.setItem(userKey, stored);
+            }
+          }
         }
-      } else {
-        set({ ...DEFAULT_GAMIFICATION_DATA });
-      }
 
-      isHydrationComplete = true;
-      get().checkAndUpdateStreak();
+        if (generation !== hydrationGeneration) {
+          return;
+        }
+
+        let localSavedAt = 0;
+        let hasLocalCache = false;
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            localSavedAt = Number(parsed._savedAt) || 0;
+            hasLocalCache = true;
+            set(buildStateFromSnapshot(parsed, isGuestMode, todayISO));
+          } catch (parseErr) {
+            console.warn('[GamificationStore] Error parsing cached state:', parseErr);
+          }
+        } else {
+          // Relational SQLite fallback: reconstruct state from local SQLite tables if JSON snapshot was missing
+          try {
+            const localLessons = (await getLocalRows('user_lessons', resolvedUserId || undefined)) || [];
+            const localInvestments = (await getLocalRows('user_investments', resolvedUserId || undefined)) || [];
+            const localTx = (await getLocalRows('transactions', resolvedUserId || undefined)) || [];
+
+            const initialCompletedLessonIds = localLessons.map((r: any) => String(r.lesson_id));
+            const initialPortfolio: Record<string, number> = {};
+            for (const row of localInvestments) {
+              const qty = Number(row.quantity) || 0;
+              if (qty > 0 && row.ticker) {
+                initialPortfolio[String(row.ticker)] = qty;
+              }
+            }
+            const initialExpenses: Expense[] = localTx.map((r: any) => ({
+              id: String(r.transaction_id || r.id),
+              name: String(r.description || 'Transaction'),
+              category: String(r.category || 'Other'),
+              amount: Number(r.amount) || 0,
+              date: String(r.transaction_date || todayISO),
+              type: r.type === 'income' ? 'income' : 'expense',
+            }));
+
+            const calculatedXp = Math.max(45, 45 + initialCompletedLessonIds.length * 50);
+            set({
+              ...DEFAULT_GAMIFICATION_DATA,
+              completedLessonIds: initialCompletedLessonIds,
+              portfolioAllocations: initialPortfolio,
+              loggedExpenses: initialExpenses,
+              xp: calculatedXp,
+              level: calculateLevelFromXP(calculatedXp),
+            });
+          } catch (e) {
+            set({ ...DEFAULT_GAMIFICATION_DATA });
+          }
+        }
+
+        isHydrationComplete = true;
+        lastHydratedTarget = resolvedUserId;
+        get().checkAndUpdateStreak();
 
       // 2. If authenticated with Supabase, pull cloud records and sync permanently
       if (resolvedUserId && resolvedUserId !== 'guest') {
@@ -2957,7 +3029,17 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
     } catch (e) {
       console.warn('[GamificationStore] Failed to hydrate gamification state:', e);
     }
-  },
+  };
+
+  activeHydratingUserId = targetUserId;
+  activeHydrationPromise = runHydration();
+  try {
+    await activeHydrationPromise;
+  } finally {
+    activeHydrationPromise = null;
+    activeHydratingUserId = undefined;
+  }
+},
 }));
 
 /**

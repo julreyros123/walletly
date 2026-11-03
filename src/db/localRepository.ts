@@ -253,13 +253,18 @@ export async function applyRemoteRows(table: SyncedTable, userId: string, remote
 
 // ───────────────────────── Reads ─────────────────────────
 
-export async function getLocalRows(table: SyncedTable, userId: string): Promise<Row[] | null> {
+export async function getLocalRows(table: SyncedTable, userId?: string | null): Promise<Row[] | null> {
   const db = await getLocalDb();
   if (!db) return null;
   const ownerCol = table === 'profiles' ? 'id' : 'user_id';
   const order = table === 'transactions' ? ' ORDER BY transaction_date DESC, created_at DESC' : '';
   try {
-    const rows = await db.getAllAsync<Row>(`SELECT * FROM ${table} WHERE ${ownerCol} = ?${order}`, [userId]);
+    let rows: Row[];
+    if (userId) {
+      rows = await db.getAllAsync<Row>(`SELECT * FROM ${table} WHERE ${ownerCol} = ?${order}`, [userId]);
+    } else {
+      rows = await db.getAllAsync<Row>(`SELECT * FROM ${table}${order}`);
+    }
     return rows.map((r) => fromSql(table, r));
   } catch (e) {
     console.warn(`[LocalRepo] getLocalRows failed for ${table}:`, e);
@@ -312,6 +317,29 @@ export async function loadLocalAppState(storageKey: string): Promise<string | nu
     return row?.state ?? null;
   } catch (e) {
     console.warn('[LocalRepo] loadLocalAppState failed:', e);
+    return null;
+  }
+}
+
+/**
+ * Returns the latest gamification state snapshot stored in SQLite across any user or guest key.
+ * Used for auto-recovery across APK updates where user identity may have rotated or cleared.
+ */
+export async function getLatestLocalAppState(): Promise<{ key: string; state: string } | null> {
+  const db = await getLocalDb();
+  if (!db) return null;
+  try {
+    const row = await db.getFirstAsync<{ storage_key: string; state: string }>(
+      `SELECT storage_key, state FROM local_app_state 
+       WHERE storage_key LIKE 'cbudget_gamification_state%' 
+       ORDER BY saved_at DESC LIMIT 1`
+    );
+    if (row && row.state) {
+      return { key: row.storage_key, state: row.state };
+    }
+    return null;
+  } catch (e) {
+    console.warn('[LocalRepo] getLatestLocalAppState failed:', e);
     return null;
   }
 }

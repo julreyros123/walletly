@@ -144,6 +144,7 @@ export const storage = {
     }
 
     if (isSensitiveKey(key)) {
+      // 1. Primary read from SecureStore (Android Keystore / iOS Keychain)
       try {
         const val = await getSecureStoreChunked(key);
         if (val !== null && val !== undefined) return val;
@@ -151,20 +152,22 @@ export const storage = {
         console.warn(`[Storage] SecureStore chunked read failed for sensitive key ${key}:`, e);
       }
 
-      // Backwards-compatibility migration check:
-      // If user had existing unencrypted data in AsyncStorage before this key was marked sensitive
+      // 2. Secondary fallback from AsyncStorage if Keystore was invalidated or reset on APK update
       if (asyncStorage) {
         try {
-          const legacyVal = await asyncStorage.getItem(key);
-          if (legacyVal !== null && legacyVal !== undefined) {
-            // Silently migrate legacy data to encrypted SecureStore
-            await setSecureStoreChunked(key, legacyVal);
-            await asyncStorage.removeItem(key).catch(() => {});
-            return legacyVal;
+          const fallbackVal = await asyncStorage.getItem(key);
+          if (fallbackVal !== null && fallbackVal !== undefined) {
+            // Re-sync back to SecureStore in background
+            setSecureStoreChunked(key, fallbackVal).catch(() => {});
+            return fallbackVal;
           }
         } catch (e) {
-          console.warn(`[Storage] Legacy migration check failed for ${key}:`, e);
+          console.warn(`[Storage] AsyncStorage fallback check failed for ${key}:`, e);
         }
+      }
+
+      if (memoryCache.has(key)) {
+        return memoryCache.get(key) || null;
       }
 
       return null;
@@ -204,16 +207,26 @@ export const storage = {
       return;
     }
 
+    memoryCache.set(key, value);
+
     if (isSensitiveKey(key)) {
+      // 1. Hardware Keystore / SecureStore write
       try {
         await setSecureStoreChunked(key, value);
       } catch (e) {
         console.warn('[Storage] setSecureStoreChunked failed for sensitive key:', e);
       }
+      // 2. Also write a durable secondary copy to AsyncStorage.
+      // This strictly prevents session and identity loss if Android Keystore resets during APK upgrades.
+      if (asyncStorage) {
+        try {
+          await asyncStorage.setItem(key, value);
+        } catch (e) {
+          console.warn(`[Storage] AsyncStorage backup failed for sensitive key ${key}:`, e);
+        }
+      }
       return;
     }
-
-    memoryCache.set(key, value);
 
     let asyncStorageSuccess = false;
     if (asyncStorage) {

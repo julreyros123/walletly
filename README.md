@@ -10,12 +10,12 @@ You can download and install the latest pre-compiled Android APK directly on you
 
 | Architecture | Package | Direct Download |
 | :--- | :--- | :--- |
-| **Android (Universal)** | `com.julreyros123.cbudget` | [⬇️ **Download cbudget-release.apk (v1.0.11)**](https://github.com/julreyros123/walletly/releases/download/v1.0.11/cbudget-release.apk) |
+| **Android (Universal)** | `com.julreyros123.cbudget` | [⬇️ **Download cbudget-release.apk (v1.0.12)**](https://github.com/julreyros123/walletly/releases/download/v1.0.12/cbudget-release.apk) |
 
 > 🔗 You can also browse all versions and assets on the [GitHub Releases Page](https://github.com/julreyros123/walletly/releases/latest).
 
 ### How to Install on Android:
-1. **Download**: Tap the [Download cbudget-release.apk](https://github.com/julreyros123/walletly/releases/download/v1.0.11/cbudget-release.apk) link on your Android device.
+1. **Download**: Tap the [Download cbudget-release.apk](https://github.com/julreyros123/walletly/releases/download/v1.0.12/cbudget-release.apk) link on your Android device.
 2. **Open the File**: Open your device's **Downloads** folder or tap the completed download notification.
 3. **Allow Unknown Apps**: If prompted with *"For your security, your phone is not allowed to install unknown apps from this source"*, tap **Settings** and switch **Allow from this source** to ON.
 4. **Complete Installation**: Tap **Install**, then open **Cbudget**.

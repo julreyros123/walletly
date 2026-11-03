@@ -11,6 +11,7 @@ import {
   cancelCloudSnapshot,
 } from '@/store/gamificationStore';
 import { syncQueue } from '@/utils/syncQueue';
+import { saveLocalAppState, loadLocalAppState, deleteLocalAppState } from '@/db/localRepository';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -69,6 +70,8 @@ let authSubscription: { unsubscribe: () => void } | null = null;
 async function clearLocalSessionData(): Promise<void> {
   await storage.deleteItem(AUTH_TOKEN_KEY);
   await storage.deleteItem(USER_KEY);
+  await deleteLocalAppState(AUTH_TOKEN_KEY);
+  await deleteLocalAppState(USER_KEY);
   await syncQueue.clear();
 }
 
@@ -317,6 +320,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     };
     await storage.setItem(AUTH_TOKEN_KEY, guestToken);
     await storage.setItem(USER_KEY, JSON.stringify(mockUser));
+    await saveLocalAppState(AUTH_TOKEN_KEY, guestToken);
+    await saveLocalAppState(USER_KEY, JSON.stringify(mockUser));
 
     setActiveGamificationUser('guest');
     set({
@@ -345,6 +350,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // Clear local auth session credentials (keeps user's gamification data intact on disk)
     await storage.deleteItem(AUTH_TOKEN_KEY);
     await storage.deleteItem(USER_KEY);
+    await deleteLocalAppState(AUTH_TOKEN_KEY);
+    await deleteLocalAppState(USER_KEY);
 
     // Also sign out of Native Google Sign-In so future sign-in prompts for account selection
     const googleModule = getGoogleSigninModule();
@@ -375,6 +382,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // Clear local guest storage and flush pending sync items
     await storage.deleteItem(AUTH_TOKEN_KEY);
     await storage.deleteItem(USER_KEY);
+    await deleteLocalAppState(AUTH_TOKEN_KEY);
+    await deleteLocalAppState(USER_KEY);
     await syncQueue.clear();
 
     // Also sign out of Native Google Sign-In so future sign-in prompts for account selection
@@ -410,9 +419,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   hydrate: async () => {
     try {
-      // 1. Instant offline auth restoration: check if a saved session exists (guest or authenticated)
-      const storedToken = await storage.getItem(AUTH_TOKEN_KEY);
-      const userStr = await storage.getItem(USER_KEY);
+      // 1. Instant offline auth restoration: check SecureStore/AsyncStorage first, then SQLite fallback
+      let storedToken = await storage.getItem(AUTH_TOKEN_KEY);
+      let userStr = await storage.getItem(USER_KEY);
+
+      if (!storedToken) {
+        storedToken = await loadLocalAppState(AUTH_TOKEN_KEY);
+      }
+      if (!userStr) {
+        userStr = await loadLocalAppState(USER_KEY);
+      }
+
       let restoredUser: User | null = null;
       if (userStr) {
         try {
@@ -423,6 +440,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       if (storedToken && restoredUser) {
+        // Ensure all persistence tiers are aligned
+        storage.setItem(AUTH_TOKEN_KEY, storedToken).catch(() => {});
+        storage.setItem(USER_KEY, JSON.stringify(restoredUser)).catch(() => {});
+        saveLocalAppState(AUTH_TOKEN_KEY, storedToken).catch(() => {});
+        saveLocalAppState(USER_KEY, JSON.stringify(restoredUser)).catch(() => {});
+
         const isGuest = isGuestToken(storedToken) || restoredUser.id === 'guest';
         const targetUserId = isGuest ? 'guest' : restoredUser.id;
         setActiveGamificationUser(targetUserId);
@@ -441,6 +464,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           avatarColor: '#14B8A6',
           avatarEmoji: '💼',
         };
+        const validGuestToken = storedToken as string;
+        storage.setItem(AUTH_TOKEN_KEY, validGuestToken).catch(() => {});
+        storage.setItem(USER_KEY, JSON.stringify(guestUser)).catch(() => {});
+        saveLocalAppState(AUTH_TOKEN_KEY, validGuestToken).catch(() => {});
+        saveLocalAppState(USER_KEY, JSON.stringify(guestUser)).catch(() => {});
+
         setActiveGamificationUser('guest');
         set({
           token: storedToken,
@@ -495,10 +524,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             isOnboarded: Boolean(meta.is_onboarded),
           };
 
-          // Persist user and token to hardware storage so APK upgrades and app relaunches
+          // Persist user and token to hardware storage and SQLite so APK upgrades and app relaunches
           // never lose authentication or encounter blank guest race conditions.
           await storage.setItem(AUTH_TOKEN_KEY, session.access_token);
           await storage.setItem(USER_KEY, JSON.stringify(initialUser));
+          await saveLocalAppState(AUTH_TOKEN_KEY, session.access_token);
+          await saveLocalAppState(USER_KEY, JSON.stringify(initialUser));
 
           setActiveGamificationUser(session.user.id);
 
@@ -549,6 +580,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 };
 
                 await storage.setItem(USER_KEY, JSON.stringify(updatedUser));
+    await saveLocalAppState(USER_KEY, JSON.stringify(updatedUser));
+                await saveLocalAppState(USER_KEY, JSON.stringify(updatedUser));
                 set((state) => ({
                   user: state.user ? updatedUser : state.user,
                 }));
@@ -634,6 +667,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       ...updatedFields,
     };
     await storage.setItem(USER_KEY, JSON.stringify(updatedUser));
+    await saveLocalAppState(USER_KEY, JSON.stringify(updatedUser));
     set({ user: updatedUser });
 
     if (currentUser.id === 'guest') {
