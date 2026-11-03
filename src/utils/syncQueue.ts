@@ -1,3 +1,4 @@
+import { AppState, Platform } from 'react-native';
 import { supabase, isSupabaseConfigured } from '@/utils/supabase';
 import { storage } from '@/utils/storage';
 import { applyLocalMutation, markSynced } from '@/db/localRepository';
@@ -20,6 +21,28 @@ let isProcessing = false;
 let memoryQueue: SyncQueueItem[] = [];
 let queueLoaded = false;
 const listeners = new Set<(count: number) => void>();
+let heartbeatTimer: any = null;
+
+function scheduleHeartbeat() {
+  if (heartbeatTimer) return;
+  heartbeatTimer = setInterval(async () => {
+    if (memoryQueue.length === 0) {
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+      }
+      return;
+    }
+    await syncQueue.process();
+  }, 10000);
+}
+
+function stopHeartbeatIfEmpty() {
+  if (memoryQueue.length === 0 && heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+}
 
 function notifyListeners() {
   const count = memoryQueue.length;
@@ -38,6 +61,9 @@ async function loadQueue(): Promise<SyncQueueItem[]> {
     const stored = await storage.getItem(SYNC_QUEUE_KEY);
     if (stored) {
       memoryQueue = JSON.parse(stored);
+      if (memoryQueue.length > 0) {
+        scheduleHeartbeat();
+      }
     }
   } catch (err) {
     console.warn('[SyncQueue] Failed to load offline queue from storage:', err);
@@ -69,6 +95,7 @@ export const syncQueue = {
 
   clear: async (): Promise<void> => {
     memoryQueue = [];
+    stopHeartbeatIfEmpty();
     await persistQueue();
   },
 
@@ -86,6 +113,7 @@ export const syncQueue = {
 
     memoryQueue.push(queueItem);
     await persistQueue();
+    scheduleHeartbeat();
 
     // Optimistically update local SQLite database
     applyLocalMutation(item.table, item.action, item.payload, item.match).catch((err) => {
@@ -207,8 +235,23 @@ export const syncQueue = {
         .filter((q) => !completedIds.has(q.id))
         .map((q) => retriedItems.get(q.id) ?? q);
       await persistQueue();
+      stopHeartbeatIfEmpty();
     } finally {
       isProcessing = false;
     }
   },
 };
+
+// Auto-sync trigger on returning to app (e.g. after toggling Wi-Fi in Android status bar / settings)
+AppState.addEventListener('change', (nextState) => {
+  if (nextState === 'active') {
+    syncQueue.process().catch(() => {});
+  }
+});
+
+// Auto-sync trigger for Web platforms
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    syncQueue.process().catch(() => {});
+  });
+}

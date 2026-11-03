@@ -3140,12 +3140,15 @@ function scheduleMidnightCheck() {
 
 scheduleMidnightCheck();
 
-// Listen to foreground resume so if device slept through midnight, guest resets immediately.
+// Listen to foreground resume so if device slept through midnight, guest resets immediately,
+// and any pending offline changes or cloud snapshot sync immediately upon reconnecting / returning to app.
 // On background, push any pending cloud backup so it isn't lost if the app is killed.
 AppState.addEventListener('change', (nextAppState) => {
   if (nextAppState === 'active') {
     useGamificationStore.getState().checkMidnightGuestReset();
     useGamificationStore.getState().checkAndUpdateStreak();
+    flushCloudSnapshot().catch((err) => console.warn('[GamificationStore] Active snapshot flush error:', err));
+    syncQueue.process().catch((err) => console.warn('[GamificationStore] Active syncQueue error:', err));
   } else if (nextAppState === 'background') {
     flushCloudSnapshot().catch((err) => console.warn('[GamificationStore] Background snapshot flush error:', err));
   }
