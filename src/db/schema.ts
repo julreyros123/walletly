@@ -12,7 +12,7 @@
 export const LOCAL_DB_NAME = 'cbudget.db';
 
 /** Bump this and add a step in MIGRATIONS whenever the local schema changes. */
-export const LOCAL_DB_VERSION = 1;
+export const LOCAL_DB_VERSION = 2;
 
 export type SyncedTable =
   | 'profiles'
@@ -21,7 +21,8 @@ export type SyncedTable =
   | 'saving_challenges'
   | 'user_investments'
   | 'guardian_reports'
-  | 'user_app_state';
+  | 'user_app_state'
+  | 'user_lessons';
 
 /** Primary key column(s) of each synced table — must match Supabase. */
 export const TABLE_PRIMARY_KEYS: Record<SyncedTable, string[]> = {
@@ -32,6 +33,7 @@ export const TABLE_PRIMARY_KEYS: Record<SyncedTable, string[]> = {
   user_investments: ['id'],
   guardian_reports: ['id'],
   user_app_state: ['user_id'],
+  user_lessons: ['id'],
 };
 
 /** Columns that exist in Supabase for each table (local-only sync columns excluded). */
@@ -62,6 +64,7 @@ export const TABLE_COLUMNS: Record<SyncedTable, string[]> = {
     'badges_count', 'sent_at',
   ],
   user_app_state: ['user_id', 'state', 'updated_at'],
+  user_lessons: ['id', 'user_id', 'lesson_id', 'completed_at'],
 };
 
 export const BOOLEAN_COLUMNS = new Set(['is_onboarded', 'guardian_linked', 'is_completed']);
@@ -181,5 +184,19 @@ export const MIGRATIONS: string[] = [
     state TEXT NOT NULL,
     saved_at INTEGER NOT NULL
   );
+  `,
+
+  // v1 -> v2: user_lessons table for dedicated lesson completion sync
+  `
+  CREATE TABLE IF NOT EXISTS user_lessons (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL,
+    lesson_id TEXT NOT NULL,
+    completed_at TEXT NOT NULL,
+    sync_status TEXT NOT NULL DEFAULT 'synced' CHECK (sync_status IN ('synced', 'pending')),
+    local_updated_at INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (user_id, lesson_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_user_lessons_user ON user_lessons (user_id);
   `,
 ];

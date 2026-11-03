@@ -6,7 +6,7 @@ import { PhosphorIcon } from '@/components/ui/PhosphorIcon';
 import Svg, { Path, Circle, Rect, G, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { safeHaptic } from '@/utils/haptics';
 import { useTheme } from '@/hooks/use-theme';
-import { useGamificationStore, getLocalDateString } from '@/store/gamificationStore';
+import { useGamificationStore, getLocalDateString, getDaysDifference } from '@/store/gamificationStore';
 import { useCurrency } from '@/utils/currency';
 import { useExchangeRateStore } from '@/store/exchangeRateStore';
 import { Fonts } from '@/constants/theme';
@@ -239,18 +239,12 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
   const [showCelebration, setShowCelebration] = useState(false);
 
   const today = getLocalDateString();
-  const isAlreadyClaimedToday = store.lastClaimedRewardDate === today;
+  const isAlreadyClaimedToday = store.lastClaimedRewardDate?.slice(0, 10) === today;
 
-  // Calculate calendar days difference between today and the last claimed reward date
-  let daysSinceLastClaim = -1;
-  if (store.lastClaimedRewardDate) {
-    const [y1, m1, d1] = store.lastClaimedRewardDate.split('-').map(Number);
-    const [y2, m2, d2] = today.split('-').map(Number);
-    const dClaim = new Date(y1, m1 - 1, d1);
-    const dToday = new Date(y2, m2 - 1, d2);
-    const diffTime = dToday.getTime() - dClaim.getTime();
-    daysSinceLastClaim = Math.round(diffTime / (1000 * 60 * 60 * 24));
-  }
+  // Calculate calendar days difference safely using Date.UTC
+  const daysSinceLastClaim = store.lastClaimedRewardDate
+    ? getDaysDifference(store.lastClaimedRewardDate, today)
+    : -1;
 
   // Determine current day in the 7-day reward cycle (1 to 7)
   let currentDayInCycle: number;
@@ -259,9 +253,8 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
     currentDayInCycle = store.lastClaimedDay || (((store.streakDays - 1) % 7) + 1) || 1;
   } else if (daysSinceLastClaim === 1) {
     // Claimed yesterday: advance consecutively to the next day in the 1..7 cycle
-    const prevDay = store.lastClaimedDay || store.streakDays || 1;
-    currentDayInCycle = ((prevDay - 1) % 7) + 2;
-    if (currentDayInCycle > 7) currentDayInCycle = 1;
+    const prevDay = store.lastClaimedDay || 1;
+    currentDayInCycle = (prevDay % 7) + 1;
   } else {
     // First time, or missed days: start at Day 1
     currentDayInCycle = 1;

@@ -3,7 +3,7 @@ import { AppState } from 'react-native';
 import { storage } from '@/utils/storage';
 import { supabase } from '@/utils/supabase';
 import { syncQueue } from '@/utils/syncQueue';
-import { applyRemoteRows, getLocalRows } from '@/db/localRepository';
+import { applyRemoteRows, getLocalRows, saveLocalAppState, loadLocalAppState } from '@/db/localRepository';
 import { safeHaptic } from '@/utils/haptics';
 import { useExchangeRateStore } from './exchangeRateStore';
 
@@ -148,6 +148,24 @@ export function getLocalDateString(d: Date = new Date()): string {
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+/**
+ * Safely computes calendar day difference between two date strings (YYYY-MM-DD or ISO strings).
+ * Uses Date.UTC to eliminate daylight saving time (DST) shifts and timezone offsets.
+ */
+export function getDaysDifference(dateA?: string | null, dateB?: string | null): number {
+  if (!dateA || !dateB) return -1;
+  const cleanA = dateA.slice(0, 10);
+  const cleanB = dateB.slice(0, 10);
+  const [y1, m1, d1] = cleanA.split('-').map(Number);
+  const [y2, m2, d2] = cleanB.split('-').map(Number);
+  if (isNaN(y1) || isNaN(m1) || isNaN(d1) || isNaN(y2) || isNaN(m2) || isNaN(d2)) {
+    return -1;
+  }
+  const utc1 = Date.UTC(y1, m1 - 1, d1);
+  const utc2 = Date.UTC(y2, m2 - 1, d2);
+  return Math.round((utc2 - utc1) / (1000 * 60 * 60 * 24));
 }
 
 export interface Achievement {
@@ -600,6 +618,33 @@ async function persistState(state: GamificationState, specificUserId?: string | 
     const targetUserId = specificUserId !== undefined ? specificUserId : currentActiveUserId;
     const storageKey = getUserStorageKey(targetUserId);
 
+    // Guard against accidentally wiping populated user data with default zeroes
+    const isStateBlank =
+      !state.isBudgetSetupComplete &&
+      (state.completedLessonIds || []).length === 0 &&
+      Object.keys(state.portfolioAllocations || {}).length === 0 &&
+      (state.virtualBalance || 0) === 0 &&
+      (state.xp || 0) <= 45;
+
+    if (isStateBlank) {
+      const existingJson = (await loadLocalAppState(storageKey)) || (await storage.getItem(storageKey));
+      if (existingJson) {
+        try {
+          const parsed = JSON.parse(existingJson);
+          const hasExistingProgress =
+            (parsed.completedLessonIds || []).length > 0 ||
+            Object.keys(parsed.portfolioAllocations || {}).length > 0 ||
+            (parsed.virtualBalance || 0) > 0 ||
+            (parsed.xp || 0) > 45 ||
+            (parsed.streakDays || 1) > 1;
+          if (hasExistingProgress) {
+            // Refuse to overwrite real user data with empty defaults
+            return;
+          }
+        } catch {}
+      }
+    }
+
     const dataToSave = {
       _version: CURRENT_GAMIFICATION_VERSION,
       xp: state.xp,
@@ -633,7 +678,14 @@ async function persistState(state: GamificationState, specificUserId?: string | 
       currency: state.currency || 'PHP',
       _savedAt: Date.now(),
     };
-    await storage.setItem(storageKey, JSON.stringify(dataToSave));
+
+    const json = JSON.stringify(dataToSave);
+
+    // 1. Save directly into SQLite local_app_state table (guaranteed APK upgrade durability)
+    await saveLocalAppState(storageKey, json);
+
+    // 2. Save into AsyncStorage & SecureStore chunked mirror
+    await storage.setItem(storageKey, json);
 
     if (targetUserId && targetUserId !== 'guest') {
       scheduleCloudSnapshot(targetUserId, dataToSave);
@@ -738,23 +790,28 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         persistState({ ...state, ...next });
         return next;
       }
-      if (state.lastActiveDate === today) {
+
+      const cleanLastActive = state.lastActiveDate.slice(0, 10);
+      if (cleanLastActive === today) {
         return state;
       }
 
-      // Calculate calendar days difference safely using local date parts
-      const [y1, m1, d1] = state.lastActiveDate.split('-').map(Number);
-      const [y2, m2, d2] = today.split('-').map(Number);
-      const dActive = new Date(y1, m1 - 1, d1);
-      const dToday = new Date(y2, m2 - 1, d2);
-      const diffTime = dToday.getTime() - dActive.getTime();
-      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+      const diffDays = getDaysDifference(cleanLastActive, today);
 
-      if (diffDays === 1 || diffDays === 2) {
-        // Active consecutive day: maintain streak and update last active date
+      if (diffDays === 1) {
+        // Consecutive calendar day: advance streak and update active date
         const next = {
+          streakDays: (state.streakDays || 1) + 1,
           lastActiveDate: today,
           savingScore: Math.min(100, state.savingScore + 2),
+        };
+        persistState({ ...state, ...next });
+        return next;
+      } else if (diffDays === 2) {
+        // 1-day grace period: maintain current streak without resetting
+        const next = {
+          lastActiveDate: today,
+          savingScore: Math.min(100, state.savingScore + 1),
         };
         persistState({ ...state, ...next });
         return next;
@@ -776,32 +833,25 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
     let result = { success: false, xp: 0, cash: 0, day: 1 };
     set((state) => {
       const today = getLocalDateString();
-      if (state.lastClaimedRewardDate === today) {
+      if (state.lastClaimedRewardDate?.slice(0, 10) === today) {
         return state;
       }
 
-      let daysSinceLastClaim = -1;
-      if (state.lastClaimedRewardDate) {
-        const [y1, m1, d1] = state.lastClaimedRewardDate.split('-').map(Number);
-        const [y2, m2, d2] = today.split('-').map(Number);
-        const dClaim = new Date(y1, m1 - 1, d1);
-        const dToday = new Date(y2, m2 - 1, d2);
-        const diffTime = dToday.getTime() - dClaim.getTime();
-        daysSinceLastClaim = Math.round(diffTime / (1000 * 60 * 60 * 24));
-      }
+      const daysSinceLastClaim = state.lastClaimedRewardDate
+        ? getDaysDifference(state.lastClaimedRewardDate, today)
+        : -1;
 
       let dayInCycle = 1;
       let nextStreak = 1;
       if (daysSinceLastClaim === 1) {
-        // Consecutive check-in!
-        const prevDay = state.lastClaimedDay || state.streakDays || 1;
-        dayInCycle = ((prevDay - 1) % 7) + 2;
-        if (dayInCycle > 7) dayInCycle = 1;
+        // Consecutive check-in! Advance cleanly in the 1..7 cycle
+        const prevDay = state.lastClaimedDay || 1;
+        dayInCycle = (prevDay % 7) + 1;
         nextStreak = (state.streakDays || 0) + 1;
       } else if (daysSinceLastClaim === -1) {
         // First ever claim
         dayInCycle = 1;
-        nextStreak = 1;
+        nextStreak = Math.max(state.streakDays || 1, 1);
       } else {
         // Streak broken: restart at Day 1
         dayInCycle = 1;
@@ -2154,6 +2204,28 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         ...xpUpdate,
       };
       persistState({ ...state, ...next });
+
+      // Record lesson completion in relational database (Supabase + SQLite mirror)
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (session?.user?.id && session.user.id !== 'guest') {
+            await syncQueue.enqueue({
+              table: 'user_lessons',
+              action: 'upsert',
+              payload: {
+                user_id: session.user.id,
+                lesson_id: id,
+                completed_at: new Date().toISOString(),
+              },
+              options: { onConflict: 'user_id,lesson_id' },
+            });
+          }
+        } catch (lessonSyncErr) {
+          console.warn('[GamificationStore] Lesson sync note:', lessonSyncErr);
+        }
+      })();
+
       return next;
     });
   },
@@ -2267,17 +2339,18 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       const isGuestMode = resolvedUserId === null || resolvedUserId === 'guest';
       const todayISO = getLocalDateString();
 
-      // 1. Read from local cache for instant offline load
-      let stored = await storage.getItem(userKey);
+      // 1. Read from local cache for instant offline load (SQLite local_app_state first, then storage)
+      let stored = (await loadLocalAppState(userKey)) || (await storage.getItem(userKey));
       if (!stored && isGuestMode) {
         // Migration: check legacy un-scoped key only for guest/unauthenticated sessions
-        stored = await storage.getItem(BASE_GAMIFICATION_KEY);
+        stored = (await loadLocalAppState(BASE_GAMIFICATION_KEY)) || (await storage.getItem(BASE_GAMIFICATION_KEY));
       } else if (!stored && resolvedUserId && resolvedUserId !== 'guest') {
         // Migration: If newly signed-in user has no local cache yet, inherit guest progress
-        const guestStored = await storage.getItem(`${BASE_GAMIFICATION_KEY}_guest`);
+        const guestStored = (await loadLocalAppState(`${BASE_GAMIFICATION_KEY}_guest`)) || (await storage.getItem(`${BASE_GAMIFICATION_KEY}_guest`));
         if (guestStored) {
           stored = guestStored;
-          // Store under active user's key immediately
+          // Store under active user's key immediately in both SQLite and storage
+          await saveLocalAppState(userKey, guestStored);
           await storage.setItem(userKey, guestStored);
         }
       }
@@ -2308,9 +2381,8 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       if (resolvedUserId && resolvedUserId !== 'guest') {
         const userId = resolvedUserId;
 
-        // Concurrent fetch of full-state backup, transactions, budgets, and saving challenges
-        // Standardized on user_id UUID ownership
-        const [snapshotRes, txRes, budgetRes, goalsRes] = await Promise.allSettled([
+        // Concurrent fetch of full-state backup, transactions, budgets, saving challenges, investments, and completed lessons
+        const [snapshotRes, txRes, budgetRes, goalsRes, investRes, lessonsRes] = await Promise.allSettled([
           supabase
             .from(CLOUD_STATE_TABLE)
             .select('state, updated_at')
@@ -2329,13 +2401,21 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
             .from('saving_challenges')
             .select('*')
             .eq('user_id', userId),
+          supabase
+            .from('user_investments')
+            .select('*')
+            .eq('user_id', userId),
+          supabase
+            .from('user_lessons')
+            .select('*')
+            .eq('user_id', userId),
         ]);
 
         if (generation !== hydrationGeneration) {
           return;
         }
 
-        // Full-state backup: restore it when this device has no cache or an older one
+        // Full-state backup: restore and merge safely with offline/current state
         let snapshotRead = false;
         let restoredFromSnapshot = false;
         if (snapshotRes.status === 'fulfilled') {
@@ -2346,7 +2426,33 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
             if (remoteState && typeof remoteState === 'object') {
               const remoteSavedAt = Number(remoteState._savedAt) || 0;
               if (!hasLocalCache || remoteSavedAt > localSavedAt) {
-                set(buildStateFromSnapshot(remoteState, false, todayISO));
+                const builtRemote = buildStateFromSnapshot(remoteState, false, todayISO);
+                const currentLocal = get();
+
+                // Merge collections so local offline progress is never obliterated
+                const mergedLessons = Array.from(
+                  new Set([...(currentLocal.completedLessonIds || []), ...(builtRemote.completedLessonIds || [])])
+                );
+                const mergedAllocations = {
+                  ...(builtRemote.portfolioAllocations || {}),
+                  ...(currentLocal.portfolioAllocations || {}),
+                };
+                const mergedVirtualBalance = Math.max(
+                  builtRemote.virtualBalance || 0,
+                  currentLocal.virtualBalance || 0
+                );
+                const mergedXp = Math.max(builtRemote.xp || 45, currentLocal.xp || 45);
+                const mergedStreak = Math.max(builtRemote.streakDays || 1, currentLocal.streakDays || 1);
+
+                set({
+                  ...builtRemote,
+                  completedLessonIds: mergedLessons,
+                  portfolioAllocations: mergedAllocations,
+                  virtualBalance: mergedVirtualBalance,
+                  xp: mergedXp,
+                  level: calculateLevelFromXP(mergedXp),
+                  streakDays: mergedStreak,
+                });
                 restoredFromSnapshot = true;
                 get().checkAndUpdateStreak();
               }
@@ -2354,13 +2460,65 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
           } else if (isMissingTableError(snapErr)) {
             cloudSnapshotDisabled = true;
             snapshotRead = true;
-            console.warn('[GamificationStore] user_app_state table missing. Run supabase/user_app_state.sql to enable cloud backup.');
+            console.warn('[GamificationStore] user_app_state table missing. Run complete_setup.sql in Supabase.');
           } else {
             console.warn('[GamificationStore] Cloud snapshot read failed:', snapErr.message);
           }
         }
 
         const nextUpdates: Partial<GamificationState> = {};
+
+        // User Investments / Portfolio Holdings sync
+        if (investRes.status === 'fulfilled' && investRes.value.data) {
+          const investRows = investRes.value.data;
+          applyRemoteRows('user_investments', userId, investRows).catch((e) => {
+            console.warn('[GamificationStore] SQLite user_investments mirror error:', e);
+          });
+          if (investRows.length > 0) {
+            const allocations: Record<string, number> = { ...(get().portfolioAllocations || {}) };
+            for (const row of investRows) {
+              const qty = Number(row.quantity) || 0;
+              if (qty > 0 && row.ticker) {
+                allocations[row.ticker] = qty;
+              }
+            }
+            nextUpdates.portfolioAllocations = allocations;
+          }
+        } else {
+          // Offline fallback: load portfolio from local SQLite mirror
+          const localInvest = await getLocalRows('user_investments', userId);
+          if (localInvest && localInvest.length > 0) {
+            const allocations: Record<string, number> = { ...(get().portfolioAllocations || {}) };
+            for (const row of localInvest) {
+              const qty = Number(row.quantity) || 0;
+              if (qty > 0 && row.ticker) {
+                allocations[String(row.ticker)] = qty;
+              }
+            }
+            nextUpdates.portfolioAllocations = allocations;
+          }
+        }
+
+        // Completed Lessons sync
+        if (lessonsRes.status === 'fulfilled' && lessonsRes.value.data) {
+          const lessonRows = lessonsRes.value.data;
+          applyRemoteRows('user_lessons', userId, lessonRows).catch((e) => {
+            console.warn('[GamificationStore] SQLite user_lessons mirror error:', e);
+          });
+          if (lessonRows.length > 0) {
+            const lessonIds = lessonRows.map((r: any) => String(r.lesson_id));
+            const merged = Array.from(new Set([...(get().completedLessonIds || []), ...lessonIds]));
+            nextUpdates.completedLessonIds = merged;
+          }
+        } else {
+          // Offline fallback: load completed lessons from local SQLite mirror
+          const localLessons = await getLocalRows('user_lessons', userId);
+          if (localLessons && localLessons.length > 0) {
+            const lessonIds = localLessons.map((r: any) => String(r.lesson_id));
+            const merged = Array.from(new Set([...(get().completedLessonIds || []), ...lessonIds]));
+            nextUpdates.completedLessonIds = merged;
+          }
+        }
 
         // Transactions / Activity history sync (merge remote with offline local items, mirrored in SQLite)
         if (txRes.status === 'fulfilled' && txRes.value.data) {

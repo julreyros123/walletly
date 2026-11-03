@@ -13,6 +13,7 @@ type SQLValue = string | number | null;
 const NATURAL_KEYS: Partial<Record<SyncedTable, string[]>> = {
   budgets: ['user_id', 'category', 'month'],
   user_investments: ['user_id', 'ticker'],
+  user_lessons: ['user_id', 'lesson_id'],
 };
 
 export function isSyncedTable(name: string): name is SyncedTable {

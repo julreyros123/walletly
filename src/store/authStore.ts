@@ -410,33 +410,45 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   hydrate: async () => {
     try {
-      // Check if a local guest session is active (dynamic or legacy token)
-      const guestToken = await storage.getItem(AUTH_TOKEN_KEY);
-      if (isGuestToken(guestToken)) {
-        const userStr = await storage.getItem(USER_KEY);
-        let user: User = {
+      // 1. Instant offline auth restoration: check if a saved session exists (guest or authenticated)
+      const storedToken = await storage.getItem(AUTH_TOKEN_KEY);
+      const userStr = await storage.getItem(USER_KEY);
+      let restoredUser: User | null = null;
+      if (userStr) {
+        try {
+          restoredUser = JSON.parse(userStr);
+        } catch (e) {
+          console.warn('[Auth] Failed to parse stored user JSON:', e);
+        }
+      }
+
+      if (storedToken && restoredUser) {
+        const isGuest = isGuestToken(storedToken) || restoredUser.id === 'guest';
+        const targetUserId = isGuest ? 'guest' : restoredUser.id;
+        setActiveGamificationUser(targetUserId);
+        set({
+          token: storedToken,
+          user: restoredUser,
+          isAuthenticated: true,
+          isLoading: false,
+        });
+        useGamificationStore.getState().hydrate(targetUserId);
+      } else if (isGuestToken(storedToken)) {
+        const guestUser: User = {
           id: 'guest',
           name: 'Guest Explorer',
           email: 'guest@cbudget.com',
           avatarColor: '#14B8A6',
           avatarEmoji: '💼',
         };
-        if (userStr) {
-          try {
-            user = JSON.parse(userStr);
-          } catch (e) {
-            console.warn('[Auth] Failed to parse stored user JSON:', e);
-          }
-        }
         setActiveGamificationUser('guest');
         set({
-          token: guestToken,
-          user,
+          token: storedToken,
+          user: guestUser,
           isAuthenticated: true,
           isLoading: false,
         });
         useGamificationStore.getState().hydrate('guest');
-        // Fall through: guests still need the listener so a later sign-in is picked up
       }
 
       // Unsubscribe any previous listener to prevent leaks on re-hydration / hot-reload
@@ -445,19 +457,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         authSubscription = null;
       }
 
-      // Initialize Supabase session listener
+      // 2. Initialize Supabase session listener
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (session) {
           const current = get();
 
           // Token refreshes / repeat events for the same signed-in user: only update the token.
-          // Re-running the full sign-in path would reset isPremium and re-hydrate gamification.
           if (current.isAuthenticated && current.user?.id === session.user.id) {
             set({ token: session.access_token, isLoading: false });
+            await storage.setItem(AUTH_TOKEN_KEY, session.access_token);
             return;
           }
 
-          // A real sign-in just succeeded: now it's safe to drop any local guest session
+          // A real sign-in just succeeded: drop any local guest session
           if (isGuestToken(current.token)) {
             try {
               await clearLocalSessionData();
@@ -483,9 +495,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             isOnboarded: Boolean(meta.is_onboarded),
           };
 
+          // Persist user and token to hardware storage so APK upgrades and app relaunches
+          // never lose authentication or encounter blank guest race conditions.
+          await storage.setItem(AUTH_TOKEN_KEY, session.access_token);
+          await storage.setItem(USER_KEY, JSON.stringify(initialUser));
+
           setActiveGamificationUser(session.user.id);
 
-          // 1. INSTANTLY authenticate the user (0ms delay to navigate)
           set({
             token: session.access_token,
             user: initialUser,
@@ -493,10 +509,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             isLoading: false,
           });
 
-          // 2. Hydrate user-specific gamification state (activities & allocations from Supabase)
+          // Hydrate user-specific gamification state (activities, portfolio & completed lessons)
           useGamificationStore.getState().hydrate(session.user.id);
 
-          // 3. Concurrently fetch or create user profile in background
+          // Concurrently fetch or create user profile in background
           (async () => {
             try {
               const { data: profile } = await supabase
@@ -522,18 +538,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                     ? Boolean(profileAny.is_onboarded)
                     : Boolean(initialUser.isOnboarded || (profile.name && profile.name !== 'User' && resolvedAge));
 
+                const updatedUser: User = {
+                  ...initialUser,
+                  name: profile.name || initialUser.name,
+                  avatarColor: profile.avatar_color || initialUser.avatarColor,
+                  avatarEmoji: profile.avatar_emoji || initialUser.avatarEmoji,
+                  avatarUrl: (profileAny.avatar_url as string) || initialUser.avatarUrl,
+                  age: resolvedAge,
+                  isOnboarded: resolvedOnboarded,
+                };
+
+                await storage.setItem(USER_KEY, JSON.stringify(updatedUser));
                 set((state) => ({
-                  user: state.user
-                    ? {
-                        ...state.user,
-                        name: profile.name || state.user.name,
-                        avatarColor: profile.avatar_color || state.user.avatarColor,
-                        avatarEmoji: profile.avatar_emoji || state.user.avatarEmoji,
-                        avatarUrl: (profileAny.avatar_url as string) || state.user.avatarUrl,
-                        age: resolvedAge,
-                        isOnboarded: resolvedOnboarded,
-                      }
-                    : state.user,
+                  user: state.user ? updatedUser : state.user,
                 }));
               }
             } catch (err) {
@@ -541,9 +558,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             }
           })();
         } else {
-          // If we had a local guest session, preserve it.
-          // NEVER call resetAllData here! Calling resetAllData on app boot when session is null
-          // wipes the local state back to factory defaults before offline storage can hydrate.
+          // If we have an existing authenticated session locally, check if session is genuinely gone
+          const current = get();
+          if (current.isAuthenticated && current.user && current.user.id !== 'guest') {
+            const { data: { session: probeSession } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+            if (probeSession) {
+              set({ token: probeSession.access_token, isLoading: false });
+              return;
+            }
+          }
+
           if (!isGuestToken(get().token)) {
             setActiveGamificationUser('guest');
             set({

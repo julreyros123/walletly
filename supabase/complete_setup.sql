@@ -288,6 +288,26 @@ CREATE TRIGGER on_auth_user_created
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- ==============================================================================
+-- 9. USER COMPLETED LESSONS TABLE (public.user_lessons)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.user_lessons (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    lesson_id TEXT NOT NULL,
+    completed_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    UNIQUE (user_id, lesson_id)
+);
+
+ALTER TABLE public.user_lessons ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can manage their own completed lessons" ON public.user_lessons;
+CREATE POLICY "Users can manage their own completed lessons" ON public.user_lessons FOR ALL
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS idx_user_lessons_user ON public.user_lessons (user_id);
+
+-- ==============================================================================
 -- 10. ACCOUNT DELETION FUNCTION (GDPR / Right-to-be-forgotten)
 -- ==============================================================================
 CREATE OR REPLACE FUNCTION public.delete_user()
