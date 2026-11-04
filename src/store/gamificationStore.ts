@@ -5,6 +5,7 @@ import { supabase } from '@/utils/supabase';
 import { syncQueue } from '@/utils/syncQueue';
 import { applyRemoteRows, getLocalRows, saveLocalAppState, loadLocalAppState, getLatestLocalAppState } from '@/db/localRepository';
 import { safeHaptic } from '@/utils/haptics';
+import { getTrustedTime, updateHighWaterMark } from '@/utils/timeService';
 import { useExchangeRateStore } from './exchangeRateStore';
 
 export const CURRENT_GAMIFICATION_VERSION = 2;
@@ -611,7 +612,32 @@ export const ALL_ACHIEVEMENTS: Achievement[] = [
   },
 ];
 
+let pendingPersistState: { state: GamificationState; targetUserId?: string | null } | null = null;
+let persistDebounceTimer: any = null;
+const PERSIST_DEBOUNCE_MS = 250;
+
+/** Immediately flushes any pending debounced state write to SQLite & storage (call before backgrounding/signout) */
+export async function flushPersistState(): Promise<void> {
+  if (persistDebounceTimer) {
+    clearTimeout(persistDebounceTimer);
+    persistDebounceTimer = null;
+  }
+  const pending = pendingPersistState;
+  pendingPersistState = null;
+  if (pending) {
+    await executePersistState(pending.state, pending.targetUserId);
+  }
+}
+
 async function persistState(state: GamificationState, specificUserId?: string | null) {
+  pendingPersistState = { state, targetUserId: specificUserId };
+  if (persistDebounceTimer) clearTimeout(persistDebounceTimer);
+  persistDebounceTimer = setTimeout(() => {
+    flushPersistState().catch((err) => console.warn('[GamificationStore] Debounced persist error:', err));
+  }, PERSIST_DEBOUNCE_MS);
+}
+
+async function executePersistState(state: GamificationState, specificUserId?: string | null) {
   try {
     if (!isHydrationComplete && specificUserId === undefined) {
       // Ignore premature persist calls while store is loading from cache
@@ -780,7 +806,16 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
   },
 
   checkAndUpdateStreak: () => {
-    const today = getLocalDateString();
+    const timeInfo = getTrustedTime();
+    // Guard against time travel manipulation (clock set backwards)
+    if (timeInfo.isTampered && timeInfo.tamperReason === 'clock_set_backwards') {
+      console.warn('[GamificationStore] Backward clock tampering detected, streak update blocked');
+      return;
+    }
+
+    const today = timeInfo.todayISO;
+    updateHighWaterMark(timeInfo.trustedTimestamp).catch(() => {});
+
     set((state) => {
       // Guard against running before stored cache has hydrated
       if (!isHydrationComplete) {
@@ -800,8 +835,14 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
 
       const diffDays = getDaysDifference(cleanLastActive, today);
 
+      // Disallow streak advance if clock was altered backwards
+      if (diffDays < 0) {
+        console.warn('[GamificationStore] Date is behind last active date, streak change rejected');
+        return state;
+      }
+
       if (diffDays === 1) {
-        // Consecutive calendar day: advance streak and update active date
+        // Consecutive calendar day: advance streak by 1
         const next = {
           streakDays: (state.streakDays || 1) + 1,
           lastActiveDate: today,
@@ -809,16 +850,8 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         };
         persistState({ ...state, ...next });
         return next;
-      } else if (diffDays === 2) {
-        // 1-day grace period: maintain current streak without resetting
-        const next = {
-          lastActiveDate: today,
-          savingScore: Math.min(100, state.savingScore + 1),
-        };
-        persistState({ ...state, ...next });
-        return next;
-      } else if (diffDays > 2) {
-        // Inactive for more than 2 calendar days: reset streak to 1
+      } else if (diffDays > 1) {
+        // Missed one or more days: streak strictly resets back to 1!
         const next = {
           streakDays: 1,
           lastClaimedDay: undefined,
@@ -832,9 +865,23 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
   },
 
   claimDailyReward: () => {
-    let result = { success: false, xp: 0, cash: 0, day: 1 };
+    let result: { success: boolean; xp: number; cash: number; day?: number; error?: string } = {
+      success: false,
+      xp: 0,
+      cash: 0,
+      day: 1,
+    };
+
+    const timeInfo = getTrustedTime();
+    if (timeInfo.isTampered) {
+      console.warn(`[GamificationStore] Clock tampering detected (${timeInfo.tamperReason}), daily reward claim blocked`);
+      return { success: false, xp: 0, cash: 0, day: 1, error: 'clock_tampered' };
+    }
+
+    const today = timeInfo.todayISO;
+    updateHighWaterMark(timeInfo.trustedTimestamp).catch(() => {});
+
     set((state) => {
-      const today = getLocalDateString();
       if (state.lastClaimedRewardDate?.slice(0, 10) === today) {
         return state;
       }
@@ -842,6 +889,12 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       const daysSinceLastClaim = state.lastClaimedRewardDate
         ? getDaysDifference(state.lastClaimedRewardDate, today)
         : -1;
+
+      // Disallow claiming if current date is before last claimed date (clock rollback)
+      if (daysSinceLastClaim < 0 && daysSinceLastClaim !== -1) {
+        console.warn('[GamificationStore] Attempted claim on past date, claim rejected');
+        return state;
+      }
 
       let dayInCycle = 1;
       let nextStreak = 1;
@@ -855,7 +908,7 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
         dayInCycle = 1;
         nextStreak = Math.max(state.streakDays || 1, 1);
       } else {
-        // Streak broken: restart at Day 1
+        // Missed one or more days: streak and day in cycle strictly reset back to Day 1!
         dayInCycle = 1;
         nextStreak = 1;
       }
@@ -3150,6 +3203,7 @@ AppState.addEventListener('change', (nextAppState) => {
     flushCloudSnapshot().catch((err) => console.warn('[GamificationStore] Active snapshot flush error:', err));
     syncQueue.process().catch((err) => console.warn('[GamificationStore] Active syncQueue error:', err));
   } else if (nextAppState === 'background') {
+    flushPersistState().catch((err) => console.warn('[GamificationStore] Background persist flush error:', err));
     flushCloudSnapshot().catch((err) => console.warn('[GamificationStore] Background snapshot flush error:', err));
   }
 });

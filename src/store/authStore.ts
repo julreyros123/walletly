@@ -9,6 +9,7 @@ import {
   setActiveGamificationUser,
   flushCloudSnapshot,
   cancelCloudSnapshot,
+  flushPersistState,
 } from '@/store/gamificationStore';
 import { syncQueue } from '@/utils/syncQueue';
 import { saveLocalAppState, loadLocalAppState, deleteLocalAppState } from '@/db/localRepository';
@@ -335,6 +336,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     const currentUser = get().user;
+
+    // Flush any pending debounced state writes and cloud backups before dropping the session
+    try {
+      await flushPersistState();
+    } catch (err) {
+      console.warn('[Auth] Failed to flush persist state before logout:', err);
+    }
 
     // Push any unsynced changes to Supabase BEFORE dropping the session,
     // otherwise pending items in the offline queue are lost forever.

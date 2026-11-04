@@ -31,6 +31,7 @@ import {
 } from '@/utils/notifications';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { supabase, isSupabaseConfigured } from '@/utils/supabase';
+import { initTimeService, syncServerTime } from '@/utils/timeService';
 
 // Safe lazy-load: expo-notifications crashes on web & Expo Go (SDK 53+)
 let Notifications: any = null;
@@ -60,8 +61,9 @@ export default function RootLayout() {
     PlusJakartaSans_800ExtraBold,
   });
 
-  // Hydrate auth, theme, user preferences, and exchange rates on app mount
+  // Hydrate auth, theme, user preferences, exchange rates, and trusted time on app mount
   useEffect(() => {
+    initTimeService().then(() => syncServerTime()).catch(() => {});
     hydrateAuth();
     hydrateTheme();
     hydratePreferences();

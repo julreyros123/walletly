@@ -1,7 +1,7 @@
 {
   "name": "cbudget",
   "main": "expo-router/entry",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "dependencies": {
     "@animateicons/react": "^0.4.3",
     "@expo-google-fonts/inter": "^0.4.2",

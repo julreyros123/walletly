@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Modal, StyleSheet, TouchableOpacity, Platform, View, Animated, Easing } from 'react-native';
 import { YStack, XStack, Text as TamaguiText } from 'tamagui';
 const Text = (props: any) => <TamaguiText {...props} />;
@@ -7,6 +7,7 @@ import Svg, { Path, Circle, Rect, G, Defs, LinearGradient, Stop } from 'react-na
 import { safeHaptic } from '@/utils/haptics';
 import { useTheme } from '@/hooks/use-theme';
 import { useGamificationStore, getLocalDateString, getDaysDifference } from '@/store/gamificationStore';
+import { getTrustedTime, syncServerTime } from '@/utils/timeService';
 import { useCurrency } from '@/utils/currency';
 import { useExchangeRateStore } from '@/store/exchangeRateStore';
 import { Fonts } from '@/constants/theme';
@@ -53,6 +54,7 @@ function CheckedInCelebrationModal({
 }) {
   const theme = useTheme();
   const isDark = theme.mode === 'dark';
+  const styles = useMemo(() => getStyles(theme), [theme]);
   const rotateSunburst = useRef(new Animated.Value(0)).current;
   const checkScale = useRef(new Animated.Value(0)).current;
   const contentFade = useRef(new Animated.Value(0)).current;
@@ -107,9 +109,9 @@ function CheckedInCelebrationModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
-      <View style={getStyles(theme).backdrop}>
-        <View style={getStyles(theme).celebrationCardWrapper}>
-          <View style={getStyles(theme).celebrationCard}>
+      <View style={styles.backdrop}>
+        <View style={styles.celebrationCardWrapper}>
+          <View style={styles.celebrationCard}>
             {/* Top Glowing Header Accent */}
             <Svg width="100%" height={90} viewBox="0 0 320 90" fill="none" style={StyleSheet.absoluteFill}>
               <Defs>
@@ -125,7 +127,7 @@ function CheckedInCelebrationModal({
             {/* Close Button */}
             <TouchableOpacity
               onPress={onDismiss}
-              style={getStyles(theme).closeBtn}
+              style={styles.closeBtn}
               activeOpacity={0.7}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
@@ -134,9 +136,9 @@ function CheckedInCelebrationModal({
 
             <YStack padding={22} gap={14} alignItems="center" width="100%">
               {/* 1. Centered Sunburst + Centered Checkmark Hero Box */}
-              <View style={getStyles(theme).sunburstHeroBox}>
+              <View style={styles.sunburstHeroBox}>
                 {/* Background Rotating Shining Sunburst Rays */}
-                <View style={getStyles(theme).sunburstContainer} pointerEvents="none">
+                <View style={styles.sunburstContainer} pointerEvents="none">
                   <Animated.View style={{ transform: [{ rotate: spinInterpolation }] }}>
                     <Svg width={140} height={140} viewBox="0 0 140 140" fill="none">
                       <Defs>
@@ -161,7 +163,7 @@ function CheckedInCelebrationModal({
                 </View>
 
                 {/* Center Animated Checkmark Badge (Dead Center) */}
-                <Animated.View style={[getStyles(theme).checkCircleBadge, { transform: [{ scale: checkScale }] }]}>
+                <Animated.View style={[styles.checkCircleBadge, { transform: [{ scale: checkScale }] }]}>
                   <Svg width={56} height={56} viewBox="0 0 56 56" fill="none">
                     {/* Glowing Outer Ring */}
                     <Circle cx={28} cy={28} r={26} fill="#10B981" stroke="#34D399" strokeWidth={2.5} />
@@ -179,7 +181,7 @@ function CheckedInCelebrationModal({
               </View>
 
               {/* 2. Text & Earned Badges (Positioned Cleanly Below Shiny Graphic) */}
-              <Animated.View style={[getStyles(theme).contentFadeBox, { opacity: contentFade }]}>
+              <Animated.View style={[styles.contentFadeBox, { opacity: contentFade }]}>
                 <YStack alignItems="center" gap={4}>
                   <Text color={theme.text} fontSize={20} fontFamily={Fonts.bold} letterSpacing={-0.3}>
                     You're Checked In! ✨
@@ -192,13 +194,13 @@ function CheckedInCelebrationModal({
 
                 {/* Earned Reward Badges */}
                 <XStack alignItems="center" gap={8} marginTop={12}>
-                  <View style={getStyles(theme).earnedPillXp}>
+                  <View style={styles.earnedPillXp}>
                     <Text color={isDark ? '#FBBF24' : '#D97706'} fontSize={13} fontFamily={Fonts.bold}>
                       +{xp} XP
                     </Text>
                   </View>
                   {cash > 0 && (
-                    <View style={getStyles(theme).earnedPillCash}>
+                    <View style={styles.earnedPillCash}>
                       <Text color={isDark ? '#34D399' : '#059669'} fontSize={13} fontFamily={Fonts.bold}>
                         +{currencySymbol}{cash} Sim Cash
                       </Text>
@@ -209,7 +211,7 @@ function CheckedInCelebrationModal({
                 {/* Awesome Button */}
                 <TouchableOpacity
                   onPress={onDismiss}
-                  style={getStyles(theme).awesomeBtn}
+                  style={styles.awesomeBtn}
                   activeOpacity={0.85}
                   accessibilityRole="button"
                   accessibilityLabel="Awesome, dismiss celebration"
@@ -230,30 +232,44 @@ function CheckedInCelebrationModal({
 export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
   const theme = useTheme();
   const isDark = theme.mode === 'dark';
+  const styles = useMemo(() => getStyles(theme), [theme]);
   const cashColor = isDark ? '#34D399' : '#059669';
   const blueColor = isDark ? '#60A5FA' : '#2563EB';
   const greenText = isDark ? '#34D399' : '#059669';
-  const store = useGamificationStore();
+  const lastClaimedRewardDate = useGamificationStore((s) => s.lastClaimedRewardDate);
+  const lastClaimedDay = useGamificationStore((s) => s.lastClaimedDay);
+  const streakDays = useGamificationStore((s) => s.streakDays);
+  const claimDailyReward = useGamificationStore((s) => s.claimDailyReward);
+  const debugSimulateNextDay = useGamificationStore((s) => s.debugSimulateNextDay);
   const { symbol: currencySymbol } = useCurrency();
   const [claimedReward, setClaimedReward] = useState<{ xp: number; cash: number; day: number } | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
 
-  const today = getLocalDateString();
-  const isAlreadyClaimedToday = store.lastClaimedRewardDate?.slice(0, 10) === today;
+  // Sync server time in background when modal is opened
+  useEffect(() => {
+    if (visible) {
+      syncServerTime().catch(() => {});
+    }
+  }, [visible]);
+
+  const timeInfo = getTrustedTime();
+  const today = timeInfo.todayISO;
+  const isClockTampered = timeInfo.isTampered;
+  const isAlreadyClaimedToday = lastClaimedRewardDate?.slice(0, 10) === today;
 
   // Calculate calendar days difference safely using Date.UTC
-  const daysSinceLastClaim = store.lastClaimedRewardDate
-    ? getDaysDifference(store.lastClaimedRewardDate, today)
+  const daysSinceLastClaim = lastClaimedRewardDate
+    ? getDaysDifference(lastClaimedRewardDate, today)
     : -1;
 
   // Determine current day in the 7-day reward cycle (1 to 7)
   let currentDayInCycle: number;
   if (isAlreadyClaimedToday) {
     // Already claimed today: show today's claimed day
-    currentDayInCycle = store.lastClaimedDay || (((store.streakDays - 1) % 7) + 1) || 1;
+    currentDayInCycle = lastClaimedDay || (((streakDays - 1) % 7) + 1) || 1;
   } else if (daysSinceLastClaim === 1) {
     // Claimed yesterday: advance consecutively to the next day in the 1..7 cycle
-    const prevDay = store.lastClaimedDay || 1;
+    const prevDay = lastClaimedDay || 1;
     currentDayInCycle = (prevDay % 7) + 1;
   } else {
     // First time, or missed days: start at Day 1
@@ -263,10 +279,10 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
   const nextDayInCycle = (currentDayInCycle % 7) + 1;
 
   const handleClaim = () => {
-    if (isAlreadyClaimedToday) return;
+    if (isAlreadyClaimedToday || isClockTampered) return;
     safeHaptic('success');
 
-    const res = store.claimDailyReward();
+    const res = claimDailyReward();
     if (!res.success) return;
 
     const claimedDay = res.day ?? currentDayInCycle;
@@ -287,7 +303,7 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
   const renderRewardIcon = (item: DayRewardInfo, isClaimed: boolean, isReadyToClaim: boolean) => {
     if (isClaimed) {
       return (
-        <View style={getStyles(theme).iconCircleClaimed}>
+        <View style={styles.iconCircleClaimed}>
           <PhosphorIcon
             name="CheckCircle"
             size={24}
@@ -349,9 +365,9 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
     <>
       {/* 1. SEVEN-DAY DAILY REWARD GRID MODAL */}
       <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-        <View style={getStyles(theme).backdrop}>
-          <View style={getStyles(theme).modalCardWrapper}>
-            <View style={getStyles(theme).modalCard}>
+        <View style={styles.backdrop}>
+          <View style={styles.modalCardWrapper}>
+            <View style={styles.modalCard}>
               {/* Top Glowing Header Accent */}
               <Svg width="100%" height={90} viewBox="0 0 340 90" fill="none" style={StyleSheet.absoluteFill}>
                 <Defs>
@@ -370,7 +386,7 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                   safeHaptic('light');
                   onClose();
                 }}
-                style={getStyles(theme).closeBtn}
+                style={styles.closeBtn}
                 activeOpacity={0.7}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
@@ -414,19 +430,19 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                         <View
                           key={item.day}
                           style={[
-                            getStyles(theme).day7Card,
-                            isReadyToClaim && getStyles(theme).day7CardCurrent,
-                            isClaimed && getStyles(theme).dayCardPast,
-                            isNextUp && getStyles(theme).dayCardNextUp,
-                            isFuture && getStyles(theme).dayCardFuture,
+                            styles.day7Card,
+                            isReadyToClaim && styles.day7CardCurrent,
+                            isClaimed && styles.dayCardPast,
+                            isNextUp && styles.dayCardNextUp,
+                            isFuture && styles.dayCardFuture,
                           ]}
                         >
                           <XStack alignItems="center" gap={10} flex={1}>
-                            <View style={getStyles(theme).day7IconBox}>
+                            <View style={styles.day7IconBox}>
                               {renderRewardIcon(item, isClaimed, isReadyToClaim)}
                             </View>
                             <YStack gap={2}>
-                              <View style={getStyles(theme).day7Badge}>
+                              <View style={styles.day7Badge}>
                                 <Text color={isDark ? '#FBBF24' : '#B45309'} fontSize={8.5} fontFamily={Fonts.bold} letterSpacing={0.5}>
                                   DAY 7 • BONUS REWARD
                                 </Text>
@@ -437,14 +453,14 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                             </YStack>
                           </XStack>
                           {isClaimed && (
-                            <View style={getStyles(theme).claimedBadgeMini}>
+                            <View style={styles.claimedBadgeMini}>
                               <Text color={greenText} fontSize={10} fontFamily={Fonts.bold}>
                                 Claimed ✓
                               </Text>
                             </View>
                           )}
                           {isNextUp && (
-                            <View style={getStyles(theme).nextUpBadgeMini}>
+                            <View style={styles.nextUpBadgeMini}>
                               <Text color={blueColor} fontSize={9.5} fontFamily={Fonts.bold}>
                                 Tomorrow
                               </Text>
@@ -459,20 +475,20 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                       <View
                         key={item.day}
                         style={[
-                          getStyles(theme).dayCard,
-                          isReadyToClaim && getStyles(theme).dayCardCurrent,
-                          isClaimed && getStyles(theme).dayCardPast,
-                          isNextUp && getStyles(theme).dayCardNextUp,
-                          isFuture && getStyles(theme).dayCardFuture,
+                          styles.dayCard,
+                          isReadyToClaim && styles.dayCardCurrent,
+                          isClaimed && styles.dayCardPast,
+                          isNextUp && styles.dayCardNextUp,
+                          isFuture && styles.dayCardFuture,
                         ]}
                       >
                         {/* Day Pill Tag */}
                         <View
                           style={[
-                            getStyles(theme).dayTagPill,
-                            isReadyToClaim && getStyles(theme).dayTagPillCurrent,
-                            isClaimed && getStyles(theme).dayTagPillPast,
-                            isNextUp && getStyles(theme).dayTagPillNext,
+                            styles.dayTagPill,
+                            isReadyToClaim && styles.dayTagPillCurrent,
+                            isClaimed && styles.dayTagPillPast,
+                            isNextUp && styles.dayTagPillNext,
                           ]}
                         >
                           <Text
@@ -485,7 +501,7 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                         </View>
 
                         {/* Custom Polished Vector Icon */}
-                        <View style={getStyles(theme).iconContainer}>
+                        <View style={styles.iconContainer}>
                           {renderRewardIcon(item, isClaimed, isReadyToClaim)}
                         </View>
 
@@ -509,21 +525,45 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                   })}
                 </XStack>
 
+                {/* Anti-Tamper Clock Warning Banner */}
+                {isClockTampered && (
+                  <View style={styles.tamperBanner}>
+                    <PhosphorIcon name="Warning" size={16} color="#EF4444" weight="fill" />
+                    <Text color="#EF4444" fontSize={11.5} fontFamily={Fonts.medium} style={{ flex: 1 }}>
+                      {timeInfo.tamperReason === 'clock_set_backwards'
+                        ? 'Device clock set backwards. Please restore device date & time to claim rewards.'
+                        : 'Device clock out of sync. Please enable automatic network time to claim rewards.'}
+                    </Text>
+                  </View>
+                )}
+
                 {/* Claim Button */}
                 <TouchableOpacity
                   onPress={handleClaim}
-                  disabled={isAlreadyClaimedToday}
-                  style={[getStyles(theme).claimButton, isAlreadyClaimedToday && getStyles(theme).claimButtonChecked]}
+                  disabled={isAlreadyClaimedToday || isClockTampered}
+                  style={[
+                    styles.claimButton,
+                    (isAlreadyClaimedToday || isClockTampered) && styles.claimButtonChecked,
+                  ]}
                   activeOpacity={0.85}
                   accessibilityRole="button"
                   accessibilityLabel={
-                    isAlreadyClaimedToday
+                    isClockTampered
+                      ? 'Clock desynchronized. Claim disabled.'
+                      : isAlreadyClaimedToday
                       ? `Day ${currentDayInCycle} claimed. Day ${nextDayInCycle} unlocks tomorrow.`
                       : `Claim Day ${currentDayInCycle} Reward`
                   }
-                  accessibilityState={{ disabled: isAlreadyClaimedToday }}
+                  accessibilityState={{ disabled: isAlreadyClaimedToday || isClockTampered }}
                 >
-                  {isAlreadyClaimedToday ? (
+                  {isClockTampered ? (
+                    <XStack alignItems="center" gap={6}>
+                      <PhosphorIcon name="Lock" size={16} color={theme.textSecondary} />
+                      <Text color={theme.textSecondary} fontSize={14.5} fontFamily={Fonts.bold}>
+                        Clock Desynchronized
+                      </Text>
+                    </XStack>
+                  ) : isAlreadyClaimedToday ? (
                     <YStack alignItems="center" gap={2}>
                       <XStack alignItems="center" gap={6}>
                         <PhosphorIcon name="CheckCircle" size={16} color={greenText} weight="fill" />
@@ -547,9 +587,9 @@ export function DailyRewardModal({ visible, onClose }: DailyRewardModalProps) {
                   <TouchableOpacity
                     onPress={() => {
                       safeHaptic('light');
-                      store.debugSimulateNextDay();
+                      debugSimulateNextDay();
                     }}
-                    style={getStyles(theme).devTestBtn}
+                    style={styles.devTestBtn}
                     activeOpacity={0.7}
                     accessibilityRole="button"
                     accessibilityLabel="Simulate Next Day for Testing"
@@ -758,6 +798,18 @@ const getStyles = (theme: any) => {
   iconCircleClaimed: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  tamperBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.08)',
+    borderWidth: 1,
+    borderColor: theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.35)' : 'rgba(239, 68, 68, 0.25)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    width: '100%',
   },
   claimButton: {
     backgroundColor: '#10B981',

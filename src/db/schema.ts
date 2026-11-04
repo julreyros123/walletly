@@ -12,7 +12,7 @@
 export const LOCAL_DB_NAME = 'cbudget.db';
 
 /** Bump this and add a step in MIGRATIONS whenever the local schema changes. */
-export const LOCAL_DB_VERSION = 3;
+export const LOCAL_DB_VERSION = 4;
 
 export type SyncedTable =
   | 'profiles'
@@ -307,5 +307,13 @@ export const MIGRATIONS: string[] = [
     local_updated_at INTEGER NOT NULL DEFAULT 0
   );
   CREATE INDEX IF NOT EXISTS idx_savings_vault_history_user ON savings_vault_history (user_id, rolled_over_at DESC);
+  `,
+
+  // v3 -> v4: performance indexes for high-frequency queries and auto-recovery
+  `
+  CREATE INDEX IF NOT EXISTS idx_local_app_state_saved ON local_app_state (storage_key, saved_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_sync_outbox_order ON sync_outbox (id ASC);
+  CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions (user_id, category);
+  CREATE INDEX IF NOT EXISTS idx_user_investments_ticker ON user_investments (user_id, ticker);
   `,
 ];
