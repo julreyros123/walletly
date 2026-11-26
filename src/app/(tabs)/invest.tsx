@@ -21,6 +21,7 @@ import { toast } from '@/store/toastStore';
 import { RiskAssessmentModal } from '@/features/invest/components/RiskAssessmentModal';
 import { DepositFundsModal } from '@/features/invest/components/DepositFundsModal';
 import { CompoundForecastView } from '@/features/invest/components/CompoundForecastView';
+import { RuleBasedSimulatorCard } from '@/features/invest/components/RuleBasedSimulatorCard';
 import { useCurrency } from '@/utils/currency';
 import { useExchangeRateStore } from '@/store/exchangeRateStore';
 import Svg, { Path, Defs, LinearGradient, Stop, Line, Circle } from 'react-native-svg';
@@ -1282,6 +1283,31 @@ export default function InvestScreen() {
                   </View>
                 </YStack>
               </CbudgetCard>
+
+              {/* ==================== RB-PFDSE ALLOCATION & EQUATION 4 REPLAY SIMULATOR ==================== */}
+              <RuleBasedSimulatorCard
+                budget={cycleMetrics.limit}
+                spent={cycleMetrics.spent}
+                isBudgetSetupComplete={store.isBudgetSetupComplete}
+                assets={assets}
+                currencySymbol={currencySymbol}
+                onAllocateRecommended={(amt) => {
+                  const ok = store.allocateToSimulation(amt);
+                  if (ok) {
+                    store.addXP(15);
+                    toast.success(
+                      'Recommended 20% Transferred!',
+                      `${currencySymbol}${amt.toFixed(2)} moved from allowance to Buying Power (+15 XP).`
+                    );
+                  } else {
+                    toast.warning(
+                      'Transfer Unavailable',
+                      'Unable to allocate from current allowance balance.'
+                    );
+                  }
+                }}
+                onSelectTicker={(ticker) => navigateToDetails(ticker)}
+              />
 
               {/* ==================== YOUR HOLDINGS SECTION (PORTFOLIO TAB) ==================== */}
               <YStack gap={12} marginBottom={24}>

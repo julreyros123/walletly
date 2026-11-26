@@ -137,11 +137,16 @@ export async function applyLocalMutation(
   try {
     if (action === 'insert' || action === 'upsert') {
       const rows = Array.isArray(payload) ? payload : [payload];
-      await db.withExclusiveTransactionAsync(async () => {
+      const runBatch = async () => {
         for (const r of rows) {
           if (r && typeof r === 'object') await upsertLocal(db, table, pickColumns(table, r as Row), 'pending');
         }
-      });
+      };
+      if (typeof db.withExclusiveTransactionAsync === 'function') {
+        await db.withExclusiveTransactionAsync(runBatch);
+      } else {
+        await db.withTransactionAsync(runBatch);
+      }
     } else if (action === 'update' && match && payload && typeof payload === 'object') {
       const where = whereFromMatch(table, match);
       const data = pickColumns(table, payload as Row);
@@ -445,5 +450,254 @@ export async function outboxClear(): Promise<void> {
     }
   } catch (e) {
     console.warn('[LocalRepo] outboxClear failed:', e);
+  }
+}
+
+// ───────────────────────── RB-PFDSE Local Tables (v5) ─────────────────────────
+
+export interface LocalRecommendationRow {
+  id?: string;
+  user_id: string;
+  period: string;
+  budget_amount: number;
+  total_expenses: number;
+  remaining_budget: number;
+  budget_utilization: number;
+  status: string;
+  recommended_investment: number;
+  recommendation_type: string;
+  message: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export async function saveLocalRecommendation(rec: LocalRecommendationRow): Promise<boolean> {
+  const db = await getLocalDb();
+  if (!db) return false;
+  try {
+    const nowISO = new Date().toISOString();
+    const id = rec.id || `${rec.user_id}_${rec.period}`;
+    await db.runAsync(
+      `INSERT INTO recommendations (
+         id, user_id, period, budget_amount, total_expenses, remaining_budget,
+         budget_utilization, status, recommended_investment, recommendation_type,
+         message, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, period) DO UPDATE SET
+         budget_amount = excluded.budget_amount,
+         total_expenses = excluded.total_expenses,
+         remaining_budget = excluded.remaining_budget,
+         budget_utilization = excluded.budget_utilization,
+         status = excluded.status,
+         recommended_investment = excluded.recommended_investment,
+         recommendation_type = excluded.recommendation_type,
+         message = excluded.message,
+         updated_at = excluded.updated_at`,
+      [
+        id,
+        rec.user_id,
+        rec.period,
+        rec.budget_amount,
+        rec.total_expenses,
+        rec.remaining_budget,
+        rec.budget_utilization,
+        rec.status,
+        rec.recommended_investment,
+        rec.recommendation_type,
+        rec.message,
+        rec.created_at || nowISO,
+        nowISO,
+      ]
+    );
+    return true;
+  } catch (e) {
+    console.warn('[LocalRepo] saveLocalRecommendation failed:', e);
+    return false;
+  }
+}
+
+export async function getLatestLocalRecommendation(
+  userId: string,
+  period?: string
+): Promise<LocalRecommendationRow | null> {
+  const db = await getLocalDb();
+  if (!db) return null;
+  try {
+    if (period) {
+      return await db.getFirstAsync<LocalRecommendationRow>(
+        'SELECT * FROM recommendations WHERE user_id = ? AND period = ? LIMIT 1',
+        [userId, period]
+      );
+    }
+    return await db.getFirstAsync<LocalRecommendationRow>(
+      'SELECT * FROM recommendations WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1',
+      [userId]
+    );
+  } catch (e) {
+    console.warn('[LocalRepo] getLatestLocalRecommendation failed:', e);
+    return null;
+  }
+}
+
+export interface MarketHistoryPoint {
+  dayIndex: number;
+  tradeDate: string;
+  closePrice: number;
+  pctChange: number;
+}
+
+export async function saveMarketPriceHistory(
+  ticker: string,
+  points: readonly MarketHistoryPoint[]
+): Promise<boolean> {
+  const db = await getLocalDb();
+  if (!db) return false;
+  try {
+    const nowISO = new Date().toISOString();
+    await db.runAsync('DELETE FROM market_price_history WHERE ticker = ?', [ticker]);
+    for (const pt of points) {
+      await db.runAsync(
+        `INSERT INTO market_price_history (id, ticker, day_index, trade_date, close_price, pct_change, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [`${ticker}_${pt.dayIndex}`, ticker, pt.dayIndex, pt.tradeDate, pt.closePrice, pt.pctChange, nowISO]
+      );
+    }
+    return true;
+  } catch (e) {
+    console.warn('[LocalRepo] saveMarketPriceHistory failed:', e);
+    return false;
+  }
+}
+
+export async function loadMarketPriceHistory(ticker: string): Promise<MarketHistoryPoint[]> {
+  const db = await getLocalDb();
+  if (!db) return [];
+  try {
+    const rows = await db.getAllAsync<{
+      day_index: number;
+      trade_date: string;
+      close_price: number;
+      pct_change: number;
+    }>(
+      'SELECT day_index, trade_date, close_price, pct_change FROM market_price_history WHERE ticker = ? ORDER BY day_index ASC',
+      [ticker]
+    );
+    return (rows || []).map((r) => ({
+      dayIndex: Number(r.day_index),
+      tradeDate: String(r.trade_date),
+      closePrice: Number(r.close_price),
+      pctChange: Number(r.pct_change),
+    }));
+  } catch (e) {
+    console.warn('[LocalRepo] loadMarketPriceHistory failed:', e);
+    return [];
+  }
+}
+
+export async function saveLocalExchangeRate(
+  baseCurrency: string,
+  targetCurrency: string,
+  rate: number,
+  source: string
+): Promise<boolean> {
+  const db = await getLocalDb();
+  if (!db) return false;
+  try {
+    await db.runAsync(
+      `INSERT INTO exchange_rates (base_currency, target_currency, rate, source, updated_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(base_currency, target_currency) DO UPDATE SET
+         rate = excluded.rate,
+         source = excluded.source,
+         updated_at = excluded.updated_at`,
+      [baseCurrency, targetCurrency, rate, source, new Date().toISOString()]
+    );
+    return true;
+  } catch (e) {
+    console.warn('[LocalRepo] saveLocalExchangeRate failed:', e);
+    return false;
+  }
+}
+
+export interface LocalRecurringRow {
+  id: string;
+  user_id: string;
+  name: string;
+  category: string;
+  amount: number;
+  type: 'income' | 'expense';
+  frequency: 'daily' | 'weekly' | 'monthly';
+  next_due_date: string;
+  is_active: boolean;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function saveLocalRecurringSchedules(
+  userId: string,
+  schedules: readonly LocalRecurringRow[]
+): Promise<boolean> {
+  const db = await getLocalDb();
+  if (!db) return false;
+  try {
+    await db.runAsync('DELETE FROM recurring_schedules WHERE user_id = ?', [userId]);
+    for (const s of schedules) {
+      await db.runAsync(
+        `INSERT INTO recurring_schedules (
+           id, user_id, name, category, amount, type, frequency, next_due_date, is_active, notes, created_at, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          s.id,
+          userId,
+          s.name,
+          s.category,
+          s.amount,
+          s.type,
+          s.frequency,
+          s.next_due_date,
+          s.is_active ? 1 : 0,
+          s.notes || null,
+          s.created_at,
+          s.updated_at,
+        ]
+      );
+    }
+    return true;
+  } catch (e) {
+    console.warn('[LocalRepo] saveLocalRecurringSchedules failed:', e);
+    return false;
+  }
+}
+
+export async function loadLocalRecurringSchedules(userId: string): Promise<LocalRecurringRow[]> {
+  const db = await getLocalDb();
+  if (!db) return [];
+  try {
+    const rows = await db.getAllAsync<{
+      id: string;
+      user_id: string;
+      name: string;
+      category: string;
+      amount: number;
+      type: 'income' | 'expense';
+      frequency: 'daily' | 'weekly' | 'monthly';
+      next_due_date: string;
+      is_active: number;
+      notes: string | null;
+      created_at: string;
+      updated_at: string;
+    }>(
+      'SELECT * FROM recurring_schedules WHERE user_id = ? ORDER BY next_due_date ASC',
+      [userId]
+    );
+    return (rows || []).map((r) => ({
+      ...r,
+      is_active: r.is_active === 1,
+      notes: r.notes || undefined,
+    }));
+  } catch (e) {
+    console.warn('[LocalRepo] loadLocalRecurringSchedules failed:', e);
+    return [];
   }
 }

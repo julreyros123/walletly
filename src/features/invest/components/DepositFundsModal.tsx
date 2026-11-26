@@ -20,6 +20,11 @@ import { useGamificationStore, getCycleMetrics } from '@/store/gamificationStore
 import { toast } from '@/store/toastStore';
 import { safeHaptic } from '@/utils/haptics';
 import { useCurrency } from '@/utils/currency';
+import {
+  BUDGET_STATUS,
+  computeInvestmentAllocation,
+  evaluateBudget,
+} from '@/utils/decisionEngine';
 
 interface DepositFundsModalProps {
   visible: boolean;
@@ -38,6 +43,15 @@ export function DepositFundsModal({ visible, onClose }: DepositFundsModalProps) 
 
   const cycleMetrics = getCycleMetrics(store, currencyCode);
   const availableToTransfer = Math.max(0, cycleMetrics.balance);
+  const effectiveBudget =
+    store.isBudgetSetupComplete || cycleMetrics.spent > 0 ? cycleMetrics.limit : 0;
+  const budgetEval = evaluateBudget(effectiveBudget, cycleMetrics.spent, currencySymbol);
+  const allocationRec = computeInvestmentAllocation(
+    budgetEval.status,
+    budgetEval.remainingBudget,
+    0.2,
+    currencySymbol
+  );
 
   const numericAmount = parseFloat((amount || '').replace(/[^0-9.]/g, '')) || 0;
   const isOverAllowance = numericAmount > availableToTransfer;
@@ -245,6 +259,71 @@ export function DepositFundsModal({ visible, onClose }: DepositFundsModalProps) 
                   </Text>
                 </View>
               )}
+
+              {/* RB-PFDSE Equation 2 Recommendation Banner */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  paddingHorizontal: 12,
+                  paddingVertical: 9,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  marginBottom: 10,
+                  backgroundColor:
+                    budgetEval.status === BUDGET_STATUS.WITHIN_BUDGET
+                      ? 'rgba(16, 185, 129, 0.1)'
+                      : 'rgba(245, 158, 11, 0.1)',
+                  borderColor:
+                    budgetEval.status === BUDGET_STATUS.WITHIN_BUDGET
+                      ? 'rgba(16, 185, 129, 0.28)'
+                      : 'rgba(245, 158, 11, 0.28)',
+                }}
+              >
+                <PhosphorIcon
+                  name={
+                    budgetEval.status === BUDGET_STATUS.WITHIN_BUDGET
+                      ? 'CheckCircle'
+                      : 'Warning'
+                  }
+                  size={15}
+                  color={
+                    budgetEval.status === BUDGET_STATUS.WITHIN_BUDGET
+                      ? '#10B981'
+                      : '#F59E0B'
+                  }
+                  weight="fill"
+                />
+                <Text
+                  style={{
+                    flex: 1,
+                    fontSize: 11.5,
+                    fontFamily: Fonts.semiBold,
+                    color: theme.text,
+                    lineHeight: 16,
+                  }}
+                >
+                  {allocationRec.message}
+                </Text>
+                {!allocationRec.isGated && allocationRec.recommendedAllocation > 0 ? (
+                  <TouchableOpacity
+                    onPress={() =>
+                      handleQuickFill(Number(allocationRec.recommendedAllocation.toFixed(2)))
+                    }
+                    style={{
+                      backgroundColor: '#10B981',
+                      paddingHorizontal: 9,
+                      paddingVertical: 5,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontFamily: Fonts.bold }}>
+                      Use 20%
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
 
               {/* Quick Amount Preset Chips */}
               <View style={styles.presetsRow}>

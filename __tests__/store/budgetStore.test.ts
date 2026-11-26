@@ -14,7 +14,7 @@ describe('budgetStore facade', () => {
   });
 
   test('useBudgetStore reads unified budget state', () => {
-    const budgetState = useBudgetStore.getState ? (useBudgetStore as any)() : null;
+    expect(typeof useBudgetStore).toBe('function');
     expect(useGamificationStore.getState().totalBudget).toBe(4000);
     expect(useGamificationStore.getState().budgetType).toBe('monthly');
   });

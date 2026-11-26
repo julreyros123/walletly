@@ -28,9 +28,15 @@ async function migrate(db: SQLiteDatabase): Promise<void> {
   while (version < LOCAL_DB_VERSION) {
     const step = MIGRATIONS[version];
     if (!step) throw new Error(`[LocalDB] Missing migration for version ${version}`);
-    await db.withExclusiveTransactionAsync(async (txn) => {
-      await txn.execAsync(step);
-    });
+    if (typeof db.withExclusiveTransactionAsync === 'function') {
+      await db.withExclusiveTransactionAsync(async (txn) => {
+        await txn.execAsync(step);
+      });
+    } else {
+      await db.withTransactionAsync(async () => {
+        await db.execAsync(step);
+      });
+    }
     version += 1;
     // PRAGMA cannot be parameterized; version is a trusted integer.
     await db.execAsync(`PRAGMA user_version = ${version}`);

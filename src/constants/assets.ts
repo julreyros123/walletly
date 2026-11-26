@@ -91,6 +91,11 @@ export const ASSET_THESIS: Record<string, AssetThesis> = {
     businessModel: "Global digital advertising distribution network, enterprise search infrastructure, and high-performance cloud server hosting.",
     catalysts: "Pervasive global reach with billions of daily active queries, strong enterprise cloud migrations, and generative AI search monetization.",
     riskExplanation: "Moderate Growth Profile: Dominant competitive moat with high operating margins, but navigates digital ad spending cycles and regulatory oversight."
+  },
+  LITE: {
+    businessModel: "Broad-market index basket tracking blue-chip Philippine and global dividend-paying corporations designed for student micro-investing.",
+    catalysts: "Accessible ₱50 entry share price, instant diversification across essential industries, and low single-company volatility.",
+    riskExplanation: "Conservative Starter Profile: Broad diversification cushions sharp single-stock swings, ideal for first-time SHS investors."
   }
 };
 
@@ -122,6 +127,10 @@ export const TEEN_GUIDES: Record<string, TeenGuide> = {
   NEXS: {
     analogy: "NEXS commands global digital discovery. Every web search and video view monetizes through targeted advertising, supplemented by enterprise cloud infrastructure.",
     riskExplanation: "📈 Moderate Risk: Unmatched digital network effects and market leadership with consistent double-digit operating margins."
+  },
+  LITE: {
+    analogy: "LITE is like buying a student-sized sampler basket of top everyday companies for just ₱50 a share instead of picking only one stock.",
+    riskExplanation: "🛡️ Conservative Starter: Spreads risk across multiple companies so small allowance surpluses can practice safely."
   }
 };
 
@@ -265,6 +274,26 @@ export const ASSET_DATA: Record<string, AssetDetails> = {
     history1D: [164.00, 164.50, 165.00, 164.80, 165.20, 165.80],
     history1W: [160.00, 162.50, 163.00, 164.00, 165.00, 164.50, 165.80],
     history1M: [150.00, 152.00, 155.50, 158.00, 159.00, 160.00, 162.00, 164.00, 165.00, 165.80],
+  },
+  LITE: {
+    ticker: 'LITE',
+    name: 'LiteSave Index Fund',
+    price: 50.00,
+    change: 2.00,
+    icon: 'Coins',
+    color: '#10B981',
+    sparkline: [5, 5.1, 5.02, 5.17, 4.94, 4.89, 5.0],
+    riskProfile: 'Conservative',
+    partner: 'Diversified Index',
+    description: 'Entry-level micro-share basket built for student allowance allocations.',
+    marketCap: '₱3.2 Million',
+    volume: '₱51,000',
+    high52: 54.50,
+    low52: 46.20,
+    eps: 3.85,
+    history1D: [49.20, 49.50, 49.80, 49.60, 49.90, 50.00],
+    history1W: [50.00, 51.00, 50.24, 51.74, 49.41, 48.92, 50.00],
+    history1M: [48.00, 48.50, 49.10, 50.00, 51.00, 50.24, 51.74, 49.41, 48.92, 50.00],
   }
 };
 

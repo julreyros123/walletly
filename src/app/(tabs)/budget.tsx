@@ -5,8 +5,11 @@ import { YStack, XStack, Text as TamaguiText, Button, Progress, View } from 'tam
 const Text = (props: any) => <TamaguiText {...props} />;
 import { useTheme } from '@/hooks/use-theme';
 import { PhosphorIcon, PhosphorIconName } from '@/components/ui/PhosphorIcon';
-import { useGamificationStore, getCycleMetrics } from '@/store/gamificationStore';
+import { useGamificationStore, getCycleMetrics, advanceRecurringDate } from '@/store/gamificationStore';
 import type { Expense, SavingsGoal } from '@/store/gamificationStore';
+import { useMarketStore } from '@/store/marketStore';
+import { DecisionSupportCard } from '@/features/dashboard/components/DecisionSupportCard';
+import { RecurringTransactionsCard } from '@/features/budget/components/RecurringTransactionsCard';
 import { CbudgetCard } from '@/components/ui/CbudgetCard';
 import { FormInput } from '@/components/ui/FormInput';
 import { FormButton } from '@/components/ui/FormButton';
@@ -74,11 +77,12 @@ export default function BudgetScreen() {
   const isDark = theme.mode === 'dark';
   const insets = useSafeAreaInsets();
   const store = useGamificationStore();
+  const marketAssets = useMarketStore((state) => state.assets);
   const { user } = useAuthStore();
 
   // Tab State
   const [activeTab, setActiveTab] = useState<'budget' | 'calendar' | 'savings' | 'goals'>('budget');
-  const [categoryFilter, setCategoryFilter] = useState<'all' | 'overspent' | 'inbudget'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'overspent' | 'warning' | 'inbudget'>('all');
   const [categorySearchQuery, setCategorySearchQuery] = useState('');
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [activityFilter, setActivityFilter] = useState<'all' | 'expenses' | 'income'>('all');
@@ -375,8 +379,10 @@ export default function BudgetScreen() {
         .filter((e) => e.type !== 'income' && e.category === cat)
         .reduce((s, e) => s + e.amount, 0);
       const limit = store.categoryLimits?.[cat] || store.totalBudget / (store.selectedCategories.length || 1);
+      const ratio = limit > 0 ? spent / limit : 0;
       if (categoryFilter === 'overspent') return spent > limit;
-      if (categoryFilter === 'inbudget') return spent <= limit;
+      if (categoryFilter === 'warning') return spent <= limit && ratio >= 0.8;
+      if (categoryFilter === 'inbudget') return ratio < 0.8;
       return true;
     });
   }, [store.selectedCategories, store.loggedExpenses, store.categoryLimits, categoryFilter, categorySearchQuery]);
@@ -1319,7 +1325,13 @@ export default function BudgetScreen() {
                       width={6}
                       height={6}
                       borderRadius={3}
-                      backgroundColor={effectiveSpent > effectiveBudget ? '#EF4444' : '#10B981'}
+                      backgroundColor={
+                        effectiveSpent > effectiveBudget
+                          ? '#EF4444'
+                          : effectiveBudget > 0 && (effectiveSpent / effectiveBudget) * 100 >= 80
+                          ? '#F59E0B'
+                          : '#10B981'
+                      }
                       flexShrink={0}
                     />
                     <Text
@@ -1329,23 +1341,71 @@ export default function BudgetScreen() {
                       numberOfLines={1}
                       ellipsizeMode="tail"
                     >
-                      Remaining: <Text color={effectiveSpent > effectiveBudget ? '#EF4444' : '#10B981'} fontFamily={Fonts.bold}>{currencySymbol}{effectiveRemaining.toLocaleString()}</Text>
+                      Remaining: <Text color={effectiveSpent > effectiveBudget ? '#EF4444' : '#10B981'} fontFamily={Fonts.bold}>{currencySymbol}{(effectiveSpent > effectiveBudget ? -(effectiveSpent - effectiveBudget) : effectiveRemaining).toLocaleString()}</Text>
                     </Text>
                   </XStack>
 
                   <Text
-                    color={effectiveSpent > effectiveBudget ? '#EF4444' : '#10B981'}
+                    color={
+                      effectiveSpent > effectiveBudget
+                        ? '#EF4444'
+                        : effectiveBudget > 0 && (effectiveSpent / effectiveBudget) * 100 >= 80
+                        ? '#F59E0B'
+                        : '#10B981'
+                    }
                     fontSize={11.5}
                     fontFamily={Fonts.bold}
                     numberOfLines={1}
                     flexShrink={0}
                   >
                     {effectiveSpent > effectiveBudget
-                      ? `Over by ${currencySymbol}${(effectiveSpent - effectiveBudget).toLocaleString()}`
-                      : 'On Track'}
+                      ? `Overspending (-${currencySymbol}${(effectiveSpent - effectiveBudget).toLocaleString()})`
+                      : effectiveBudget > 0 && (effectiveSpent / effectiveBudget) * 100 >= 80
+                      ? 'Warning (≥80%)'
+                      : 'Within Budget'}
                   </Text>
                 </XStack>
               </View>
+
+              {/* RB-PFDSE Decision Support & Investment Gate */}
+              <DecisionSupportCard
+                compact={true}
+                budget={effectiveBudget}
+                spent={effectiveSpent}
+                isBudgetSetupComplete={store.isBudgetSetupComplete}
+                assets={Object.values(marketAssets)}
+                currencySymbol={currencySymbol}
+                onPressSetBudget={() => {
+                  setAllowanceAmountInput(effectiveBudget.toString());
+                  setShowEditAllowanceModal(true);
+                }}
+                onPressAllocateRecommended={(amt) => {
+                  const ok = store.allocateToSimulation(amt);
+                  if (ok) {
+                    Alert.alert(
+                      'Recommended Allocation Transferred',
+                      `${currencySymbol}${amt.toFixed(2)} (20% of remaining budget) moved to Investment Sandbox.`
+                    );
+                  }
+                }}
+              />
+
+              {/* Automated Recurring Income & Expense Schedules */}
+              <RecurringTransactionsCard
+                schedules={store.recurringSchedules || []}
+                currencySymbol={currencySymbol}
+                todayISO={todayISO}
+                nextCycleISO={(freq) => advanceRecurringDate(todayISO, freq)}
+                onAddSchedule={(sched) => {
+                  store.addRecurringSchedule(sched);
+                  Alert.alert(
+                    'Schedule Saved',
+                    `"${sched.name}" will auto-record ${sched.frequency}.`
+                  );
+                }}
+                onToggleSchedule={(id) => store.toggleRecurringSchedule(id)}
+                onDeleteSchedule={(id) => store.deleteRecurringSchedule(id)}
+              />
 
               {/* 3. Category Budgets Section with Search Bar & Dropdown Filter */}
               <YStack gap={12}>
@@ -1461,7 +1521,9 @@ export default function BudgetScreen() {
                           ? 'Filter'
                           : categoryFilter === 'overspent'
                           ? 'Overspent'
-                          : 'In budget'}
+                          : categoryFilter === 'warning'
+                          ? 'Warning'
+                          : 'Within Budget'}
                       </Text>
                       <PhosphorIcon
                         name={showCategoryDropdown ? 'CaretUp' : 'CaretDown'}
@@ -1494,15 +1556,22 @@ export default function BudgetScreen() {
                       },
                       {
                         id: 'overspent' as const,
-                        label: 'Overspent',
+                        label: 'Overspending',
                         sublabel: 'Exceeding target budget limit (>100%)',
-                        icon: 'Warning' as const,
+                        icon: 'ShieldWarning' as const,
                         color: '#EF4444',
                       },
                       {
+                        id: 'warning' as const,
+                        label: 'Warning',
+                        sublabel: 'Approaching budget limit (80% – 100%)',
+                        icon: 'Warning' as const,
+                        color: '#F59E0B',
+                      },
+                      {
                         id: 'inbudget' as const,
-                        label: 'In Budget',
-                        sublabel: 'Spending within target limit (<=100%)',
+                        label: 'Within Budget',
+                        sublabel: 'Safe spending below warning threshold (<80%)',
                         icon: 'CheckCircle' as const,
                         color: '#10B981',
                       },
@@ -1619,12 +1688,16 @@ export default function BudgetScreen() {
                     </View>
                   )}
                   {filteredCategories.map((cat) => {
-                    const spent = store.loggedExpenses.filter((e) => e.category === cat).reduce((s, e) => s + e.amount, 0);
+                    const spent = store.loggedExpenses
+                      .filter((e) => e.type !== 'income' && e.category === cat)
+                      .reduce((s, e) => s + e.amount, 0);
                     const limit = store.categoryLimits?.[cat] || store.totalBudget / (store.selectedCategories.length || 1);
                     const ratio = limit > 0 ? spent / limit : 0;
                     const isOver = spent > limit;
+                    const isWarn = !isOver && ratio >= 0.8;
                     const catColor = CATEGORY_COLORS[cat] || '#64748B';
-                    
+                    const statusColor = isOver ? '#EF4444' : isWarn ? '#F59E0B' : '#10B981';
+
                     return (
                       <TouchableOpacity
                         key={cat}
@@ -1651,13 +1724,17 @@ export default function BudgetScreen() {
                             </XStack>
 
                             <Text
-                              color={isOver ? '#EF4444' : '#10B981'}
-                              fontSize={12.5}
+                              color={statusColor}
+                              fontSize={12}
                               fontFamily={Fonts.bold}
                               numberOfLines={1}
                               flexShrink={0}
                             >
-                              {isOver ? 'OVER' : `${Math.round(ratio * 100)}%`}
+                              {isOver
+                                ? 'OVERSPENT'
+                                : isWarn
+                                ? `WARN • ${Math.round(ratio * 100)}%`
+                                : `${Math.round(ratio * 100)}%`}
                             </Text>
                           </XStack>
 
@@ -1668,7 +1745,7 @@ export default function BudgetScreen() {
                                 styles.catProgressBar,
                                 {
                                   width: `${Math.min(100, ratio * 100)}%`,
-                                  backgroundColor: isOver ? '#EF4444' : catColor,
+                                  backgroundColor: isOver ? '#EF4444' : isWarn ? '#F59E0B' : catColor,
                                 },
                               ]}
                             />
