@@ -3,9 +3,18 @@ import { AppState } from 'react-native';
 import { storage } from '@/utils/storage';
 import { supabase } from '@/utils/supabase';
 import { syncQueue } from '@/utils/syncQueue';
-import { applyRemoteRows, getLocalRows, saveLocalAppState, loadLocalAppState, getLatestLocalAppState } from '@/db/localRepository';
+import {
+  applyRemoteRows,
+  getLocalRows,
+  saveLocalAppState,
+  loadLocalAppState,
+  getLatestLocalAppState,
+  saveLocalRecommendation,
+  saveLocalRecurringSchedules,
+} from '@/db/localRepository';
 import { safeHaptic } from '@/utils/haptics';
 import { getTrustedTime, updateHighWaterMark } from '@/utils/timeService';
+import { computeInvestmentAllocation, evaluateBudget } from '@/utils/decisionEngine';
 import { useExchangeRateStore } from './exchangeRateStore';
 
 export const CURRENT_GAMIFICATION_VERSION = 2;
@@ -210,6 +219,51 @@ export interface SavingsRecord {
   createdAtISO: string;
 }
 
+export interface RecurringSchedule {
+  id: string;
+  name: string;
+  category: string;
+  amount: number;
+  type: 'income' | 'expense';
+  frequency: 'daily' | 'weekly' | 'monthly';
+  nextDueDate: string; // YYYY-MM-DD
+  isActive: boolean;
+  notes?: string;
+  createdAt: string;
+}
+
+/**
+ * Advances a YYYY-MM-DD schedule date by one cycle ('daily' | 'weekly' | 'monthly'),
+ * safely clamping month-end dates (e.g. Jan 31 -> Feb 28).
+ */
+export function advanceRecurringDate(
+  dateISO: string,
+  frequency: 'daily' | 'weekly' | 'monthly'
+): string {
+  const clean = (dateISO || getLocalDateString()).slice(0, 10);
+  const [y, m, d] = clean.split('-').map(Number);
+  if (isNaN(y) || isNaN(m) || isNaN(d)) {
+    return getLocalDateString();
+  }
+
+  if (frequency === 'daily') {
+    const next = new Date(y, m - 1, d + 1);
+    return getLocalDateString(next);
+  }
+  if (frequency === 'weekly') {
+    const next = new Date(y, m - 1, d + 7);
+    return getLocalDateString(next);
+  }
+
+  // Monthly: advance month by 1 and clamp day to days in target month
+  const targetMonthIndex = m; // 0-indexed next month
+  const targetYear = y + Math.floor(targetMonthIndex / 12);
+  const normalizedMonth = targetMonthIndex % 12;
+  const maxDayInTargetMonth = new Date(targetYear, normalizedMonth + 1, 0).getDate();
+  const clampedDay = Math.min(d, maxDayInTargetMonth);
+  return getLocalDateString(new Date(targetYear, normalizedMonth, clampedDay));
+}
+
 export function format12HourTime(d: Date = new Date()): string {
   let hours = d.getHours();
   const minutes = d.getMinutes();
@@ -387,8 +441,9 @@ interface GamificationState {
   selectedCategories: string[];
   categoryLimits: Record<string, number>;
 
-  // Logged Expenses, Incomes & Savings Goals
+  // Logged Expenses, Incomes, Recurring Schedules & Savings Goals
   loggedExpenses: Expense[];
+  recurringSchedules: RecurringSchedule[];
   savingsGoals: SavingsGoal[];
   unspentSavingsVault: number;
   savingsRecords: SavingsRecord[];
@@ -427,6 +482,12 @@ interface GamificationState {
   editExpense: (id: string, updated: Partial<Omit<Expense, 'id'>>) => void;
   deleteExpense: (id: string) => void;
   addIncome: (name: string, category: string, amount: number, date?: string, notes?: string, time?: string) => void;
+  addRecurringSchedule: (
+    schedule: Omit<RecurringSchedule, 'id' | 'isActive' | 'createdAt'>
+  ) => RecurringSchedule;
+  toggleRecurringSchedule: (id: string) => void;
+  deleteRecurringSchedule: (id: string) => void;
+  processDueRecurringTransactions: (referenceDateISO?: string) => number;
   resetBudget: () => void;
   resetAllData: (defaultVirtualBalance?: number) => void;
 
@@ -693,6 +754,7 @@ async function executePersistState(state: GamificationState, specificUserId?: st
       selectedCategories: state.selectedCategories,
       categoryLimits: state.categoryLimits,
       loggedExpenses: state.loggedExpenses,
+      recurringSchedules: state.recurringSchedules || [],
       savingsGoals: state.savingsGoals,
       unspentSavingsVault: state.unspentSavingsVault,
       savingsRecords: state.savingsRecords,
@@ -711,6 +773,48 @@ async function executePersistState(state: GamificationState, specificUserId?: st
 
     // 1. Save directly into SQLite local_app_state table (guaranteed APK upgrade durability)
     await saveLocalAppState(storageKey, json);
+
+    // 1b. Persist RB-PFDSE Recommendation & Recurring Schedules to dedicated SQLite tables (Algorithms 1 & 2)
+    const ownerKey = targetUserId && targetUserId !== 'guest' ? targetUserId : 'guest';
+    const cycleMetrics = getCycleMetrics(state, state.currency || 'PHP');
+    const effectiveBudgetForEngine =
+      state.isBudgetSetupComplete || cycleMetrics.spent > 0 ? cycleMetrics.limit : 0;
+    const budgetEval = evaluateBudget(effectiveBudgetForEngine, cycleMetrics.spent);
+    const investAlloc = computeInvestmentAllocation(
+      budgetEval.status,
+      budgetEval.remainingBudget
+    );
+    saveLocalRecommendation({
+      user_id: ownerKey,
+      period: cycleMetrics.cycle,
+      budget_amount: budgetEval.budget,
+      total_expenses: budgetEval.totalExpenses,
+      remaining_budget: budgetEval.remainingBudget,
+      budget_utilization: budgetEval.budgetUtilization,
+      status: budgetEval.status,
+      recommended_investment: investAlloc.recommendedAllocation,
+      recommendation_type: investAlloc.recommendationType,
+      message: investAlloc.message,
+    }).catch((recErr) => console.warn('[GamificationStore] Recommendation SQLite write warning:', recErr));
+
+    const nowISO = new Date().toISOString();
+    saveLocalRecurringSchedules(
+      ownerKey,
+      (state.recurringSchedules || []).map((s) => ({
+        id: s.id,
+        user_id: ownerKey,
+        name: s.name,
+        category: s.category,
+        amount: s.amount,
+        type: s.type,
+        frequency: s.frequency,
+        next_due_date: s.nextDueDate,
+        is_active: s.isActive,
+        notes: s.notes,
+        created_at: s.createdAt,
+        updated_at: nowISO,
+      }))
+    ).catch((schedErr) => console.warn('[GamificationStore] Recurring SQLite write warning:', schedErr));
 
     // 2. Save into AsyncStorage & SecureStore chunked mirror
     await storage.setItem(storageKey, json);
@@ -743,6 +847,7 @@ export type GamificationDataState = {
   selectedCategories: string[];
   categoryLimits: Record<string, number>;
   loggedExpenses: Expense[];
+  recurringSchedules: RecurringSchedule[];
   savingsGoals: SavingsGoal[];
   unspentSavingsVault: number;
   savingsRecords: SavingsRecord[];
@@ -775,6 +880,7 @@ export const DEFAULT_GAMIFICATION_DATA: GamificationDataState = {
   selectedCategories: [],
   categoryLimits: {},
   loggedExpenses: [],
+  recurringSchedules: [],
   savingsGoals: [],
   unspentSavingsVault: 0,
   savingsRecords: [],
@@ -1479,6 +1585,133 @@ export const useGamificationStore = create<GamificationState>()((set, get) => ({
       persistState({ ...state, ...next });
       return next;
     });
+  },
+
+  addRecurringSchedule: (scheduleInput) => {
+    const newSchedule: RecurringSchedule = {
+      id: generateUUID(),
+      name: scheduleInput.name.trim(),
+      category: scheduleInput.category,
+      amount: scheduleInput.amount,
+      type: scheduleInput.type,
+      frequency: scheduleInput.frequency,
+      nextDueDate: scheduleInput.nextDueDate.slice(0, 10),
+      isActive: true,
+      notes: scheduleInput.notes,
+      createdAt: new Date().toISOString(),
+    };
+
+    set((state) => {
+      const updated = [...(state.recurringSchedules || []), newSchedule];
+      const next = { recurringSchedules: updated };
+      persistState({ ...state, ...next });
+      return next;
+    });
+
+    // Immediately materialize if scheduled for today or earlier
+    get().processDueRecurringTransactions();
+    return newSchedule;
+  },
+
+  toggleRecurringSchedule: (id) => {
+    set((state) => {
+      const updated = (state.recurringSchedules || []).map((item) =>
+        item.id === id ? { ...item, isActive: !item.isActive } : item
+      );
+      const next = { recurringSchedules: updated };
+      persistState({ ...state, ...next });
+      return next;
+    });
+  },
+
+  deleteRecurringSchedule: (id) => {
+    set((state) => {
+      const updated = (state.recurringSchedules || []).filter((item) => item.id !== id);
+      const next = { recurringSchedules: updated };
+      persistState({ ...state, ...next });
+      return next;
+    });
+  },
+
+  processDueRecurringTransactions: (referenceDateISO) => {
+    const today = (referenceDateISO || getLocalDateString()).slice(0, 10);
+    const generated: Expense[] = [];
+    const MAX_CATCHUP_ITERATIONS = 24;
+
+    set((state) => {
+      const schedules = state.recurringSchedules || [];
+      if (schedules.length === 0) return state;
+
+      let didMutate = false;
+      const updatedSchedules = schedules.map((sched) => {
+        if (!sched.isActive || sched.amount <= 0) return sched;
+
+        let due = (sched.nextDueDate || today).slice(0, 10);
+        let guard = 0;
+        while (due <= today && guard < MAX_CATCHUP_ITERATIONS) {
+          didMutate = true;
+          guard += 1;
+          generated.push({
+            id: generateUUID(),
+            name: sched.name,
+            category: sched.category,
+            amount: sched.amount,
+            date: due,
+            time: format12HourTime(),
+            notes: sched.notes || `Auto-logged recurring ${sched.type}`,
+            type: sched.type,
+          });
+          due = advanceRecurringDate(due, sched.frequency);
+        }
+
+        return due !== sched.nextDueDate ? { ...sched, nextDueDate: due } : sched;
+      });
+
+      if (!didMutate || generated.length === 0) {
+        return state;
+      }
+
+      const xpUpdate = applyXpGain(state, generated.length * 5);
+      const next = {
+        loggedExpenses: [...generated, ...state.loggedExpenses],
+        recurringSchedules: updatedSchedules,
+        ...xpUpdate,
+      };
+      persistState({ ...state, ...next });
+
+      (async () => {
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (session?.user?.id && session.user.id !== 'guest') {
+            for (const tx of generated) {
+              await syncQueue.enqueue({
+                table: 'transactions',
+                action: 'upsert',
+                payload: {
+                  transaction_id: tx.id,
+                  user_id: session.user.id,
+                  owner_id: session.user.id,
+                  type: tx.type || 'expense',
+                  category: tx.category,
+                  amount: tx.amount,
+                  description: tx.notes ? `${tx.name} — ${tx.notes}` : tx.name,
+                  transaction_date: tx.date,
+                },
+                options: { onConflict: 'transaction_id' },
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('[GamificationStore] Recurring sync enqueue warning:', err);
+        }
+      })();
+
+      return next;
+    });
+
+    return generated.length;
   },
 
   resetAllData: (defaultVirtualBalance = 10000) => {
@@ -3159,6 +3392,7 @@ function buildStateFromSnapshot(
     selectedCategories: parsed.selectedCategories ?? [],
     categoryLimits: parsed.categoryLimits ?? {},
     loggedExpenses: effectiveExpenses,
+    recurringSchedules: Array.isArray(parsed.recurringSchedules) ? parsed.recurringSchedules : [],
     savingsGoals: parsed.savingsGoals ?? [],
     unspentSavingsVault: parsed.unspentSavingsVault ?? 0,
     savingsRecords: parsed.savingsRecords ?? [],
@@ -3200,6 +3434,7 @@ AppState.addEventListener('change', (nextAppState) => {
   if (nextAppState === 'active') {
     useGamificationStore.getState().checkMidnightGuestReset();
     useGamificationStore.getState().checkAndUpdateStreak();
+    useGamificationStore.getState().processDueRecurringTransactions();
     flushCloudSnapshot().catch((err) => console.warn('[GamificationStore] Active snapshot flush error:', err));
     syncQueue.process().catch((err) => console.warn('[GamificationStore] Active syncQueue error:', err));
   } else if (nextAppState === 'background') {

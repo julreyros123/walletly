@@ -39,6 +39,8 @@ export function BalanceHeroCard({
   }));
 
   const isOverLimit = displaySpent > displayLimit && displayLimit > 0;
+  const utilizationPct = displayLimit > 0 ? (displaySpent / displayLimit) * 100 : 0;
+  const isWarning = !isOverLimit && utilizationPct >= 80;
 
   return (
     <View style={styles.cardContainer}>
@@ -116,9 +118,13 @@ export function BalanceHeroCard({
               Spent: {isBalanceHidden ? `${currencySymbol} •••` : `${currencySymbol} ${displaySpent.toLocaleString()}`}
             </Text>
             <View style={styles.limitGroup}>
-              {isOverLimit && (
-                <Text style={styles.overLimitText} numberOfLines={1}>OVER LIMIT</Text>
-              )}
+              {isOverLimit ? (
+                <Text style={styles.overLimitText} numberOfLines={1}>OVERSPENDING</Text>
+              ) : isWarning ? (
+                <Text style={[styles.overLimitText, { backgroundColor: 'rgba(245, 158, 11, 0.28)', color: '#FEF3C7' }]} numberOfLines={1}>
+                  WARNING ≥80%
+                </Text>
+              ) : null}
               <Text style={styles.limitLabel} numberOfLines={1}>
                 Limit: {currencySymbol} {displayLimit.toLocaleString()}
               </Text>
@@ -137,7 +143,7 @@ export function BalanceHeroCard({
               style={[
                 styles.progressBarFill,
                 progressStyle,
-                { backgroundColor: isOverLimit ? '#EF4444' : '#34D399' },
+                { backgroundColor: isOverLimit ? '#EF4444' : isWarning ? '#FBBF24' : '#34D399' },
               ]}
             />
           </View>

@@ -23,6 +23,7 @@ import { EducationalPromoCard } from '@/components/ui/EducationalPromoCard';
 import { InteractivePressable } from '@/components/ui/InteractivePressable';
 
 import { BalanceHeroCard } from '@/features/dashboard/components/BalanceHeroCard';
+import { DecisionSupportCard } from '@/features/dashboard/components/DecisionSupportCard';
 import { QuickActionsGrid } from '@/features/dashboard/components/QuickActionsGrid';
 import { BentoGoalsAndPortfolio } from '@/features/dashboard/components/BentoGoalsAndPortfolio';
 import { QuickExpenseModal } from '@/features/dashboard/components/QuickExpenseModal';
@@ -98,6 +99,13 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     store.checkAndUpdateStreak();
+    const autoCount = store.processDueRecurringTransactions();
+    if (autoCount > 0) {
+      toast.info(
+        'Recurring Schedule Applied',
+        `${autoCount} scheduled transaction${autoCount > 1 ? 's were' : ' was'} recorded automatically.`
+      );
+    }
   }, []);
 
   // Reset auto-prompt when user changes (e.g. login, logout, switch account)
@@ -321,6 +329,32 @@ export default function DashboardScreen() {
 
         {/* Main Body Content Sections */}
         <View style={styles.bodyContent}>
+          {/* ==================== 4B. RB-PFDSE DECISION SUPPORT ADVISOR ==================== */}
+          <DecisionSupportCard
+            budget={displayLimit}
+            spent={displaySpent}
+            isBudgetSetupComplete={store.isBudgetSetupComplete}
+            assets={Object.values(marketAssets)}
+            currencySymbol={currencySymbol}
+            onPressSetBudget={() => router.push('/(tabs)/budget' as Href)}
+            onPressAllocateRecommended={(amt, matchedTicker) => {
+              const ok = store.allocateToSimulation(amt);
+              if (ok) {
+                toast.success(
+                  'Recommended 20% Allocated!',
+                  `${currencySymbol}${amt.toFixed(2)} transferred to Investment Sandbox.`
+                );
+                router.push(
+                  (matchedTicker
+                    ? `/invest-details?ticker=${matchedTicker}`
+                    : '/(tabs)/invest') as Href
+                );
+              } else {
+                router.push('/(tabs)/invest' as Href);
+              }
+            }}
+          />
+
           {/* ==================== 5. BENTO GOALS & INVESTMENTS ==================== */}
           <BentoGoalsAndPortfolio
             savingsGoals={store.savingsGoals}

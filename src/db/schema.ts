@@ -12,7 +12,7 @@
 export const LOCAL_DB_NAME = 'cbudget.db';
 
 /** Bump this and add a step in MIGRATIONS whenever the local schema changes. */
-export const LOCAL_DB_VERSION = 4;
+export const LOCAL_DB_VERSION = 5;
 
 export type SyncedTable =
   | 'profiles'
@@ -315,5 +315,63 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX IF NOT EXISTS idx_sync_outbox_order ON sync_outbox (id ASC);
   CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions (user_id, category);
   CREATE INDEX IF NOT EXISTS idx_user_investments_ticker ON user_investments (user_id, ticker);
+  `,
+
+  // v4 -> v5: RB-PFDSE local tables (recommendations, recurring_schedules, market_price_history, exchange_rates)
+  `
+  CREATE TABLE IF NOT EXISTS recommendations (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL,
+    period TEXT NOT NULL,
+    budget_amount REAL NOT NULL,
+    total_expenses REAL NOT NULL,
+    remaining_budget REAL NOT NULL,
+    budget_utilization REAL NOT NULL,
+    status TEXT NOT NULL,
+    recommended_investment REAL NOT NULL DEFAULT 0,
+    recommendation_type TEXT NOT NULL DEFAULT 'no_investment',
+    message TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (user_id, period)
+  );
+  CREATE INDEX IF NOT EXISTS idx_recommendations_user ON recommendations (user_id, updated_at DESC);
+
+  CREATE TABLE IF NOT EXISTS recurring_schedules (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    amount REAL NOT NULL CHECK (amount > 0),
+    type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
+    frequency TEXT NOT NULL CHECK (frequency IN ('daily', 'weekly', 'monthly')),
+    next_due_date TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_recurring_user_due ON recurring_schedules (user_id, is_active, next_due_date ASC);
+
+  CREATE TABLE IF NOT EXISTS market_price_history (
+    id TEXT PRIMARY KEY NOT NULL,
+    ticker TEXT NOT NULL,
+    day_index INTEGER NOT NULL,
+    trade_date TEXT NOT NULL,
+    close_price REAL NOT NULL,
+    pct_change REAL NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (ticker, day_index)
+  );
+  CREATE INDEX IF NOT EXISTS idx_market_history_ticker ON market_price_history (ticker, day_index ASC);
+
+  CREATE TABLE IF NOT EXISTS exchange_rates (
+    base_currency TEXT NOT NULL,
+    target_currency TEXT NOT NULL,
+    rate REAL NOT NULL,
+    source TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (base_currency, target_currency)
+  );
   `,
 ];

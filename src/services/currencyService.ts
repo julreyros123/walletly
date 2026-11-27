@@ -1,4 +1,5 @@
 import { storage } from '@/utils/storage';
+import { saveLocalExchangeRate } from '@/db/localRepository';
 
 const CACHE_KEY = 'cbudget_exchange_rates_v1';
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes cache
@@ -104,9 +105,12 @@ export async function fetchLiveExchangeRates(force: boolean = false): Promise<Ex
           lastUpdatedStr: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         };
 
-        // Save fresh rates to offline cache
+        // Save fresh rates to offline cache & local SQLite exchange_rates table
         await storage.setItem(CACHE_KEY, JSON.stringify(result)).catch((e) => {
           console.warn('[CurrencyService] Failed to cache exchange rates:', e);
+        });
+        saveLocalExchangeRate('USD', 'PHP', result.usdPhpRate, url).catch((e) => {
+          console.warn('[CurrencyService] SQLite exchange_rates save warning:', e);
         });
 
         return result;

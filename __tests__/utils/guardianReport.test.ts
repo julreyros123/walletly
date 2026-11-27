@@ -15,8 +15,8 @@ describe('guardianReport utils', () => {
     useGamificationStore.setState({
       streakDays: 5,
       achievements: [
-        { id: 'a1', title: 'A1', description: '', icon: '', points: 10, unlocked: true },
-        { id: 'a2', title: 'A2', description: '', icon: '', points: 10, unlocked: false },
+        { id: 'a1', title: 'A1', description: '', icon: 'Trophy', color: '#10B981', unlockedAt: '2026-01-01' },
+        { id: 'a2', title: 'A2', description: '', icon: 'Star', color: '#3B82F6' },
       ],
     });
   });
