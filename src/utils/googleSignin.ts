@@ -1,23 +1,11 @@
 import { Platform, NativeModules, TurboModuleRegistry } from 'react-native';
+import type * as GoogleSigninPackage from '@react-native-google-signin/google-signin';
+
+export type GoogleSigninModule = typeof GoogleSigninPackage;
 
 let googleSigninConfigured = false;
 
-interface GoogleSigninLike {
-  GoogleSignin?: {
-    configure: (opts: {
-      webClientId: string;
-      scopes: string[];
-      offlineAccess: boolean;
-    }) => void;
-    hasPlayServices: (opts?: { showPlayServicesUpdateDialog?: boolean }) => Promise<boolean>;
-    signIn: () => Promise<{ data?: { idToken?: string | null }; idToken?: string | null }>;
-    signOut: () => Promise<void>;
-    isSignedIn?: () => Promise<boolean>;
-  };
-  statusCodes?: Record<string, string>;
-}
-
-export function getGoogleSigninModule(): GoogleSigninLike | null {
+export function getGoogleSigninModule(): GoogleSigninModule | null {
   try {
     if (Platform.OS === 'web') return null;
 
@@ -35,7 +23,7 @@ export function getGoogleSigninModule(): GoogleSigninLike | null {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const googleSigninModule = require('@react-native-google-signin/google-signin') as GoogleSigninLike;
+    const googleSigninModule = require('@react-native-google-signin/google-signin') as GoogleSigninModule;
     if (!googleSigninConfigured && googleSigninModule?.GoogleSignin) {
       googleSigninModule.GoogleSignin.configure({
         webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '',
