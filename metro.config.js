@@ -12,6 +12,9 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
       type: 'sourceFile',
     };
   }
+  if (platform === 'web' && moduleName === '@react-native-google-signin/google-signin') {
+    return { type: 'empty' };
+  }
   if (originalResolveRequest) {
     return originalResolveRequest(context, moduleName, platform);
   }

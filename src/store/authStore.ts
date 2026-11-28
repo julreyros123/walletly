@@ -1,9 +1,10 @@
-import { Platform, NativeModules, TurboModuleRegistry } from 'react-native';
+import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { create } from 'zustand';
 import { storage } from '@/utils/storage';
 import { supabase, isSupabaseConfigured } from '@/utils/supabase';
+import { getGoogleSigninModule } from '@/utils/googleSignin';
 import {
   useGamificationStore,
   setActiveGamificationUser,
@@ -15,38 +16,6 @@ import { syncQueue } from '@/utils/syncQueue';
 import { saveLocalAppState, loadLocalAppState, deleteLocalAppState } from '@/db/localRepository';
 
 WebBrowser.maybeCompleteAuthSession();
-
-let googleSigninConfigured = false;
-
-function getGoogleSigninModule() {
-  try {
-    if (Platform.OS === 'web') return null;
-
-    // Check if the native binary actually has RNGoogleSignin registered
-    // to avoid triggering TurboModuleRegistry.getEnforcing invariant crash
-    const hasTurbo = typeof TurboModuleRegistry?.get === 'function' && TurboModuleRegistry.get('RNGoogleSignin') != null;
-    const hasNative = typeof NativeModules !== 'undefined' && NativeModules?.RNGoogleSignin != null;
-
-    if (!hasTurbo && !hasNative) {
-      // Native module is not in the current APK binary (e.g. Expo Go or dev client without rebuild)
-      return null;
-    }
-
-    const googleSigninModule = require('@react-native-google-signin/google-signin');
-    if (!googleSigninConfigured && googleSigninModule?.GoogleSignin) {
-      googleSigninModule.GoogleSignin.configure({
-        webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '',
-        scopes: ['email', 'profile'],
-        offlineAccess: false,
-      });
-      googleSigninConfigured = true;
-    }
-    return googleSigninModule;
-  } catch (err) {
-    console.warn('[Auth] Native Google Sign-In module is not linked in current APK:', err);
-    return null;
-  }
-}
 
 // ── Storage key constants (avoid magic strings) ──────────────────────
 const AUTH_TOKEN_KEY = 'cbudget_auth_token';
